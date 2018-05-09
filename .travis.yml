@@ -1,0 +1,17 @@
+language: python
+sudo: false
+
+matrix:
+  include:
+    - python: 3.6
+      env: TOXENV=py36
+    - python: nightly
+      env: TOXENV=py37
+  allow_failures:
+    - env: TOXENV=py37
+
+install:
+  - travis_retry pip install tox
+
+script:
+  - travis_retry tox

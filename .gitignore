@@ -8,7 +8,7 @@ build/
 dist/
 
 # Testing
-.coverage
+.coverage*
 .pytest_cache/
 .mypy_cache/
 .tox/
