@@ -4,7 +4,7 @@ sudo: false
 matrix:
   include:
     - python: 3.6
-      env: TOXENV=py36
+      env: TOXENV=py36,coverage,lint,mypy
     - python: nightly
       env: TOXENV=py37
   allow_failures:
@@ -15,3 +15,7 @@ install:
 
 script:
   - travis_retry tox
+
+after_success:
+  - pip install coveralls
+  - coveralls
