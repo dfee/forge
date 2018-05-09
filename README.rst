@@ -1,4 +1,4 @@
-.. image:: https://raw.githubusercontent.com/dfee/forge/blob/master/docs/_static/logo.png
+.. image:: https://raw.githubusercontent.com/dfee/forge/master/docs/_static/logo.png
    :alt: forge logo
 
 ============================================
