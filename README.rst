@@ -31,7 +31,7 @@ The primary purpose of forge is to alter the public signature of functions:
       forge.pos('positional'),
       forge.arg('argument'),
       *forge.args,
-      forge.kwarg('keyword'),
+      keyword=forge.kwarg(),
       **forge.kwargs,
   )
   def myfunc(*args, **kwargs):
@@ -45,9 +45,9 @@ The primary purpose of forge is to alter the public signature of functions:
   >>> args
   (3, 4, 5)
   >>> kwargs
-  {'extra': 'xyz', 'positional': 1, 'argument': 2, 'keyword': 'abc'}
+  {'positional': 1, 'argument': 2, 'keyword': 'abc' 'extra': 'xyz'}
 
-You can re-map a parameter to a different type, and optionally supply a default value:
+You can re-map a parameter to a different ParameterKind (e.g. positional-only to positional-or-keyword *or* keyword-only), and optionally supply a default value:
 
 .. code-block:: python
 
@@ -58,6 +58,8 @@ You can re-map a parameter to a different type, and optionally supply a default 
   )
   def myfunc(colour):
     return colour
+
+.. code-block:: python
 
   >>> help(myfunc)
   myfunc(*, color='blue')
@@ -76,6 +78,8 @@ You can also supply type annotations for usage with linters like mypy:
   @forge.returns(str)
   def to_str(number):
       return str(number)
+
+.. code-block:: python
 
   >>> help(to_str)
   to_str(number:int) -> str
@@ -101,6 +105,8 @@ You can validate arguments by either passing a validator or an iterable (such as
   )
   def send_presents(count):
       print(f'sending {count} presents')
+
+.. code-block:: python
 
   >>> send_presents(3)
   TypeError: count must be >= 5
@@ -129,6 +135,8 @@ You can optionally provide a context parameter, such as `self`, `cls`, or create
       def select_color(self, color):
           self.selected = color
 
+.. code-block:: python
+
   >>> cs = ColorSelector('red', 'green', 'blue')
   >>> cs.select('orange')
   TypeError('expected one of ('red', 'green', 'blue'), received 'orange')
@@ -155,6 +163,8 @@ You can convert an argument by passing a conversion function to your ParameterMa
   def shout(message):
       print(message)
 
+.. code-block:: python
+
   >>> shout('hello over there')
   HELLO OVER THERE
 
@@ -177,6 +187,8 @@ You can optionally provide a context parameter, such as `self`, `cls`, or create
       )
       def announce(self, name):
           print(f'Now announcing {name}!')
+
+.. code-block:: python
 
   >>> doctor_ra = RoleAnnouncer('Doctor')
   >>> patient_ra = RoleAnnouncer('Doctor')
@@ -403,6 +415,8 @@ Typically, the code we use today, looks like this:
       if log:
           print(ctx, '... with myparam: ', myparam)
 
+.. code-block:: python
+
   >>> myfunc(9000, log=True)
   Context() ... with myparam 9000
   >>> help(myfunc)
@@ -447,6 +461,8 @@ Users of the function aren't supposed to provide this functionality. Forge paves
       if log:
           print(ctx, '... with myparam: ', myparam)
 
+.. code-block:: python
+
   >>> myfunc(9000, log=True)
   Context() ... with myparam:  9000
   >>> help(myfunc)
@@ -464,7 +480,7 @@ Requirements
 Author
 =======
 
-This package was conceived of and written by Devin Fee. Other contributors are listed under https://github.com/dfee/forge/graphs/contributors
+This package was conceived of and written by `Devin Fee <https://github.com/dfee>`_. Other contributors are listed under https://github.com/dfee/forge/graphs/contributors.
 
 
 License
@@ -482,7 +498,11 @@ https://github.com/dfee/forge
 
 Image / Meta
 ============
-`Salvador Dali <https://en.wikipedia.org/wiki/Salvador_Dal%C3%AD>`_, a Spanish surealist artist, is infamous for allegedly forging his own work. In his latter years, it's said that he signed blank canvases and tens of thousands of sheets of lithographic paper (under duress of his guardians). In the image atop this `README`, he's seen with his pet ocelot, Babou. This image is recomposed from the original, whose metadata is below.
+`Salvador Dali <https://en.wikipedia.org/wiki/Salvador_Dal%C3%AD>`_, a Spanish surealist artist, is infamous for allegedly forging his own work. In his latter years, it's said that he signed blank canvases and tens of thousands of sheets of lithographic paper (under duress of his guardians). In the image atop this `README`, he's seen with his pet ocelot, Babou.
+
+Practically speaking, Salvador Dali and Babou are pretty awesome, and I intend to throw no shade at him or his legacy.
+
+This image is recomposed from the original, whose metadata is below.
 
 | **Title**: `Salvatore Dali with ocelot friend at St Regis / World Telegram & Sun photo by Roger Higgins <http://www.loc.gov/pictures/item/95513802/>`_
 | **Creator(s)**: Higgins, Roger, photographer
@@ -490,5 +510,4 @@ Image / Meta
 | **Medium**: 1 photographic print.
 | **Reproduction Number**: LC-USZ62-114985 (b&w film copy neg.)
 | **Rights Advisory**: No copyright restriction known. Staff photographer reproduction rights transferred to Library of Congress through Instrument of Gift.
-| **Call Number**: NYWTS - BIOG--Dali, Salvador--Artist <item> [P&P]
-| Repository: Library of Congress Prints and Photographs Division Washington, D.C. 20540 USA
+| **Repository**: Library of Congress Prints and Photographs Division Washington, D.C. 20540 USA
