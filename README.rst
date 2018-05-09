@@ -5,6 +5,10 @@
 forge: (python) signatures for fun and profit
 ============================================
 
+.. image:: https://travis-ci.org/dfee/forge.png?branch=master
+        :target: https://travis-ci.org/dfee/forge
+        :alt: master Travis CI Status
+
 ``forge`` is an elegant Python package that allows for meta-programming of function signatures. Tools like parameter conversion, validation, and typing are now trivial.
 
 
