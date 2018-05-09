@@ -5,7 +5,7 @@
 forge: (python) signatures for fun and profit
 ============================================
 
-.. image:: https://travis-ci.org/dfee/forge.png?branch=master
+.. image:: https://travis-ci.org/dfee/forge.svg?branch=master
         :target: https://travis-ci.org/dfee/forge
         :alt: master Travis CI Status
 
