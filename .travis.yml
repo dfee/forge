@@ -17,4 +17,5 @@ script:
   - travis_retry tox
 
 after_success:
+  - pip install coveralls
   - coveralls
