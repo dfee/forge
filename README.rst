@@ -5,9 +5,12 @@
 forge: (python) signatures for fun and profit
 ============================================
 
-.. image:: https://travis-ci.org/dfee/forge.svg?branch=master
-        :target: https://travis-ci.org/dfee/forge
-        :alt: master Travis CI Status
+.. image:: https://travis-ci.org/dfee/forge.png?branch=master
+    :target: https://travis-ci.org/dfee/forge
+    :alt: master Travis CI Status
+.. image:: https://coveralls.io/repos/github/dfee/forge/badge.svg?branch=master
+    :target: https://coveralls.io/github/dfee/forge?branch=master
+    :alt: master Coveralls Status
 
 ``forge`` is an elegant Python package that allows for meta-programming of function signatures. Tools like parameter conversion, validation, and typing are now trivial.
 
