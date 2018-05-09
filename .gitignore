@@ -1,0 +1,34 @@
+# Runtime
+env*/
+
+# Build
+*.egg
+*.egg-info
+build/
+dist/
+
+# Testing
+.coverage
+.pytest_cache/
+.mypy_cache/
+.tox/
+coverage
+coverage.xml
+nosetests.xml
+test
+
+# Cache
+.DS_Store
+*.pyc
+*$py.class
+
+# Editor
+.vscode/
+*.sublime-project
+*.sublime-workspace
+.*.sw?
+.sw?
+
+# etc.
+TODO
+play/
