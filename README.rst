@@ -1,11 +1,9 @@
-==============================================
-Forge (function) signatures for fun and profit
-==============================================
+.. image:: https://raw.githubusercontent.com/dfee/forge/blob/master/docs/_static/logo.png
+   :alt: forge logo
 
-.. image:: https://raw.githubusercontent.com/dfee/forge/master/docs/_static/salvador_dali.jpg
-   :height: 64px
-   :width: 64px
-   :alt: Salvador Dali and his ocelot
+============================================
+forge: (python) signatures for fun and profit
+============================================
 
 ``forge`` is an elegant Python package that allows for meta-programming of function signatures. Tools like parameter conversion, validation, and typing are now trivial.
 
@@ -25,7 +23,7 @@ Re-signing a function
 
 The primary purpose of forge is to alter the public signature of functions:
 
-.. code-block::
+.. code-block:: python
 
   import forge
 
@@ -39,7 +37,7 @@ The primary purpose of forge is to alter the public signature of functions:
   def myfunc(*args, **kwargs):
       return (args, kwargs)
 
-.. code-block::
+.. code-block:: python
 
   >> help(myfunc)
   myfunc(positional, /, argument, *args, keyword, **kwargs)
@@ -51,7 +49,7 @@ The primary purpose of forge is to alter the public signature of functions:
 
 You can re-map a parameter to a different type, and optionally supply a default value:
 
-.. code-block::
+.. code-block:: python
 
   import forge
 
@@ -68,7 +66,7 @@ You can re-map a parameter to a different type, and optionally supply a default 
 
 You can also supply type annotations for usage with linters like mypy:
 
-.. code-block::
+.. code-block:: python
 
   import forge
 
@@ -90,7 +88,7 @@ Validating a parameter
 
 You can validate arguments by either passing a validator or an iterable (such as a list or tuple) of validators to your ParameterMap constructor.
 
-.. code-block::
+.. code-block:: python
 
   import forge
 
@@ -111,7 +109,7 @@ You can validate arguments by either passing a validator or an iterable (such as
 
 You can optionally provide a context parameter, such as `self`, `cls`, or create your own named parameter with `forge.ctx('myparam')`, and use that alongside validation:
 
-.. code-block::
+.. code-block:: python
 
   import forge
 
@@ -142,9 +140,9 @@ You can optionally provide a context parameter, such as `self`, `cls`, or create
 Converting a parameter
 ----------------------
 
-You can convert an argument by passing a converting function to your ParameterMap constructor.
+You can convert an argument by passing a conversion function to your ParameterMap constructor.
 
-.. code-block::
+.. code-block:: python
 
   import forge
 
@@ -162,7 +160,7 @@ You can convert an argument by passing a converting function to your ParameterMa
 
 You can optionally provide a context parameter, such as `self`, `cls`, or create your own named ParameterMap with `forge.ctx('myparam')`, and use that alongside conversion:
 
-.. code-block::
+.. code-block:: python
 
   import forge
 
@@ -192,7 +190,7 @@ Usage (Narrative)
 =================
 For example, consider the following `BaseService.update` method below:
 
-.. code-block::
+.. code-block:: python
 
   class BaseService:
       def update(self, ins, **kwargs):
@@ -206,7 +204,7 @@ For example, consider the following `BaseService.update` method below:
 
 Now, if we want to create a more specific implementation, e.g. `UserService`, and we want to allow certain parameters, we end up with code that looks like:
 
-.. code-block::
+.. code-block:: python
 
   class UserService(BaseService):
       def update(self, ins, **kwargs):
@@ -224,7 +222,7 @@ Now, if we want to create a more specific implementation, e.g. `UserService`, an
 
 This `update` method is nice enough, except that the signature doesn't exactly describe what parameters are accepted. Upon inspection (using `help(UserService.update`) we find out that the method takes two parameters: `self` and a variable-keyword argument `kwargs`. Is `profile_picture` accepted? NO! How about `password`? Absolutely not! There are special methods for those.
 
-.. code-block::
+.. code-block:: python
 
   class UserService(BaseService):
       def update(self, ins, **kwargs):
@@ -243,7 +241,7 @@ This `update` method is nice enough, except that the signature doesn't exactly d
 
 So, we realize now that we need to do parameter conversion and validation in multiple places, so we need to extract that logic:
 
-.. code-block::
+.. code-block:: python
 
   def validate_email_address(email_address):
     if not re.search(r'\w+@\w+\.\w+', kwargs['email_address']):
@@ -273,7 +271,7 @@ Now, we're faced with the problem that our method still doesn't describe to a us
 
 Now, we can naively solve this problem by naming the parameters:
 
-.. code-block::
+.. code-block:: python
 
   class UserService(BaseService):
       def update(self, *, email_address=None, name=None, manager=None):
@@ -289,7 +287,7 @@ Now, we can naively solve this problem by naming the parameters:
 
 So now, our method signature adequately describes what parameters `UserService.update` takes. Except, what if a user actually becomes self-employed and no-longer has a manager. We've lost the ability to *unset* attributes, as our code can't distinguish between what arguments were provided as `None` by the user, and which arguments are `None` by default:
 
-.. code-block::
+.. code-block:: python
 
   >>> user_service.update(newly_self_employed_user, manager=None)
   <User: name=Jane Doe, email_address=jane@janedoe.com, manager=Evil Bob>
@@ -297,7 +295,7 @@ So now, our method signature adequately describes what parameters `UserService.u
 
 Enter `forge`: to escape from the problems we faced above, namely the paradox of having a well defined signature impeding usage, we can use `forge`:
 
-.. code-block::
+.. code-block:: python
 
   import forge
 
@@ -314,7 +312,7 @@ Enter `forge`: to escape from the problems we faced above, namely the paradox of
 
 Reusing parameters across multiple functions isn't difficult, either:
 
-.. code-block::
+.. code-block:: python
 
   import forge
 
@@ -366,7 +364,7 @@ Reusing parameters across multiple functions isn't difficult, either:
 
 And, if you are inspecting the method, what do you see?
 
-.. code-block::
+.. code-block:: python
 
   >>> help(UserService.update)
   update(self, *, email_address=<void>, name=<void>, manager=<void>)
@@ -382,7 +380,7 @@ You can use the `forge.Forger` class directly, which is very useful when you're 
 
 Typically, the code we use today, looks like this:
 
-.. code-block::
+.. code-block:: python
 
   import functools
   from types import SimpleNamespace
@@ -412,14 +410,14 @@ Typically, the code we use today, looks like this:
 
 You'll see that the function signature has preserved the `ctx` parameter, which is an implementation detail, and oughta be private to the function. If the user provides `ctx`...
 
-.. code-block::
+.. code-block:: python
 
   >>> myfunc(ctx=Context(), myparam=1000)
   myfunc() got multiple values for argument 'ctx'
 
 Users of the function aren't supposed to provide this functionality. Forge paves the way here (again).
 
-.. code-block::
+.. code-block:: python
 
   import functools
   from types import SimpleNamespace
@@ -480,3 +478,17 @@ Source code
 
 The latest developer version is available in a github repository:
 https://github.com/dfee/forge
+
+
+Image / Meta
+============
+`Salvador Dali <https://en.wikipedia.org/wiki/Salvador_Dal%C3%AD>`_, a Spanish surealist artist, is infamous for allegedly forging his own work. In his latter years, it's said that he signed blank canvases and tens of thousands of sheets of lithographic paper (under duress of his guardians). In the image atop this `README`, he's seen with his pet ocelot, Babou. This image is recomposed from the original, whose metadata is below.
+
+| **Title**: `Salvatore Dali with ocelot friend at St Regis / World Telegram & Sun photo by Roger Higgins <http://www.loc.gov/pictures/item/95513802/>`_
+| **Creator(s)**: Higgins, Roger, photographer
+| **Date Created/Published**: 1965.
+| **Medium**: 1 photographic print.
+| **Reproduction Number**: LC-USZ62-114985 (b&w film copy neg.)
+| **Rights Advisory**: No copyright restriction known. Staff photographer reproduction rights transferred to Library of Congress through Instrument of Gift.
+| **Call Number**: NYWTS - BIOG--Dali, Salvador--Artist <item> [P&P]
+| Repository: Library of Congress Prints and Photographs Division Washington, D.C. 20540 USA
