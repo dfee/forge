@@ -7,10 +7,10 @@ import forge._parameter as fparam
 from forge._utils import (
     hasparam,
     getparam,
-    get_return_annotation,
+    get_return_type,
     get_var_keyword_parameter,
     get_var_positional_parameter,
-    set_return_annotation,
+    set_return_type,
     stringify_parameters,
 )
 
@@ -78,7 +78,7 @@ class TestGetParam:
         assert excinfo.value.args[0] == '1 is not callable'
 
 
-class TestGetReturnAnnotation:
+class TestGetReturnType:
     @pytest.mark.parametrize(('returns',), [(empty,), (None,)])
     @pytest.mark.parametrize(('has_signature',), [(False,), (True,)])
     def test_callable(self, returns, has_signature):
@@ -90,24 +90,24 @@ class TestGetReturnAnnotation:
                 replace(return_annotation=returns)
         else:
             def func() -> returns: pass
-        assert get_return_annotation(func) == returns
+        assert get_return_type(func) == returns
 
     def test_incorrect_usage_raises(self):
         with pytest.raises(TypeError) as excinfo:
-            get_return_annotation(1)
+            get_return_type(1)
         assert excinfo.value.args[0] == '1 is not callable'
 
 
-class TestSetRetrunAnnotation:
+class TestSetRetrunType:
     @pytest.mark.parametrize(('has_signature',), [(True,), (False,)])
     @pytest.mark.parametrize(('returns',), [(int,), (empty,)])
-    def test_set_return_annotation(self, has_signature, returns):
+    def test_set_return_type(self, has_signature, returns):
         # pylint: disable=W0613, unused-argument
         # pylint: disable=C0321, multiple-statements
         def func(self) -> float: pass
         if has_signature:
             func.__signature__ = inspect.signature(func)
-        set_return_annotation(func, returns)
+        set_return_type(func, returns)
         if has_signature:
             assert func.__signature__.return_annotation == returns
         else:
@@ -119,7 +119,7 @@ class TestSetRetrunAnnotation:
 
     def test_incorrect_usage_raises(self):
         with pytest.raises(TypeError) as excinfo:
-            set_return_annotation(1, None)
+            set_return_type(1, None)
         assert excinfo.value.args[0] == '1 is not callable'
 
 

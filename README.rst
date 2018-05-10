@@ -80,7 +80,7 @@ You can also supply type annotations for usage with linters like mypy:
   import forge
 
   @forge.sign(
-    forge.arg('number', annotation=int),
+    forge.arg('number', type=int),
   )
   @forge.returns(str)
   def to_str(number):

@@ -48,9 +48,9 @@ class TestMakeTransform:
         pytest.param('from_def', 'to_def', id='default_from_and_default_to'),
     ])
     @pytest.mark.parametrize(('input_',), [
-        pytest.param(CallArguments((), {}), id='input_missing'),
-        pytest.param(CallArguments((1,), {}), id='input_args'),
-        pytest.param(CallArguments((), {'a': 1}), id='input_kwargs'),
+        pytest.param(CallArguments(), id='input_missing'),
+        pytest.param(CallArguments(1), id='input_args'),
+        pytest.param(CallArguments(a=1), id='input_kwargs'),
     ])
     def test_to_non_var_parameter(
             self,
@@ -150,7 +150,7 @@ class TestMakeTransform:
         from_sig = inspect.Signature([from_param])
         to_param = self.make_param('args', VAR_POSITIONAL)
         to_sig = inspect.Signature([to_param])
-        input_ = CallArguments((1,), {})
+        input_ = CallArguments(1)
 
         if from_param.kind is VAR_POSITIONAL:
             transform = make_transform(from_sig, to_sig)
@@ -197,11 +197,11 @@ class TestMakeTransform:
             return
         transform = make_transform(from_sig, to_sig)
 
-        input_ = CallArguments((1,), {}) \
+        input_ = CallArguments(1) \
             if from_param.kind is POSITIONAL_ONLY \
-            else CallArguments((), {'a': 1})
+            else CallArguments(a=1)
         result = transform(input_)
-        assert result == CallArguments((), {'a': 1})
+        assert result == CallArguments(a=1)
 
     @pytest.mark.parametrize(('from_kind',), [
         pytest.param(POSITIONAL_ONLY, id='positional_only'),
@@ -237,8 +237,8 @@ class TestMakeTransform:
         to_sig = inspect.Signature([to_param])
         transform = make_transform(from_sig, to_sig)
 
-        result = transform(CallArguments((), {}))
+        result = transform(CallArguments())
         if to_param.kind is KEYWORD_ONLY:
-            assert result == CallArguments((), {'a': 1})
+            assert result == CallArguments(a=1)
         else:
-            assert result == CallArguments((1,), {})
+            assert result == CallArguments(1)

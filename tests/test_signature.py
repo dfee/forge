@@ -70,12 +70,12 @@ class TestCallArguments:
         bound = inspect.signature(func).bind(a=1, b=2)
         # pylint: disable=E1101, no-member
         assert CallArguments.from_bound_arguments(bound) == \
-            CallArguments((1,), {'b': 2})
+            CallArguments(1, b=2)
 
     @pytest.mark.parametrize(('partial',), [(True,), (False,)])
     @pytest.mark.parametrize(('call_args', 'incomplete'), [
-        pytest.param(CallArguments((1,), {'b': 2}), False, id='complete'),
-        pytest.param(CallArguments((), {}), True, id='incomplete'),
+        pytest.param(CallArguments(1, b=2), False, id='complete'),
+        pytest.param(CallArguments(), True, id='incomplete'),
     ])
     def test_to_bound_arguments(self, call_args, partial, incomplete):
         # pylint: disable=W0613, unused-argument
@@ -145,26 +145,26 @@ class TestForger:
         assert excinfo.value.args[0] == \
             'Only the first ParameterMap can be contextual'
 
-    def test_validate_multiple_public_name_raises(self):
+    def test_validate_multiple_interface_name_raises(self):
         with pytest.raises(ValueError) as excinfo:
             Forger.validate(forge.arg('a1', 'b'), forge.arg('a2', 'b'))
         assert excinfo.value.args[0] == \
-            "Received multiple ParameterMaps with public_name 'b'"
+            "Received multiple ParameterMaps with interface_name 'b'"
 
-    def test_validate_multiple_interface_name_raises(self):
+    def test_validate_multiple_name_raises(self):
         with pytest.raises(ValueError) as excinfo:
             Forger.validate(forge.arg('a', 'b1'), forge.arg('a', 'b2'))
         assert excinfo.value.args[0] == \
-            "Received multiple ParameterMaps with interface_name 'a'"
+            "Received multiple ParameterMaps with name 'a'"
 
     def test_validate_multiple_var_positional_parameters_raises(self):
         params = [
             ParameterMap(
                 kind=inspect.Parameter.VAR_POSITIONAL,
-                public_name=f'args{i}',
+                name=f'args{i}',
                 interface_name=f'args{i}',
                 default=empty,
-                annotation=empty,
+                type=empty,
             ) for i in range(2)
         ]
         with pytest.raises(TypeError) as excinfo:
@@ -176,10 +176,10 @@ class TestForger:
         params = [
             ParameterMap(
                 kind=inspect.Parameter.VAR_KEYWORD,
-                public_name=f'kwargs{i}',
+                name=f'kwargs{i}',
                 interface_name=f'kwargs{i}',
                 default=empty,
-                annotation=empty,
+                type=empty,
             ) for i in range(2)
         ]
         with pytest.raises(TypeError) as excinfo:
@@ -303,10 +303,10 @@ class TestForger:
         assert len(forger) == 1
         assert forger[0] == ParameterMap(
             kind=inspect.Parameter.POSITIONAL_OR_KEYWORD,
-            public_name='a',
+            name='a',
             interface_name='a',
             default=0,
-            annotation=int,
+            type=int,
         )
 
     def test_var_positional(self):
@@ -331,13 +331,13 @@ class TestForger:
         forger = Forger(forge.arg(name, validator=validator))
         assert forger.validators == {name: validator}
 
-    @pytest.mark.parametrize(('spec',), [('interface',), ('public',)])
+    @pytest.mark.parametrize(('spec',), [('interface',), ('name',)])
     def test_get_parameters(self, spec):
-        iname, pname = 'iname', 'pname'
-        forger = Forger(forge.arg(iname, pname, default=0, annotation=int))
+        name, iname = 'name', 'iname'
+        forger = Forger(forge.arg(name, iname, default=0, type=int))
         attr_name, exp_name = ('interface_parameters', iname) \
             if spec == 'interface' \
-            else ('public_parameters', pname)
+            else ('public_parameters', name)
         assert getattr(forger, attr_name) == [
             inspect.Parameter(
                 name=exp_name,
@@ -350,13 +350,13 @@ class TestForger:
     @pytest.mark.parametrize(('returns',), [(None,), (empty,)])
     @pytest.mark.parametrize(('interface',), [(False,), (True,)])
     def test_make_signature(self, returns, interface):
-        interface_name, public_name = 'interface', 'public'
-        forger = Forger(forge.arg(interface_name, public_name))
+        pname, iname = 'pname', 'iname'
+        forger = Forger(forge.arg(pname, iname))
         signature = forger.make_signature(
             interface=interface,
             return_annotation=returns,
         )
-        expected_name = interface_name if interface else public_name
+        expected_name = iname if interface else pname
         assert signature.parameters == {
             expected_name: inspect.Parameter(
                 name=expected_name,
@@ -368,7 +368,7 @@ class TestForger:
     def test_make_mapper(self):
         converter, validator = lambda: None, lambda: None
         forger = Forger(
-            forge.arg('b', 'a', converter=converter, validator=validator),
+            forge.arg('a', 'b', converter=converter, validator=validator),
         )
         # pylint: disable=C0321, multiple-statements
         # pylint: disable=W0613, unused-argument
@@ -395,12 +395,12 @@ class TestForger:
             ).items():
             assert getattr(mapper, k) == v
 
-        pre_tf_interface = CallArguments((1,), {})
+        pre_tf_interface = CallArguments(1)
         post_tf_interface = mapper.tf_interface(pre_tf_interface)
         assert pre_tf_interface == post_tf_interface
 
         post_tf_private = mapper.tf_private(post_tf_interface)
-        assert post_tf_private == CallArguments((), {'b': 1})
+        assert post_tf_private == CallArguments(b=1)
 
 
 class TestSignatureMapper:
@@ -506,7 +506,7 @@ class TestSignatureMapper:
             tf_private=tf_private,
         )
 
-        expected = CallArguments((1,), {'b': 1})
+        expected = CallArguments(1, b=1)
         assert mapper(*expected.args, **expected.kwargs) == expected
         assert all(called.values())
 

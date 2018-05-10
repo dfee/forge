@@ -22,7 +22,7 @@ dummy_validator = lambda ctx, name, value: None
 
 PMAP_DEFAULTS = dict(
     default=inspect.Parameter.empty,
-    annotation=inspect.Parameter.empty,
+    type=inspect.Parameter.empty,
     converter=None,
     validator=None,
     is_contextual=False
@@ -54,7 +54,7 @@ PMAP_VPO_DEFAULTS = dict(
     kind=inspect.Parameter.VAR_POSITIONAL,
     is_contextual=False,
     default=empty,
-    annotation=empty,
+    type=empty,
 )
 
 PMAP_KWO_DEFAULTS = dict(
@@ -68,7 +68,7 @@ PMAP_VKW_DEFAULTS = dict(
     kind=inspect.Parameter.VAR_KEYWORD,
     is_contextual=False,
     default=empty,
-    annotation=empty,
+    type=empty,
 )
 
 
@@ -78,7 +78,7 @@ class TestParameterMap:
         pytest.param(
             {
                 'kind': inspect.Parameter.POSITIONAL_ONLY,
-                'public_name': None,
+                'name': None,
                 'interface_name': None,
             },
             '<missing>',
@@ -87,7 +87,7 @@ class TestParameterMap:
         pytest.param(
             {
                 'kind': inspect.Parameter.POSITIONAL_ONLY,
-                'public_name': 'a',
+                'name': 'a',
                 'interface_name': 'a',
             },
             'a',
@@ -96,7 +96,7 @@ class TestParameterMap:
         pytest.param(
             {
                 'kind': inspect.Parameter.POSITIONAL_ONLY,
-                'public_name': 'a',
+                'name': 'a',
                 'interface_name': 'a',
                 'default': None,
             },
@@ -106,17 +106,17 @@ class TestParameterMap:
         pytest.param(
             {
                 'kind': inspect.Parameter.POSITIONAL_ONLY,
-                'public_name': 'a',
+                'name': 'a',
                 'interface_name': 'a',
-                'annotation': int,
+                'type': int,
             },
             'a:int',
-            id='named_annotation',
+            id='named_type',
         ),
         pytest.param(
             {
                 'kind': inspect.Parameter.POSITIONAL_ONLY,
-                'public_name': 'a',
+                'name': 'a',
                 'interface_name': 'b',
             },
             'a->b',
@@ -125,10 +125,10 @@ class TestParameterMap:
         pytest.param(
             {
                 'kind': inspect.Parameter.POSITIONAL_ONLY,
-                'public_name': 'a',
+                'name': 'a',
                 'interface_name': 'b',
                 'default': None,
-                'annotation': int,
+                'type': int,
             },
             'a->b:int=None',
             id='named_mapping_anotation_default',
@@ -136,7 +136,7 @@ class TestParameterMap:
         pytest.param(
             {
                 'kind': inspect.Parameter.VAR_POSITIONAL,
-                'public_name': 'a',
+                'name': 'a',
                 'interface_name': 'a',
             },
             '*a',
@@ -145,7 +145,7 @@ class TestParameterMap:
         pytest.param(
             {
                 'kind': inspect.Parameter.VAR_KEYWORD,
-                'public_name': 'a',
+                'name': 'a',
                 'interface_name': 'a',
             },
             '**a',
@@ -157,81 +157,82 @@ class TestParameterMap:
         assert str(pmap) == expected
         assert repr(pmap) == f'<ParameterMap "{expected}">'
 
-    @pytest.mark.parametrize(('replaces'), [
-        pytest.param({'kind': inspect.Parameter.KEYWORD_ONLY}, id='kind'),
-        pytest.param({'default': 1}, id='default'),
-        pytest.param({'annotation': int}, id='annotation'),
-        pytest.param({'public_name': 'b'}, id='public_name'),
-        pytest.param({'interface_name': 'b'}, id='interface_name'),
-        pytest.param({'converter': dummy_converter}, id='converter'),
-        pytest.param({'validator': dummy_validator}, id='validator'),
+    @pytest.mark.parametrize(('rkey', 'rval'), [
+        pytest.param('kind', inspect.Parameter.KEYWORD_ONLY, id='kind'),
+        pytest.param('default', 1, id='default'),
+        pytest.param('type', int, id='type'),
+        pytest.param('name', 'b', id='name'),
+        pytest.param('interface_name', 'b', id='interface_name'),
+        pytest.param('converter', dummy_converter, id='converter'),
+        pytest.param('validator', dummy_validator, id='validator'),
     ])
-    def test_replace(self, replaces):
+    def test_replace(self, rkey, rval):
         pmap = ParameterMap(
             kind=inspect.Parameter.POSITIONAL_ONLY,
-            public_name=None,
+            name=None,
             interface_name=None,
         )
-        pmap2 = pmap.replace(**replaces) # pylint: disable=E1101, no-member
-        for k, v in dict(pmap._asdict(), **replaces).items():
+        pmap2 = pmap.replace(**{rkey: rval}) # pylint: disable=E1101, no-member
+        for k, v in dict(pmap._asdict(), **{rkey: rval}).items():
+            if k in ('name', 'interface_name') and \
+                rkey in ('name', 'interface_name'):
+                v = rval
             assert getattr(pmap2, k) == v
 
-    def test_public_parameter(self):
+    def test_parameter(self):
         kwargs = dict(
             kind=inspect.Parameter.POSITIONAL_ONLY,
-            public_name='a',
+            name='a',
             interface_name='b',
             default=None,
-            annotation=int,
+            type=int,
         )
-        pub = ParameterMap(**kwargs).public_parameter
-        assert pub.kind == kwargs['kind']
-        assert pub.name == kwargs['public_name']
-        assert pub.default == kwargs['default']
-        assert pub.annotation == kwargs['annotation']
+        param = ParameterMap(**kwargs).parameter
+        assert param.kind == kwargs['kind']
+        assert param.name == kwargs['name']
+        assert param.default == kwargs['default']
+        assert param.annotation == kwargs['type']
 
-    def test_public_parameter_wo_names_raises(self):
+    def test_parameter_wo_names_raises(self):
         pmap = ParameterMap(
             kind=inspect.Parameter.POSITIONAL_ONLY,
-            public_name=None,
+            name=None,
             interface_name=None,
         )
         with pytest.raises(TypeError) as excinfo:
             # pylint: disable=W0104, pointless-statement
-            pmap.public_parameter
-        assert excinfo.value.args[0] == \
-            'Cannot generate parameter without public_name'
+            pmap.parameter
+        assert excinfo.value.args[0] == 'Cannot generate an unnamed parameter'
 
     def test_interface_parameter(self):
         kwargs = dict(
             kind=inspect.Parameter.POSITIONAL_ONLY,
-            public_name='a',
+            name='a',
             interface_name='b',
             default=None,
-            annotation=int,
+            type=int,
         )
-        priv = ParameterMap(**kwargs).interface_parameter
-        assert priv.kind == kwargs['kind']
-        assert priv.name == kwargs['interface_name']
-        assert priv.default == kwargs['default']
-        assert priv.annotation == kwargs['annotation']
+        param = ParameterMap(**kwargs).interface_parameter
+        assert param.kind == kwargs['kind']
+        assert param.name == kwargs['interface_name']
+        assert param.default == kwargs['default']
+        assert param.annotation == kwargs['type']
 
     def test_interface_parameter_wo_names_raises(self):
         pmap = ParameterMap(
             kind=inspect.Parameter.POSITIONAL_ONLY,
-            public_name=None,
+            name=None,
             interface_name=None,
         )
         with pytest.raises(TypeError) as excinfo:
             # pylint: disable=W0104, pointless-statement
             pmap.interface_parameter
-        assert excinfo.value.args[0] == \
-            'Cannot generate parameter without interface_name'
+        assert excinfo.value.args[0] == 'Cannot generate an unnamed parameter'
 
     def test_defaults(self):
         pmap = ParameterMap(
             kind=inspect.Parameter.POSITIONAL_ONLY,
-            public_name='dummy',
+            name='dummy',
             interface_name='dummy',
         )
         assert pmap.kind == inspect.Parameter.POSITIONAL_ONLY
@@ -250,37 +251,37 @@ class TestParameterMap:
         for k, v in dict(
                 PMAP_DEFAULTS,
                 kind=kwargs['kind'],
-                public_name=kwargs['name'],
+                name=kwargs['name'],
                 interface_name=kwargs['name'],
-                annotation=kwargs['annotation'],
+                type=kwargs['annotation'],
                 default=kwargs['default'],
             ).items():
             assert getattr(pmap, k) == v
 
     @pytest.mark.parametrize(('extra_in', 'extra_out'), [
         pytest.param(
-            {}, {'public_name': None, 'interface_name': None}, id='no_names'
+            {}, {'name': None, 'interface_name': None}, id='no_names'
         ),
         pytest.param(
             {'interface_name': 'a'},
-            {'public_name': 'a', 'interface_name': 'a'},
+            {'name': 'a', 'interface_name': 'a'},
             id='interface_name',
         ),
         pytest.param(
-            {'public_name': 'a'},
-            {'public_name': 'a', 'interface_name': 'a'},
-            id='public_name',
+            {'name': 'a'},
+            {'name': 'a', 'interface_name': 'a'},
+            id='name',
         ),
         pytest.param(
-            {'public_name': 'a', 'interface_name': 'b'},
-            {'public_name': 'a', 'interface_name': 'b'},
-            id='public_and_interface_name',
+            {'name': 'a', 'interface_name': 'b'},
+            {'name': 'a', 'interface_name': 'b'},
+            id='name_and_interface_name',
         ),
     ])
     def test_create_positional_only(self, extra_in, extra_out):
         kwargs = dict(
             default=None,
-            annotation=int,
+            type=int,
             converter=dummy_converter,
             validator=dummy_validator,
         )
@@ -290,28 +291,28 @@ class TestParameterMap:
 
     @pytest.mark.parametrize(('extra_in', 'extra_out'), [
         pytest.param(
-            {}, {'public_name': None, 'interface_name': None}, id='no_names'
+            {}, {'name': None, 'interface_name': None}, id='no_names'
         ),
         pytest.param(
             {'interface_name': 'a'},
-            {'public_name': 'a', 'interface_name': 'a'},
+            {'name': 'a', 'interface_name': 'a'},
             id='interface_name',
         ),
         pytest.param(
-            {'public_name': 'a'},
-            {'public_name': 'a', 'interface_name': 'a'},
-            id='public_name',
+            {'name': 'a'},
+            {'name': 'a', 'interface_name': 'a'},
+            id='name',
         ),
         pytest.param(
-            {'public_name': 'a', 'interface_name': 'b'},
-            {'public_name': 'a', 'interface_name': 'b'},
-            id='public_and_interface_name',
+            {'name': 'a', 'interface_name': 'b'},
+            {'name': 'a', 'interface_name': 'b'},
+            id='name_and_interface_name',
         ),
     ])
     def test_create_positional_or_keyword(self, extra_in, extra_out):
         kwargs = dict(
             default=None,
-            annotation=int,
+            type=int,
             converter=dummy_converter,
             validator=dummy_validator,
         )
@@ -321,26 +322,26 @@ class TestParameterMap:
 
     @pytest.mark.parametrize(('extra_in', 'extra_out'), [
         pytest.param(
-            {}, {'public_name': None, 'interface_name': None}, id='no_names'
+            {}, {'name': None, 'interface_name': None}, id='no_names'
         ),
         pytest.param(
             {'interface_name': 'a'},
-            {'public_name': 'a', 'interface_name': 'a'},
+            {'name': 'a', 'interface_name': 'a'},
             id='interface_name',
         ),
         pytest.param(
-            {'public_name': 'a'},
-            {'public_name': 'a', 'interface_name': 'a'},
-            id='public_name',
+            {'name': 'a'},
+            {'name': 'a', 'interface_name': 'a'},
+            id='name',
         ),
         pytest.param(
-            {'public_name': 'a', 'interface_name': 'b'},
-            {'public_name': 'a', 'interface_name': 'b'},
-            id='public_and_interface_name',
+            {'name': 'a', 'interface_name': 'b'},
+            {'name': 'a', 'interface_name': 'b'},
+            id='name_and_interface_name',
         ),
     ])
     def test_create_contextual(self, extra_in, extra_out):
-        kwargs = dict(annotation=int)
+        kwargs = dict(type=int)
         pmap = ParameterMap.create_contextual(**kwargs, **extra_in)
         assert isinstance(pmap, ParameterMap)
         assert pmap._asdict() == {**PMAP_CTX_DEFAULTS, **kwargs, **extra_out}
@@ -355,7 +356,7 @@ class TestParameterMap:
         assert isinstance(pmap, ParameterMap)
         assert pmap._asdict() == dict(
             PMAP_VPO_DEFAULTS,
-            public_name=kwargs['name'],
+            name=kwargs['name'],
             interface_name=kwargs['name'],
             converter=kwargs['converter'],
             validator=kwargs['validator'],
@@ -364,9 +365,9 @@ class TestParameterMap:
     def test_create_keyword_only(self):
         kwargs = dict(
             interface_name='a',
-            public_name='b',
+            name='b',
             default=None,
-            annotation=int,
+            type=int,
             converter=dummy_converter,
             validator=dummy_validator,
         )
@@ -385,7 +386,7 @@ class TestParameterMap:
         assert isinstance(pmap, ParameterMap)
         assert pmap._asdict() == dict(
             PMAP_VKW_DEFAULTS,
-            public_name=kwargs['name'],
+            name=kwargs['name'],
             interface_name=kwargs['name'],
             converter=kwargs['converter'],
             validator=kwargs['validator'],
@@ -410,7 +411,7 @@ class TestVarPositional:
         assert isinstance(pmap, ParameterMap)
         assert pmap._asdict() == dict(
             PMAP_VPO_DEFAULTS,
-            public_name=kwargs['name'],
+            name=kwargs['name'],
             interface_name=kwargs['name'],
             converter=kwargs['converter'],
             validator=kwargs['validator'],
@@ -427,7 +428,7 @@ class TestVarPositional:
         assert isinstance(pmap, ParameterMap)
         assert pmap._asdict() == dict(
             PMAP_VPO_DEFAULTS,
-            public_name=kwargs['name'],
+            name=kwargs['name'],
             interface_name=kwargs['name'],
             converter=kwargs['converter'],
             validator=kwargs['validator'],
@@ -452,7 +453,7 @@ class TestVarKeyword:
         assert name == kwargs['name']
         assert pmap._asdict() == dict(
             PMAP_VKW_DEFAULTS,
-            public_name=kwargs['name'],
+            name=kwargs['name'],
             interface_name=kwargs['name'],
             converter=kwargs['converter'],
             validator=kwargs['validator'],
@@ -470,7 +471,7 @@ class TestVarKeyword:
         assert name == kwargs['name']
         assert pmap._asdict() == dict(
             PMAP_VKW_DEFAULTS,
-            public_name=kwargs['name'],
+            name=kwargs['name'],
             interface_name=kwargs['name'],
             converter=kwargs['converter'],
             validator=kwargs['validator'],
@@ -499,7 +500,7 @@ class TestConvenience:
         assert isinstance(self_, ParameterMap)
         assert self_._asdict() == dict(
             **PMAP_CTX_DEFAULTS,
-            public_name='self',
+            name='self',
             interface_name='self',
         )
 
@@ -507,7 +508,7 @@ class TestConvenience:
         assert isinstance(cls_, ParameterMap)
         assert cls_._asdict() == dict(
             **PMAP_CTX_DEFAULTS,
-            public_name='cls',
+            name='cls',
             interface_name='cls',
         )
 

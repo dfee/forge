@@ -4,27 +4,53 @@ import inspect
 import types
 import typing
 
+import dataclasses as dc
+
 from forge._marker import (
-    coerce_if,
     void,
     void_to_empty,
 )
 
+# pylint: disable=W0212, protected-access, W0212, invalid-name
+_kind_type = inspect._ParameterKind
+_is_contextual_type = bool
+# pylint: enable=W0212, protected-access, W0212, invalid-name
+_name_type = typing.Optional[str]
+_default_type = typing.Any
+_type_type = typing.Any
+_converter_type = typing.Optional[types.FunctionType]
+_validator_type = typing.Optional[
+    typing.Union[
+        types.FunctionType,
+        typing.Iterable[types.FunctionType]
+    ]
+]
 
-class ParameterMap(typing.NamedTuple):
-    kind: inspect._ParameterKind # pylint: disable=W0212, protected-access
-    public_name: typing.Optional[str]
-    interface_name: typing.Optional[str]
-    default: typing.Any = inspect.Parameter.empty
-    annotation: typing.Any = inspect.Parameter.empty
-    converter: typing.Optional[types.FunctionType] = None
-    validator: typing.Optional[
-        typing.Union[
-            types.FunctionType,
-            typing.Iterable[types.FunctionType]
-        ]
-    ] = None
-    is_contextual: bool = False
+@dc.dataclass(frozen=True)
+class ParameterMap:
+    kind: _kind_type
+    name: _name_type = dc.field(default=None)
+    interface_name: _name_type = dc.field(default=None)
+    default: _default_type = dc.field(default=void)
+    type: _type_type = dc.field(default=void)
+    converter: _converter_type = dc.field(default=None)
+    validator: _validator_type = dc.field(default=None)
+    is_contextual: _is_contextual_type = dc.field(default=False)
+
+    def __post_init__(self):
+        setattr_ = super().__setattr__
+        if self.default is void:
+            setattr_('default', inspect.Parameter.empty)
+        if self.type is void:
+            setattr_('type', inspect.Parameter.empty)
+
+        if not self.name and self.interface_name:
+            setattr_('name', self.interface_name)
+        elif not self.interface_name and self.name:
+            setattr_('interface_name', self.name)
+
+    def _asdict(self):
+        return dc.asdict(self)
 
     def __str__(self) -> str:
         prefix = ''
@@ -33,17 +59,18 @@ class ParameterMap(typing.NamedTuple):
         elif self.kind == inspect.Parameter.VAR_KEYWORD:
             prefix = '**'
 
-        mapping = f'{prefix}{self.public_name or "<missing>"}' \
-            if self.public_name == self.interface_name \
+        mapping = f'{prefix}{self.name or "<missing>"}' \
+            if self.name == self.interface_name \
             else (
-                f'{prefix}{self.public_name or "<missing>"}->'
+                f'{prefix}{self.name or "<missing>"}->'
                 f'{prefix}{self.interface_name or "<missing>"}'
             )
-        annotation = self.annotation.__name__ \
-            if inspect.isclass(self.annotation) \
-            else str(self.annotation)
-        annotated = f'{mapping}:{annotation}' \
-            if self.annotation is not inspect.Parameter.empty \
+        # pylint: disable=E1101, no-member
+        type_ = self.type.__name__ \
+            if inspect.isclass(self.type) \
+            else str(self.type)
+        annotated = f'{mapping}:{type_}' \
+            if self.type is not inspect.Parameter.empty \
             else mapping
         defaulted = f'{annotated}={self.default}' \
             if self.default is not inspect.Parameter.empty \
@@ -54,102 +81,105 @@ class ParameterMap(typing.NamedTuple):
         return f'<{type(self).__name__} "{self}">'
 
     @property
-    def public_parameter(self) -> inspect.Parameter:
-        if not self.public_name:
-            raise TypeError('Cannot generate parameter without public_name')
+    def parameter(self) -> inspect.Parameter:
+        if not self.name:
+            raise TypeError('Cannot generate an unnamed parameter')
         return inspect.Parameter(
-            name=typing.cast(str, self.public_name),
+            name=self.name,
             kind=self.kind,
             default=self.default,
-            annotation=self.annotation,
+            annotation=self.type,
         )
 
     @property
     def interface_parameter(self) -> inspect.Parameter:
         if not self.interface_name:
-            raise TypeError('Cannot generate parameter without interface_name')
-
+            raise TypeError('Cannot generate an unnamed parameter')
         return inspect.Parameter(
-            name=typing.cast(str, self.interface_name),
+            name=self.interface_name,
             kind=self.kind,
             default=self.default,
-            annotation=self.annotation,
+            annotation=self.type,
         )
 
     def replace(
             self,
             *,
             kind=void,
-            public_name=void,
+            name=void,
             interface_name=void,
             default=void,
-            annotation=void,
+            type=void,
             converter=void,
             validator=void,
-            is_contextual=void,
+            is_contextual=void
         ):
-        # pylint: disable=R0913, too-many-arguments
         # pylint: disable=E1120, no-value-for-parameter
-        return type(self)(
-            kind=coerce_if(kind, void, self.kind),
-            public_name=coerce_if(public_name, void, self.public_name),
-            interface_name=coerce_if(
-                interface_name, void, self.interface_name),
-            default=coerce_if(default, void, self.default),
-            annotation=coerce_if(annotation, void, self.annotation),
-            converter=coerce_if(converter, void, self.converter),
-            validator=coerce_if(validator, void, self.validator),
-            is_contextual=coerce_if(is_contextual, void, self.is_contextual),
-        )
+        # pylint: disable=W0622, redefined-builtin
+        # pylint: disable=R0913, too-many-arguments
+        return dc.replace(self, **{
+            k: v for k, v in {
+                'kind': kind,
+                'name': name,
+                'interface_name': interface_name,
+                'default': default,
+                'type': type,
+                'converter': converter,
+                'validator': validator,
+                'is_contextual': is_contextual,
+            }.items() if v is not void
+        })
 
     @classmethod
     def from_parameter(cls, parameter: inspect.Parameter) -> 'ParameterMap':
-        return cls(
+        return cls(  # type: ignore
             kind=parameter.kind,
-            public_name=parameter.name,
+            name=parameter.name,
             interface_name=parameter.name,
             default=parameter.default,
-            annotation=parameter.annotation,
+            type=parameter.annotation
         )
 
     @classmethod
     def create_positional_only(
             cls,
+            name=None,
             interface_name=None,
-            public_name=None,
             *,
             default=void,
-            annotation=void,
+            type=void,
             converter=None,
-            validator=None,
+            validator=None
         ) -> 'ParameterMap':
-        return cls(
+        # pylint: disable=W0622, redefined-builtin
+        return cls(  # type: ignore
             kind=inspect.Parameter.POSITIONAL_ONLY,
-            public_name=public_name or interface_name,
-            interface_name=interface_name or public_name,
+            name=name,
+            interface_name=interface_name,
             default=void_to_empty(default),
-            annotation=void_to_empty(annotation),
+            type=void_to_empty(type),
             converter=converter,
-            validator=validator,
+            validator=validator
         )
 
     @classmethod
     def create_positional_or_keyword(
             cls,
+            name=None,
             interface_name=None,
-            public_name=None,
             *,
             default=void,
-            annotation=void,
+            type=void,
             converter=None,
-            validator=None,
+            validator=None
         ) -> 'ParameterMap':
-        return cls(
+        # pylint: disable=W0622, redefined-builtin
+        return cls(  # type: ignore
             kind=inspect.Parameter.POSITIONAL_OR_KEYWORD,
-            public_name=public_name or interface_name,
-            interface_name=interface_name or public_name,
+            name=name,
+            interface_name=interface_name,
             default=void_to_empty(default),
-            annotation=void_to_empty(annotation),
+            type=void_to_empty(type),
             converter=converter,
             validator=validator,
         )
@@ -157,37 +187,39 @@ class ParameterMap(typing.NamedTuple):
     @classmethod
     def create_contextual(
             cls,
+            name=None,
             interface_name=None,
-            public_name=None,
             *,
-            annotation=void,
+            type=void
         ) -> 'ParameterMap':
-        return cls(
+        # pylint: disable=W0622, redefined-builtin
+        return cls(  # type: ignore
             kind=inspect.Parameter.POSITIONAL_OR_KEYWORD,
-            interface_name=interface_name or public_name,
-            public_name=public_name or interface_name,
+            name=name,
+            interface_name=interface_name,
             default=inspect.Parameter.empty,
-            annotation=void_to_empty(annotation),
+            type=void_to_empty(type),
             is_contextual=True,
         )
 
     @classmethod
     def create_keyword_only(
             cls,
+            name=None,
             interface_name=None,
-            public_name=None,
             *,
             default=void,
-            annotation=void,
+            type=void,
             converter=None,
-            validator=None,
+            validator=None
         ) -> 'ParameterMap':
-        return cls(
+        # pylint: disable=W0622, redefined-builtin
+        return cls(  # type: ignore
             kind=inspect.Parameter.KEYWORD_ONLY,
-            public_name=public_name or interface_name,
-            interface_name=interface_name or public_name,
+            name=name,
+            interface_name=interface_name,
             default=void_to_empty(default),
-            annotation=void_to_empty(annotation),
+            type=void_to_empty(type),
             converter=converter,
             validator=validator,
         )
@@ -198,16 +230,16 @@ class ParameterMap(typing.NamedTuple):
             name,
             *,
             converter=None,
-            validator=None,
+            validator=None
         ) -> 'ParameterMap':
-        return cls(
+        # pylint: disable=W0622, redefined-builtin
+        return cls(  # type: ignore
             kind=inspect.Parameter.VAR_POSITIONAL,
-            public_name=name,
-            interface_name=name,
+            name=name,
             default=inspect.Parameter.empty,
-            annotation=inspect.Parameter.empty,
+            type=inspect.Parameter.empty,
             converter=converter,
-            validator=validator,
+            validator=validator
         )
 
     @classmethod
@@ -216,14 +248,14 @@ class ParameterMap(typing.NamedTuple):
             name,
             *,
             converter=None,
-            validator=None,
+            validator=None
         ) -> 'ParameterMap':
-        return cls(
+        # pylint: disable=W0622, redefined-builtin
+        return cls(  # type: ignore
             kind=inspect.Parameter.VAR_KEYWORD,
-            public_name=name,
-            interface_name=name,
+            name=name,
             default=inspect.Parameter.empty,
-            annotation=inspect.Parameter.empty,
+            type=inspect.Parameter.empty,
             converter=converter,
             validator=validator,
         )
@@ -234,12 +266,10 @@ class VarPositional(collections.abc.Iterable):
 
     def __init__(
             self,
-            name: typing.Optional[str] = None,
-            converter: typing.Optional[types.FunctionType] = None,
-            validator: typing.Union[
-                typing.Optional[types.FunctionType],
-                typing.Optional[typing.Iterable[types.FunctionType]],
-            ]=None,
+            name: _name_type = None,
+            *,
+            converter: _converter_type = None,
+            validator: _validator_type = None,
         ) -> None:
         '''
         There is no concept of name / interface_name, because this
@@ -267,13 +297,10 @@ class VarPositional(collections.abc.Iterable):
 
     def __call__(
             self,
-            name: str = None,
+            name: _name_type = None,
             *,
-            converter: typing.Optional[types.FunctionType] = None,
-            validator: typing.Union[
-                typing.Optional[types.FunctionType],
-                typing.Optional[typing.Iterable[types.FunctionType]],
-            ]=None,
+            converter: _converter_type = None,
+            validator: _validator_type = None,
         ) -> 'VarPositional':
         return type(self)(
             name=name,
@@ -288,12 +315,10 @@ class VarKeyword(collections.abc.Mapping):
 
     def __init__(
             self,
-            name: typing.Optional[str] = None,
-            converter: typing.Optional[types.FunctionType] = None,
-            validator: typing.Union[
-                typing.Optional[types.FunctionType],
-                typing.Optional[typing.Iterable[types.FunctionType]],
-            ]=None,
+            name: _name_type = None,
+            *,
+            converter: _converter_type = None,
+            validator: _validator_type = None,
         ) -> None:
         '''
         There is no concept of name / interface_name, because this
@@ -313,7 +338,7 @@ class VarKeyword(collections.abc.Mapping):
         return ParameterMap.create_var_keyword(
             name=self.name,
             converter=self.converter,
-            validator=self.validator,
+            validator=self.validator
         )
 
     def __getitem__(self, key: str) -> ParameterMap:
@@ -329,14 +354,11 @@ class VarKeyword(collections.abc.Mapping):
 
     def __call__(
             self,
-            name: typing.Optional[str] = None,
+            name: _name_type = None,
             *,
-            converter: typing.Optional[types.FunctionType] = None,
-            validator: typing.Union[
-                typing.Optional[types.FunctionType],
-                typing.Optional[typing.Iterable[types.FunctionType]],
-            ]=None,
-    ) -> 'VarKeyword':
+            converter: _converter_type = None,
+            validator: _validator_type = None,
+        ) -> 'VarKeyword':
         return type(self)(
             name=name,
             converter=converter,

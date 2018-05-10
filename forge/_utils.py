@@ -46,7 +46,7 @@ def getparam(
         )
 
 
-def get_return_annotation(callable_: TGenericCallable) -> typing.Any:
+def get_return_type(callable_: TGenericCallable) -> typing.Any:
     if not callable(callable_):
         raise TypeError(f'{callable_} is not callable')
     if hasattr(callable_, '__signature__'):
@@ -54,22 +54,23 @@ def get_return_annotation(callable_: TGenericCallable) -> typing.Any:
     return callable_.__annotations__.get('return', inspect.Signature.empty)
 
 
-def set_return_annotation(
+def set_return_type(
         callable_: TGenericCallable,
-        annotation: typing.Any,
+        type: typing.Any,
     ) -> None:
+    # pylint: disable=W0622, redefined-builtin
     if not callable(callable_):
         raise TypeError(f'{callable_} is not callable')
     if hasattr(callable_, '__signature__'):
         # https://github.com/python/mypy/issues/1170
         new_ = callable_.__signature__.replace(  # type: ignore
-            return_annotation=annotation,
+            return_annotation=type,
         )
         callable_.__signature__ = new_  # type: ignore
-    elif annotation is inspect.Signature.empty:
+    elif type is inspect.Signature.empty:
         callable_.__annotations__.pop('return', None)
     else:
-        callable_.__annotations__['return'] = annotation
+        callable_.__annotations__['return'] = type
 
 
 def get_var_positional_parameter(

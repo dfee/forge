@@ -4,6 +4,8 @@ import inspect
 import types
 import typing
 
+import dataclasses as dc
+
 from forge._marker import (
     void,
     void_to_empty,
@@ -12,7 +14,7 @@ from forge._parameter import ParameterMap
 from forge._utils import (
     get_var_positional_parameter,
     get_var_keyword_parameter,
-    set_return_annotation,
+    set_return_type,
     stringify_parameters,
 )
 
@@ -56,24 +58,28 @@ def returns(
         annotation: typing.Any = void
     ) -> typing.Callable[[typing.Callable[..., typing.Any]], typing.Any]:
     def inner(callable_):
-        set_return_annotation(callable_, void_to_empty(annotation))
+        set_return_type(callable_, void_to_empty(annotation))
         return callable_
     return inner
 
 
-class CallArguments(typing.NamedTuple):
+@dc.dataclass(init=False, frozen=True)
+class CallArguments:
+    __slots__ = ('args', 'kwargs')
     args: typing.Union[typing.Tuple[typing.Any], typing.Tuple]
-    kwargs: typing.Dict[str, typing.Any]
+    kwargs: typing.Mapping[str, typing.Any]
+
+    def __init__(self, *args, **kwargs):
+        setattr_ = super().__setattr__
+        setattr_('args', args)
+        setattr_('kwargs', types.MappingProxyType(kwargs))
 
     @classmethod
     def from_bound_arguments(
             cls,
             bound: inspect.BoundArguments,
         ) -> 'CallArguments':
-        return cls(
-            args=typing.cast(typing.Tuple[typing.Any], bound.args),
-            kwargs=typing.cast(typing.Dict[str, typing.Any], bound.kwargs),
-        )
+        return cls(*bound.args, **bound.kwargs)  # type: ignore
 
     def to_bound_arguments(
             self,
@@ -204,19 +210,19 @@ class Forger(collections.abc.MutableSequence):
         for i, current in enumerate(pmaps):
             if not isinstance(current, ParameterMap):
                 raise TypeError(f"Received non-ParameterMap '{current}'")
-            elif not (current.public_name and current.interface_name):
+            elif not (current.name and current.interface_name):
                 raise ValueError(f'Received unnamed ParameterMap: {current}')
             elif current.is_contextual and i > 0:
                 raise TypeError(
                     'Only the first ParameterMap can be contextual'
                 )
 
-            if current.public_name in pname_set:
+            if current.name in pname_set:
                 raise ValueError(
-                    'Received multiple ParameterMaps with public_name '
-                    f"'{current.public_name}'"
+                    'Received multiple ParameterMaps with name '
+                    f"'{current.name}'"
                 )
-            pname_set.add(current.public_name)
+            pname_set.add(current.name)
 
             if current.interface_name in iname_set:
                 raise ValueError(
@@ -255,7 +261,7 @@ class Forger(collections.abc.MutableSequence):
             *args,
             *[
                 v.replace(
-                    public_name=k,
+                    name=k,
                     interface_name=v.interface_name or k,
                 ) for k, v in kwargs.items()
             ],
@@ -272,7 +278,12 @@ class Forger(collections.abc.MutableSequence):
         return f'<{type(self).__name__} ({stringify_parameters(*self)})>'
 
     # Begin MutableSequence methods
-    def __getitem__(self, key: typing.Union[int, slice]) -> ParameterMap:
+    def __getitem__(
+            self,
+            key: typing.Union[int, slice],
+        ) -> typing.Any:
+        # typing.Union[ParameterMap, typing.Sequence[ParameterMap]]
+        # https://github.com/python/mypy/issues/4108
         return self._data.__getitem__(key)
 
     def __setitem__(
@@ -339,20 +350,20 @@ class Forger(collections.abc.MutableSequence):
     @property
     def converters(self):
         return {
-            pmap.public_name: pmap.converter
+            pmap.name: pmap.converter
             for pmap in self if pmap.converter
         }
 
     @property
     def validators(self):
         return {
-            pmap.public_name: pmap.validator
+            pmap.name: pmap.validator
             for pmap in self if pmap.validator
         }
 
     @property
     def public_parameters(self):
-        return [pmap.public_parameter for pmap in self]
+        return [pmap.parameter for pmap in self]
 
     @property
     def interface_parameters(self):
@@ -363,7 +374,7 @@ class Forger(collections.abc.MutableSequence):
             parameters=[
                 pmap.interface_parameter \
                     if interface \
-                    else pmap.public_parameter
+                    else pmap.parameter
                 for pmap in self
             ],
             return_annotation=void_to_empty(return_annotation),
@@ -382,7 +393,7 @@ class Forger(collections.abc.MutableSequence):
             return_annotation=sig_private.return_annotation,
         )
 
-        return SignatureMapper(
+        return SignatureMapper(  # type: ignore
             callable_=callable_,
             has_context=bool(self.context),
             sig_public=sig_public,
@@ -392,13 +403,14 @@ class Forger(collections.abc.MutableSequence):
             tf_interface=make_transform(
                 sig_public,
                 sig_interface,
-                {p.public_name: p.interface_name for p in self},
+                {p.name: p.interface_name for p in self},
             ),
             tf_private=make_transform(sig_interface, sig_private),
         )
 
 
-class SignatureMapper(typing.NamedTuple):
+@dc.dataclass(frozen=True, repr=False)
+class SignatureMapper:
     callable_: typing.Callable[..., typing.Any]
     has_context: bool
     sig_public: inspect.Signature
@@ -429,7 +441,7 @@ class SignatureMapper(typing.NamedTuple):
         # pylint: disable=E1101, no-member
         # pylint: disable=E1121, too-many-function-args
         call_args = CallArguments.from_bound_arguments(bound)
-        return self.tf_private(self.tf_interface(call_args))
+        return self.tf_private(self.tf_interface(call_args))  # type: ignore
 
     def __repr__(self) -> str:
         pubstr = stringify_parameters(
