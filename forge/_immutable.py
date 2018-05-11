@@ -30,6 +30,10 @@ def replace(obj, **changes):
 class Immutable:
     __slots__ = ()
 
+    def __getattr__(self, key: str) -> typing.Any:
+        '''Solely for placating mypy'''
+        return super().__getattribute__(key)
+
     def __setattr__(self, key, value):
         raise ImmutableInstanceError(f"cannot assign to field '{key}'")
 

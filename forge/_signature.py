@@ -65,10 +65,11 @@ def returns(
 class CallArguments(immutable.Struct):
     __slots__ = ('args', 'kwargs')
 
-    args: typing.Union[typing.Tuple[typing.Any], typing.Tuple]
-    kwargs: typing.Mapping[str, typing.Any]
-
-    def __init__(self, *args, **kwargs):
+    def __init__(
+            self,
+            *args: typing.Any,
+            **kwargs: typing.Any
+        ) -> None:
         super().__init__(args=args, kwargs=kwargs)
 
     @classmethod
@@ -418,26 +419,19 @@ class SignatureMapper(immutable.Struct):
         'tf_private',
     )
 
-    callable_: typing.Callable[..., typing.Any]
-    has_context: bool
-    sig_public: inspect.Signature
-    sig_interface: inspect.Signature
-    converters: types.MappingProxyType
-    validators: types.MappingProxyType
-    tf_interface: typing.Callable[[CallArguments], CallArguments]
-    tf_private: typing.Callable[[CallArguments], CallArguments]
-
     def __init__(
             self,
-            callable_,
-            has_context,
-            sig_public,
-            sig_interface,
-            converters=types.MappingProxyType({}),
-            validators=types.MappingProxyType({}),
-            tf_interface=ident_t,
-            tf_private=ident_t,
-        ):
+            callable_: typing.Callable[..., typing.Any],
+            has_context: bool,
+            sig_public: inspect.Signature,
+            sig_interface: inspect.Signature,
+            converters: types.MappingProxyType = types.MappingProxyType({}),
+            validators: types.MappingProxyType = types.MappingProxyType({}),
+            tf_interface: typing.Callable[[CallArguments], CallArguments] = \
+                ident_t,
+            tf_private: typing.Callable[[CallArguments], CallArguments] = \
+                ident_t,
+        ) -> None:
         # pylint: disable=R0913, too-many-arguments
         super().__init__(
             callable_=callable_,
@@ -447,7 +441,7 @@ class SignatureMapper(immutable.Struct):
             converters=types.MappingProxyType(converters),
             validators=types.MappingProxyType(validators),
             tf_interface=tf_interface,
-            tf_private=tf_private,
+            tf_private=tf_private
         )
 
     def __call__(

@@ -38,26 +38,17 @@ class ParameterMap(immutable.Struct):
         'is_contextual',
     )
 
-    kind: _kind_type
-    name: _name_type
-    interface_name: _name_type
-    default: _default_type
-    type: _type_type
-    converter: _converter_type
-    validator: _validator_type
-    is_contextual: _is_contextual_type
-
     def __init__(
             self,
-            kind,
-            name=None,
-            interface_name=None,
-            default=void,
-            type=void,
-            converter=None,
-            validator=None,
-            is_contextual=False,
-        ):
+            kind: _kind_type,
+            name: _name_type = None,
+            interface_name: _name_type = None,
+            default: _default_type = void,
+            type: _type_type = void,
+            converter: _converter_type = None,
+            validator: _validator_type = None,
+            is_contextual: _is_contextual_type = False,
+        ) -> None:
         # pylint: disable=W0622, redefined-builtin
         # pylint: disable=R0913, too-many-arguments
         super().__init__(
@@ -291,7 +282,7 @@ class VarPositional(collections.abc.Iterable):
             name: _name_type = None,
             *,
             converter: _converter_type = None,
-            validator: _validator_type = None,
+            validator: _validator_type = None
         ) -> None:
         '''
         There is no concept of name / interface_name, because this
@@ -322,7 +313,7 @@ class VarPositional(collections.abc.Iterable):
             name: _name_type = None,
             *,
             converter: _converter_type = None,
-            validator: _validator_type = None,
+            validator: _validator_type = None
         ) -> 'VarPositional':
         return type(self)(
             name=name,
@@ -340,7 +331,7 @@ class VarKeyword(collections.abc.Mapping):
             name: _name_type = None,
             *,
             converter: _converter_type = None,
-            validator: _validator_type = None,
+            validator: _validator_type = None
         ) -> None:
         '''
         There is no concept of name / interface_name, because this
@@ -379,7 +370,7 @@ class VarKeyword(collections.abc.Mapping):
             name: _name_type = None,
             *,
             converter: _converter_type = None,
-            validator: _validator_type = None,
+            validator: _validator_type = None
         ) -> 'VarKeyword':
         return type(self)(
             name=name,
