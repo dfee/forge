@@ -4,8 +4,7 @@ import inspect
 import types
 import typing
 
-import dataclasses as dc
-
+import forge._immutable as immutable
 from forge._marker import (
     void,
     void_to_empty,
@@ -26,31 +25,51 @@ _validator_type = typing.Optional[
     ]
 ]
 
-@dc.dataclass(frozen=True)
-class ParameterMap:
+
+class ParameterMap(immutable.Struct):
+    __slots__ = (
+        'kind',
+        'name',
+        'interface_name',
+        'default',
+        'type',
+        'converter',
+        'validator',
+        'is_contextual',
+    )
+
     kind: _kind_type
-    name: _name_type = dc.field(default=None)
-    interface_name: _name_type = dc.field(default=None)
-    default: _default_type = dc.field(default=void)
-    type: _type_type = dc.field(default=void)
-    converter: _converter_type = dc.field(default=None)
-    validator: _validator_type = dc.field(default=None)
-    is_contextual: _is_contextual_type = dc.field(default=False)
+    name: _name_type
+    interface_name: _name_type
+    default: _default_type
+    type: _type_type
+    converter: _converter_type
+    validator: _validator_type
+    is_contextual: _is_contextual_type
 
-    def __post_init__(self):
-        setattr_ = super().__setattr__
-        if self.default is void:
-            setattr_('default', inspect.Parameter.empty)
-        if self.type is void:
-            setattr_('type', inspect.Parameter.empty)
-
-        if not self.name and self.interface_name:
-            setattr_('name', self.interface_name)
-        elif not self.interface_name and self.name:
-            setattr_('interface_name', self.name)
-
-    def _asdict(self):
-        return dc.asdict(self)
+    def __init__(
+            self,
+            kind,
+            name=None,
+            interface_name=None,
+            default=void,
+            type=void,
+            converter=None,
+            validator=None,
+            is_contextual=False,
+        ):
+        # pylint: disable=W0622, redefined-builtin
+        # pylint: disable=R0913, too-many-arguments
+        super().__init__(
+            kind=kind,
+            name=name or interface_name,
+            interface_name=interface_name or name,
+            default=void_to_empty(default),
+            type=void_to_empty(type),
+            converter=converter,
+            validator=validator,
+            is_contextual=is_contextual,
+        )
 
     def __str__(self) -> str:
         prefix = ''
@@ -102,6 +121,9 @@ class ParameterMap:
             annotation=self.type,
         )
 
+    def _asdict(self):
+        return immutable.asdict(self)
+
     def replace(
             self,
             *,
@@ -117,7 +139,7 @@ class ParameterMap:
         # pylint: disable=E1120, no-value-for-parameter
         # pylint: disable=W0622, redefined-builtin
         # pylint: disable=R0913, too-many-arguments
-        return dc.replace(self, **{
+        return immutable.replace(self, **{
             k: v for k, v in {
                 'kind': kind,
                 'name': name,
