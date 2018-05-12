@@ -2,7 +2,7 @@
    :alt: forge logo
 
 ============================================
-forge: (python) signatures for fun and profit
+``forge`` (python) signatures for fun and profit
 ============================================
 
 .. image:: https://travis-ci.org/dfee/forge.png?branch=master
@@ -123,7 +123,7 @@ You can validate arguments by either passing a validator or an iterable (such as
   >>> send_presents(5)
   sending 5 presents
 
-You can optionally provide a context parameter, such as `self`, `cls`, or create your own named parameter with `forge.ctx('myparam')`, and use that alongside validation:
+You can optionally provide a context parameter, such as ``self``, ``cls``, or create your own named parameter with ``forge.ctx('myparam')``, and use that alongside validation:
 
 .. code-block:: python
 
@@ -178,7 +178,7 @@ You can convert an argument by passing a conversion function to your ParameterMa
   >>> shout('hello over there')
   HELLO OVER THERE
 
-You can optionally provide a context parameter, such as `self`, `cls`, or create your own named ParameterMap with `forge.ctx('myparam')`, and use that alongside conversion:
+You can optionally provide a context parameter, such as ``self``, ``cls``, or create your own named ParameterMap with ``forge.ctx('myparam')``, and use that alongside conversion:
 
 .. code-block:: python
 
@@ -210,7 +210,7 @@ You can optionally provide a context parameter, such as `self`, `cls`, or create
 
 Usage (Narrative)
 =================
-For example, consider the following `BaseService.update` method below:
+For example, consider the following ``BaseService.update`` method below:
 
 .. code-block:: python
 
@@ -224,7 +224,7 @@ For example, consider the following `BaseService.update` method below:
       def persist(self, ins):
           ...
 
-Now, if we want to create a more specific implementation, e.g. `UserService`, and we want to allow certain parameters, we end up with code that looks like:
+Now, if we want to create a more specific implementation, e.g. ``UserService``, and we want to allow certain parameters, we end up with code that looks like:
 
 .. code-block:: python
 
@@ -242,7 +242,7 @@ Now, if we want to create a more specific implementation, e.g. `UserService`, an
               cleaned['manager'] = manager
           return super().update(ins, **cleaned)
 
-This `update` method is nice enough, except that the signature doesn't exactly describe what parameters are accepted. Upon inspection (using `help(UserService.update`) we find out that the method takes two parameters: `self` and a variable-keyword argument `kwargs`. Is `profile_picture` accepted? NO! How about `password`? Absolutely not! There are special methods for those.
+This ``update`` method is nice enough, except that the signature doesn't exactly describe what parameters are accepted. Upon inspection (using ``help(UserService.update``) we find out that the method takes two parameters: ``self`` and a variable-keyword argument ``kwargs``. Is ``profile_picture`` accepted? NO! How about ``password``? Absolutely not! There are special methods for those.
 
 .. code-block:: python
 
@@ -289,7 +289,7 @@ So, we realize now that we need to do parameter conversion and validation in mul
           ... # validate, convert as above
           return super().create(**kwargs)
 
-Now, we're faced with the problem that our method still doesn't describe to a user what parameters it takes. Open up your python interpreter, and type `help(UserService.update)`.
+Now, we're faced with the problem that our method still doesn't describe to a user what parameters it takes. Open up your python interpreter, and type ``help(UserService.update)``.
 
 Now, we can naively solve this problem by naming the parameters:
 
@@ -307,7 +307,7 @@ Now, we can naively solve this problem by naming the parameters:
               cleaned['manager'] = manager
           return super().update(ins, **kwargs)
 
-So now, our method signature adequately describes what parameters `UserService.update` takes. Except, what if a user actually becomes self-employed and no-longer has a manager. We've lost the ability to *unset* attributes, as our code can't distinguish between what arguments were provided as `None` by the user, and which arguments are `None` by default:
+So now, our method signature adequately describes what parameters ``UserService.update`` takes. Except, what if a user actually becomes self-employed and no-longer has a manager. We've lost the ability to *unset* attributes, as our code can't distinguish between what arguments were provided as ``None`` by the user, and which arguments are ``None`` by default:
 
 .. code-block:: python
 
@@ -315,7 +315,7 @@ So now, our method signature adequately describes what parameters `UserService.u
   <User: name=Jane Doe, email_address=jane@janedoe.com, manager=Evil Bob>
   >>> # why can't Jane escape? why?!
 
-Enter `forge`: to escape from the problems we faced above, namely the paradox of having a well defined signature impeding usage, we can use `forge`:
+Enter ``forge``: to escape from the problems we faced above, namely the paradox of having a well defined signature impeding usage, we can use ``forge``:
 
 .. code-block:: python
 
@@ -393,12 +393,12 @@ And, if you are inspecting the method, what do you see?
 
 We've isolated parameter level validation and conversion, reducing boilerplate logic significantly, and our methods have meaningful signatures. Therefore, our code is easier to reason about and test, and developers who use are code can spend more time in their IDE or REPL environment than cross-referencing which parameters are available for a particular method.
 
-So go on, `forge` some (function) signatures for fun and profit.
+So go on, ``forge`` some (function) signatures for fun and profit.
 
 
 Advanced Usage
 ==============
-You can use the `forge.Forger` class directly, which is very useful when you're decorating functions and want to side-load certain parameters.
+You can use the ``forge.Forger`` class directly, which is very useful when you're decorating functions and want to side-load certain parameters.
 
 Typically, the code we use today, looks like this:
 
@@ -432,7 +432,7 @@ Typically, the code we use today, looks like this:
   >>> help(myfunc)
   mfunc(ctx, id, *, log=False)
 
-You'll see that the function signature has preserved the `ctx` parameter, which is an implementation detail, and oughta be private to the function. If the user provides `ctx`...
+You'll see that the function signature has preserved the ``ctx`` parameter, which is an implementation detail, and oughta be private to the function. If the user provides ``ctx``...
 
 .. code-block:: python
 
@@ -478,7 +478,7 @@ Users of the function aren't supposed to provide this functionality. Forge paves
   >>> help(myfunc)
   myfunc(myparam, *, log=False)
 
-Now, a casual user wouldn't even think to pass `ctx`.
+Now, a casual user wouldn't even think to pass ``ctx``.
 
 
 Requirements
@@ -508,7 +508,7 @@ https://github.com/dfee/forge
 
 Image / Meta
 ============
-`Salvador Dali <https://en.wikipedia.org/wiki/Salvador_Dal%C3%AD>`_, a Spanish surealist artist, is infamous for allegedly forging his own work. In his latter years, it's said that he signed blank canvases and tens of thousands of sheets of lithographic paper (under duress of his guardians). In the image atop this `README`, he's seen with his pet ocelot, Babou.
+`Salvador Dali <https://en.wikipedia.org/wiki/Salvador_Dal%C3%AD>`_, a Spanish surealist artist, is infamous for allegedly forging his own work. In his latter years, it's said that he signed blank canvases and tens of thousands of sheets of lithographic paper (under duress of his guardians). In the image atop this ``README``, he's seen with his pet ocelot, Babou.
 
 Practically speaking, Salvador Dali and Babou are pretty awesome, and I intend to throw no shade at him or his legacy.
 
