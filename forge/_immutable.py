@@ -1,9 +1,7 @@
 from types import MappingProxyType
 import typing
 
-
-class ImmutableInstanceError(Exception):
-    pass
+from ._exceptions import ImmutableInstanceError
 
 
 def asdict(obj):

@@ -20,7 +20,10 @@ Key Features
 - Revise function signatures by adding, removing, or adjusting parameters
 - Convert and validate arguments
 - Distinguish between user-supplied arguments and their default counterparts
+
+- Python >= 3.5, PyPy >= 6.0.0
 - 100% tested (branches included)
+- No extra dependencies
 
 Quickstart
 ==========
@@ -61,7 +64,7 @@ You can re-map a parameter to a different ParameterKind (e.g. positional-only to
   import forge
 
   @forge.sign(
-      forge.keyword('colour', 'color', default='blue'),
+      forge.kwarg('colour', 'color', default='blue'),
   )
   def myfunc(colour):
     return colour
@@ -481,7 +484,7 @@ Now, a casual user wouldn't even think to pass `ctx`.
 Requirements
 ============
 
-- Python >= 3.6
+- Python >= 3.5, PyPy >= 6.0.0
 
 
 Author

@@ -9,8 +9,9 @@ matrix:
       env: TOXENV=py36,coverage,lint
     - python: nightly
       env: TOXENV=py37
-    - python: pypy3.5
-      env: TOXENV=pypy
+    # https://github.com/travis-ci/travis-ci/issues/9542
+    # - python: pypy-6.0.0
+    #   env: TOXENV=pypy
 
 install:
   - travis_retry pip install tox

@@ -56,9 +56,10 @@ def set_run_validators(run: bool) -> None:
 def returns(
         annotation: typing.Any = void
     ) -> typing.Callable[[typing.Callable[..., typing.Any]], typing.Any]:
-    def inner(callable_):
-        set_return_type(callable_, void_to_empty(annotation))
-        return callable_
+    def inner(callable):
+        # pylint: disable=W0622, redefined-builtin
+        set_return_type(callable, void_to_empty(annotation))
+        return callable
     return inner
 
 
@@ -324,22 +325,24 @@ class Forger(collections.abc.MutableSequence):
 
     def __call__(
             self,
-            callable_: typing.Callable[..., types.FunctionType],
+            callable: typing.Callable[..., types.FunctionType],
         ) -> typing.Callable[..., typing.Any]:
-        @functools.wraps(callable_)
+        # pylint: disable=W0622, redefined-builtin
+        @functools.wraps(callable)
         def wrapper(*args, **kwargs):
             # pylint: disable=E1102, not-callable
             transformed = wrapper.__signature_mapper__(*args, **kwargs)
-            return callable_(*transformed.args, **transformed.kwargs)
+            return callable(*transformed.args, **transformed.kwargs)
 
-        mapper = self.make_mapper(callable_)
+        mapper = self.make_mapper(callable)
         wrapper.__signature_mapper__ = mapper  # type: ignore
         wrapper.__signature__ = mapper.sig_public  # type: ignore
         return wrapper
 
     @classmethod
-    def from_callable(cls, callable_: typing.Callable) -> 'Forger':
-        sig = inspect.signature(callable_)
+    def from_callable(cls, callable: typing.Callable) -> 'Forger':
+        # pylint: disable=W0622, redefined-builtin
+        sig = inspect.signature(callable)
         # pylint: disable=E1101, no-member
         return cls(*[
             ParameterMap.from_parameter(param)
@@ -393,9 +396,10 @@ class Forger(collections.abc.MutableSequence):
 
     def make_mapper(
             self,
-            callable_: typing.Callable[..., typing.Any],
+            callable: typing.Callable[..., typing.Any],
         ) -> 'SignatureMapper':
-        sig_private = inspect.signature(callable_)
+        # pylint: disable=W0622, redefined-builtin
+        sig_private = inspect.signature(callable)
         sig_public = self.make_signature(
             return_annotation=sig_private.return_annotation,
         )
@@ -405,7 +409,7 @@ class Forger(collections.abc.MutableSequence):
         )
 
         return SignatureMapper(  # type: ignore
-            callable_=callable_,
+            callable=callable,
             has_context=bool(self.context),
             sig_public=sig_public,
             sig_interface=sig_interface,
@@ -422,7 +426,7 @@ class Forger(collections.abc.MutableSequence):
 
 class SignatureMapper(immutable.Struct):
     __slots__ = (
-        'callable_',
+        'callable',
         'has_context',
         'sig_public',
         'sig_interface',
@@ -434,7 +438,7 @@ class SignatureMapper(immutable.Struct):
 
     def __init__(
             self,
-            callable_: typing.Callable[..., typing.Any],
+            callable: typing.Callable[..., typing.Any],
             has_context: bool,
             sig_public: inspect.Signature,
             sig_interface: inspect.Signature,
@@ -445,9 +449,10 @@ class SignatureMapper(immutable.Struct):
             tf_private: typing.Callable[[CallArguments], CallArguments] = \
                 ident_t,
         ) -> None:
+        # pylint: disable=W0622, redefined-builtin
         # pylint: disable=R0913, too-many-arguments
         super().__init__(
-            callable_=callable_,
+            callable=callable,
             has_context=has_context,
             sig_public=sig_public,
             sig_interface=sig_interface,
@@ -467,7 +472,7 @@ class SignatureMapper(immutable.Struct):
         except TypeError as exc:
             raise TypeError(
                 '{callable_name}() {message}'.format(
-                    callable_name=self.callable_.__name__,
+                    callable_name=self.callable.__name__,
                     message=exc.args[0],
                 ),
             )
@@ -501,7 +506,7 @@ class SignatureMapper(immutable.Struct):
 
     @property
     def sig_private(self):
-        return inspect.signature(self.callable_)
+        return inspect.signature(self.callable)
 
     def convert(
             self,

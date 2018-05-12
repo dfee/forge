@@ -1,3 +1,4 @@
+import builtins
 import inspect
 import typing
 
@@ -19,23 +20,25 @@ TUnionParameter = \
 
 
 def hasparam(
-        callable_: TGenericCallable,
+        callable: TGenericCallable,
         name: str,
     ) -> bool:
-    if not callable(callable_):
-        raise TypeError('{} is not callable'.format(callable_))
-    return name in inspect.signature(callable_).parameters
+    # pylint: disable=W0622, redefined-builtin
+    if not builtins.callable(callable):
+        raise TypeError('{} is not callable'.format(callable))
+    return name in inspect.signature(callable).parameters
 
 
 def getparam(
-        callable_: typing.Callable[..., typing.Any],
+        callable: typing.Callable[..., typing.Any],
         name: str,
         default: typing.Any = void,
     ) -> inspect.Parameter:
-    if not callable(callable_):
-        raise TypeError('{} is not callable'.format(callable_))
+    # pylint: disable=W0622, redefined-builtin
+    if not builtins.callable(callable):
+        raise TypeError('{} is not callable'.format(callable))
 
-    params = inspect.signature(callable_).parameters
+    params = inspect.signature(callable).parameters
     if default is not void:
         return params.get(name, default)
     try:
@@ -43,37 +46,38 @@ def getparam(
     except KeyError:
         raise ParameterError(
             "'{callable_name}' has no parameter '{param_name}'".format(
-                callable_name=callable_.__name__,
+                callable_name=callable.__name__,
                 param_name=name,
             )
         )
 
 
-def get_return_type(callable_: TGenericCallable) -> typing.Any:
-    if not callable(callable_):
-        raise TypeError('{} is not callable'.format(callable_))
-    if hasattr(callable_, '__signature__'):
-        return callable_.__signature__.return_annotation  # type: ignore
-    return callable_.__annotations__.get('return', inspect.Signature.empty)
+def get_return_type(callable: TGenericCallable) -> typing.Any:
+    # pylint: disable=W0622, redefined-builtin
+    if not builtins.callable(callable):
+        raise TypeError('{} is not callable'.format(callable))
+    if hasattr(callable, '__signature__'):
+        return callable.__signature__.return_annotation  # type: ignore
+    return callable.__annotations__.get('return', inspect.Signature.empty)
 
 
 def set_return_type(
-        callable_: TGenericCallable,
+        callable: TGenericCallable,
         type: typing.Any,
     ) -> None:
     # pylint: disable=W0622, redefined-builtin
-    if not callable(callable_):
-        raise TypeError('{} is not callable'.format(callable_))
-    if hasattr(callable_, '__signature__'):
+    if not builtins.callable(callable):
+        raise TypeError('{} is not callable'.format(callable))
+    if hasattr(callable, '__signature__'):
         # https://github.com/python/mypy/issues/1170
-        new_ = callable_.__signature__.replace(  # type: ignore
+        new_ = callable.__signature__.replace(  # type: ignore
             return_annotation=type,
         )
-        callable_.__signature__ = new_  # type: ignore
+        callable.__signature__ = new_  # type: ignore
     elif type is inspect.Signature.empty:
-        callable_.__annotations__.pop('return', None)
+        callable.__annotations__.pop('return', None)
     else:
-        callable_.__annotations__['return'] = type
+        callable.__annotations__['return'] = type
 
 
 def get_var_positional_parameter(

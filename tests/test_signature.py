@@ -381,7 +381,7 @@ class TestForger:
         mapper = forger.make_mapper(func)
 
         for k, v in dict(
-                callable_=func,
+                callable=func,
                 has_context=False,
                 sig_public=inspect.Signature(parameters=[
                     inspect.Parameter(
@@ -412,7 +412,7 @@ class TestSignatureMapper:
     @pytest.fixture
     def mapper_factory(self):
         defaults = dict(
-            callable_=lambda: None,
+            callable=lambda: None,
             has_context=False,
             sig_public=inspect.Signature(),
             sig_interface=inspect.Signature(),
@@ -430,7 +430,7 @@ class TestSignatureMapper:
 
     def test__repr__(self, mapper_factory):
         mapper = mapper_factory(
-            callable_=lambda *, b: None,
+            callable=lambda *, b: None,
             sig_public=inspect.Signature(parameters=[
                 inspect.Parameter('a', POSITIONAL_ONLY)
             ]),
@@ -529,7 +529,7 @@ class TestSignatureMapper:
         sig = inspect.Signature(parameters=[
             inspect.Parameter('a', POSITIONAL_ONLY)
         ])
-        mapper = mapper_factory(callable_=myfunc, sig_public=sig)
+        mapper = mapper_factory(callable=myfunc, sig_public=sig)
         with pytest.raises(TypeError) as excinfo:
             mapper()
         assert excinfo.value.args[0] == \
