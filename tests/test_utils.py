@@ -57,20 +57,20 @@ class TestGetParam:
         (False, False),
     ])
     def test_correct_usage(self, has_param, has_default):
-        func = (lambda myparam: None) \
+        callable_ = (lambda myparam: None) \
             if has_param \
             else (lambda: None)
 
         if has_param:
-            assert getparam(func, 'myparam') == \
-                inspect.signature(func).parameters['myparam']
+            assert getparam(callable_, 'myparam') == \
+                inspect.signature(callable_).parameters['myparam']
         elif has_default:
-            assert getparam(func, 'myparam', 'DEFAULT') == 'DEFAULT'
+            assert getparam(callable_, 'myparam', 'DEFAULT') == 'DEFAULT'
         else:
             with pytest.raises(ParameterError) as excinfo:
-                getparam(func, 'myparam')
+                getparam(callable_, 'myparam')
             assert excinfo.value.args[0] == \
-                f"'{func.__name__}' has no parameter 'myparam'"
+                "'{}' has no parameter 'myparam'".format(callable_.__name__)
 
     def test_incorrect_usage_raises(self):
         with pytest.raises(TypeError) as excinfo:

@@ -35,10 +35,7 @@ class Immutable:
         return super().__getattribute__(key)
 
     def __setattr__(self, key, value):
-        raise ImmutableInstanceError(f"cannot assign to field '{key}'")
-
-    def __immutable_setattr__(self, key, value):
-        object.__setattr__(self, key, value)
+        raise ImmutableInstanceError("cannot assign to field '{}'".format(key))
 
 
 class Struct(Immutable):

@@ -7,7 +7,7 @@ class MarkerMeta(type):
         return cls
 
     def __repr__(cls) -> str:
-        return f'<{cls.__name__}>'
+        return '<{}>'.format(cls.__name__)
 
     def __bool__(cls) -> bool:
         return False

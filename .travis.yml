@@ -3,12 +3,14 @@ sudo: false
 
 matrix:
   include:
+    - python: 3.5
+      env: TOXENV=py35
     - python: 3.6
       env: TOXENV=py36,coverage,lint
     - python: nightly
       env: TOXENV=py37
-  allow_failures:
-    - env: TOXENV=py37
+    - python: pypy-6.0.0
+      env: TOXENV=pypy
 
 install:
   - travis_retry pip install tox

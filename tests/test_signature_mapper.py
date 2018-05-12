@@ -78,13 +78,19 @@ class TestMakeTransform:
             if to_param.default is inspect.Parameter.empty:
                 make_transform_exc = TypeError(
                     "Missing requisite mapping to non-default "
-                    f"{pk_strings[to_param.kind]} parameter '{to_param.name}'"
+                    "{to_kind} parameter '{to_name}'".format(
+                        to_kind=pk_strings[to_param.kind],
+                        to_name=to_param.name,
+                    )
                 )
         elif from_param.name != to_param.name and not has_keymap_hints:
             if to_param.default is inspect.Parameter.empty:
                 make_transform_exc = TypeError(
                     "Missing requisite mapping to non-default "
-                    f"{pk_strings[to_param.kind]} parameter 'b'"
+                    "{to_kind} parameter '{to_name}'".format(
+                        to_kind=pk_strings[to_param.kind],
+                        to_name=to_param.name,
+                    )
                 )
             else:
                 make_transform_exc = TypeError(
@@ -219,8 +225,8 @@ class TestMakeTransform:
             make_transform(from_sig, to_sig)
         if from_param.kind in (VAR_KEYWORD, VAR_POSITIONAL):
             assert excinfo.value.args[0] == (
-                f"Missing requisite mapping from {pk_strings[from_kind]} "
-                "parameter 'a'"
+                "Missing requisite mapping from {from_kind} parameter 'a'".\
+                    format(from_kind=pk_strings[from_kind])
             )
         else:
             assert excinfo.value.args[0] == \

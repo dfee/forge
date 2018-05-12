@@ -23,7 +23,7 @@ def hasparam(
         name: str,
     ) -> bool:
     if not callable(callable_):
-        raise TypeError(f'{callable_} is not callable')
+        raise TypeError('{} is not callable'.format(callable_))
     return name in inspect.signature(callable_).parameters
 
 
@@ -33,7 +33,7 @@ def getparam(
         default: typing.Any = void,
     ) -> inspect.Parameter:
     if not callable(callable_):
-        raise TypeError(f'{callable_} is not callable')
+        raise TypeError('{} is not callable'.format(callable_))
 
     params = inspect.signature(callable_).parameters
     if default is not void:
@@ -42,13 +42,16 @@ def getparam(
         return params[name]
     except KeyError:
         raise ParameterError(
-            f"'{callable_.__name__}' has no parameter '{name}'"
+            "'{callable_name}' has no parameter '{param_name}'".format(
+                callable_name=callable_.__name__,
+                param_name=name,
+            )
         )
 
 
 def get_return_type(callable_: TGenericCallable) -> typing.Any:
     if not callable(callable_):
-        raise TypeError(f'{callable_} is not callable')
+        raise TypeError('{} is not callable'.format(callable_))
     if hasattr(callable_, '__signature__'):
         return callable_.__signature__.return_annotation  # type: ignore
     return callable_.__annotations__.get('return', inspect.Signature.empty)
@@ -60,7 +63,7 @@ def set_return_type(
     ) -> None:
     # pylint: disable=W0622, redefined-builtin
     if not callable(callable_):
-        raise TypeError(f'{callable_} is not callable')
+        raise TypeError('{} is not callable'.format(callable_))
     if hasattr(callable_, '__signature__'):
         # https://github.com/python/mypy/issues/1170
         new_ = callable_.__signature__.replace(  # type: ignore

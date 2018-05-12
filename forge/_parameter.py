@@ -63,32 +63,42 @@ class ParameterMap(immutable.Struct):
         )
 
     def __str__(self) -> str:
-        prefix = ''
         if self.kind == inspect.Parameter.VAR_POSITIONAL:
             prefix = '*'
         elif self.kind == inspect.Parameter.VAR_KEYWORD:
             prefix = '**'
+        else:
+            prefix = ''
 
-        mapping = f'{prefix}{self.name or "<missing>"}' \
-            if self.name == self.interface_name \
-            else (
-                f'{prefix}{self.name or "<missing>"}->'
-                f'{prefix}{self.interface_name or "<missing>"}'
+        mapped = \
+            '{prefix}{name}'.format(
+                prefix=prefix,
+                name=self.name or '<missing>',
+            ) if self.name == self.interface_name \
+            else '{prefix}{name}->{prefix}{interface_name}'.format(
+                prefix=prefix,
+                name=self.name or '<missing>',
+                interface_name=self.interface_name or '<missing>',
             )
-        # pylint: disable=E1101, no-member
-        type_ = self.type.__name__ \
-            if inspect.isclass(self.type) \
-            else str(self.type)
-        annotated = f'{mapping}:{type_}' \
-            if self.type is not inspect.Parameter.empty \
-            else mapping
-        defaulted = f'{annotated}={self.default}' \
-            if self.default is not inspect.Parameter.empty \
-            else annotated
-        return defaulted
+
+        annotated = mapped \
+            if self.type is inspect.Parameter.empty \
+            else '{mapped}:{annotation}'.format(
+                mapped=mapped,
+                annotation=self.type.__name__ \
+                    if inspect.isclass(self.type) \
+                    else str(self.type),
+            )
+
+        return annotated \
+            if self.default is inspect.Parameter.empty \
+            else '{annotated}={default}'.format(
+                annotated=annotated,
+                default=self.default,
+            )
 
     def __repr__(self) -> str:
-        return f'<{type(self).__name__} "{self}">'
+        return '<{} "{}">'.format(type(self).__name__, str(self))
 
     @property
     def parameter(self) -> inspect.Parameter:

@@ -136,8 +136,9 @@ def make_transform(
 
             kind_repr = pk_strings[to_param.kind]
             raise TypeError(
-                f"Missing requisite mapping to non-default {kind_repr} "
-                f"parameter '{to_name}'"
+                "Missing requisite mapping to non-default {kind_repr} "
+                "parameter '{to_name}'".\
+                    format(kind_repr=kind_repr, to_name=to_name)
             )
         else:
             ikeymap[to_name] = from_name
@@ -145,20 +146,22 @@ def make_transform(
     if from_var_po and not to_var_po:
         kind_repr = pk_strings[VAR_POSITIONAL]
         raise TypeError(
-            f"Missing requisite mapping from {kind_repr} parameter "
-            f"'{from_var_po.name}'"
+            "Missing requisite mapping from {kind_repr} parameter "
+            "'{from_name}'".\
+                format(kind_repr=kind_repr, from_name=from_var_po.name)
         )
     if not to_var_kw:
         kind_repr = pk_strings[VAR_KEYWORD]
         if from_var_kw:
             raise TypeError(
-                f"Missing requisite mapping from {kind_repr} parameter "
-                f"'{from_var_kw.name}'"
+                "Missing requisite mapping from {kind_repr} parameter "
+                "'{from_name}'".\
+                    format(kind_repr=kind_repr, from_name=from_var_kw.name)
             )
         elif from_params:
             raise TypeError(
-                "Missing requisite mapping from parameters "
-                f"({', '.join(from_params)})"
+                "Missing requisite mapping from parameters ({})".\
+                    format(', '.join(from_params))
             )
 
     def _transform(call_arguments: CallArguments) -> CallArguments:
@@ -207,9 +210,13 @@ class Forger(collections.abc.MutableSequence):
         iname_set = set()
         for i, current in enumerate(pmaps):
             if not isinstance(current, ParameterMap):
-                raise TypeError(f"Received non-ParameterMap '{current}'")
+                raise TypeError(
+                    "Received non-ParameterMap '{}'".format(current)
+                )
             elif not (current.name and current.interface_name):
-                raise ValueError(f'Received unnamed ParameterMap: {current}')
+                raise ValueError(
+                    "Received unnamed ParameterMap: '{}'".format(current)
+                )
             elif current.is_contextual and i > 0:
                 raise TypeError(
                     'Only the first ParameterMap can be contextual'
@@ -217,15 +224,15 @@ class Forger(collections.abc.MutableSequence):
 
             if current.name in pname_set:
                 raise ValueError(
-                    'Received multiple ParameterMaps with name '
-                    f"'{current.name}'"
+                    "Received multiple ParameterMaps with name '{}'".\
+                        format(current.name)
                 )
             pname_set.add(current.name)
 
             if current.interface_name in iname_set:
                 raise ValueError(
-                    'Received multiple ParameterMaps with interface_name '
-                    f"'{current.interface_name}'"
+                    "Received multiple ParameterMaps with interface_name "
+                    "'{}'".format(current.interface_name)
                 )
             iname_set.add(current.interface_name)
 
@@ -235,8 +242,11 @@ class Forger(collections.abc.MutableSequence):
 
             elif current.kind < last.kind:
                 raise SyntaxError(
-                    f"{current} of kind '{current.kind.name}' follows "
-                    f"{last} of kind '{last.kind.name}'"
+                    "{current} of kind '{current.kind.name}' follows "
+                    "{last} of kind '{last.kind.name}'".format(
+                        current=current,
+                        last=last,
+                    )
                 )
             if current.kind is last.kind:
                 if current.kind is VAR_POSITIONAL:
@@ -273,7 +283,10 @@ class Forger(collections.abc.MutableSequence):
         return self._data == other._data
 
     def __repr__(self):
-        return f'<{type(self).__name__} ({stringify_parameters(*self)})>'
+        return '<{} ({})>'.format(
+            type(self).__name__,
+            stringify_parameters(*self),
+        )
 
     # Begin MutableSequence methods
     def __getitem__(
@@ -452,7 +465,12 @@ class SignatureMapper(immutable.Struct):
         try:
             bound = self.sig_public.bind(*args, **kwargs)
         except TypeError as exc:
-            raise TypeError(f'{self.callable_.__name__}() {exc.args[0]}')
+            raise TypeError(
+                '{callable_name}() {message}'.format(
+                    callable_name=self.callable_.__name__,
+                    message=exc.args[0],
+                ),
+            )
 
         bound.apply_defaults()
         self.convert(bound.arguments)
@@ -470,15 +488,16 @@ class SignatureMapper(immutable.Struct):
         privstr = stringify_parameters(
             *self.sig_private.parameters.values()
         )
-        return f'<{type(self).__name__} ({pubstr}) -> ({privstr})>'
+        return '<{} ({}) -> ({})>'.format(type(self).__name__, pubstr, privstr)
 
     def _get_context(
             self,
             arguments: typing.MutableMapping[str, typing.Any]
         ) -> typing.Any:
-        return next(iter(arguments.values()), None) \
-            if self.has_context \
-            else None
+        if not self.has_context:
+            return None
+        param_ctx = next(iter(self.sig_public.parameters.values()))
+        return arguments[param_ctx.name]
 
     @property
     def sig_private(self):

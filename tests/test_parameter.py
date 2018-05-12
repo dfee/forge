@@ -155,7 +155,7 @@ class TestParameterMap:
     def test__str__and__repr__(self, kwargs, expected):
         pmap = ParameterMap(**kwargs)
         assert str(pmap) == expected
-        assert repr(pmap) == f'<ParameterMap "{expected}">'
+        assert repr(pmap) == '<ParameterMap "{}">'.format(expected)
 
     @pytest.mark.parametrize(('rkey', 'rval'), [
         pytest.param('kind', inspect.Parameter.KEYWORD_ONLY, id='kind'),
@@ -480,7 +480,7 @@ class TestVarKeyword:
     def test_mapping(self):
         vark = VarKeyword()
         assert vark.name in vark
-        assert f'{vark.name}_' not in vark
+        assert '{}_'.format(vark.name) not in vark
         assert len(vark) == 1
         assert list(vark) == [vark.name]
 

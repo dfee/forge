@@ -16,7 +16,7 @@ class TestMarkerMeta:
 
     def test__repr__(self, make_marker):
         name = 'dummy'
-        assert repr(make_marker(name)) == f'<{name}>'
+        assert repr(make_marker(name)) == '<{}>'.format(name)
 
     def test__bool__(self, make_marker):
         assert not make_marker('dummy')

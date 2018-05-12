@@ -137,7 +137,7 @@ class TestForger:
         with pytest.raises(ValueError) as excinfo:
             Forger.validate(arg)
         assert excinfo.value.args[0] == \
-            f"Received unnamed ParameterMap: {arg}"
+            "Received unnamed ParameterMap: '{}'".format(arg)
 
     def test_validate_late_contextual_param_raises(self):
         with pytest.raises(TypeError) as excinfo:
@@ -161,8 +161,8 @@ class TestForger:
         params = [
             ParameterMap(
                 kind=inspect.Parameter.VAR_POSITIONAL,
-                name=f'args{i}',
-                interface_name=f'args{i}',
+                name='args{}'.format(i),
+                interface_name='args{}'.format(i),
                 default=empty,
                 type=empty,
             ) for i in range(2)
@@ -176,8 +176,8 @@ class TestForger:
         params = [
             ParameterMap(
                 kind=inspect.Parameter.VAR_KEYWORD,
-                name=f'kwargs{i}',
-                interface_name=f'kwargs{i}',
+                name='kwargs{}'.format(i),
+                interface_name='kwargs{}'.format(i),
                 default=empty,
                 type=empty,
             ) for i in range(2)
@@ -193,8 +193,13 @@ class TestForger:
         with pytest.raises(SyntaxError) as excinfo:
             Forger.validate(kwarg_, arg_)
         assert excinfo.value.args[0] == (
-            f"{arg_} of kind '{arg_.kind.name}' follows "
-            f"{kwarg_} of kind '{kwarg_.kind.name}'"
+            "{arg_} of kind '{arg_kind}' follows "
+            "{kwarg_} of kind '{kwarg_kind}'".format(
+                arg_=arg_,
+                arg_kind=arg_.kind.name,
+                kwarg_=kwarg_,
+                kwarg_kind=kwarg_.kind.name,
+            )
         )
 
     @pytest.mark.parametrize(('constructor',), [(forge.pos,), (forge.arg,)])
@@ -437,6 +442,10 @@ class TestSignatureMapper:
         mapper = mapper_factory(
             has_context=has_context,
             converters={'a': lambda ctx, k, v: (ctx, k, v)},
+            sig_public=inspect.Signature(
+                [inspect.Parameter('ctx', POSITIONAL_OR_KEYWORD)] \
+                if has_context else []
+            ),
         )
         arguments = {'ctx': object(), 'a': 1}
         mapper.convert(arguments)
@@ -456,6 +465,10 @@ class TestSignatureMapper:
         mapper = mapper_factory(
             has_context=has_context,
             validators={'a': [validator] if plural else validator},
+            sig_public=inspect.Signature(
+                [inspect.Parameter('ctx', POSITIONAL_OR_KEYWORD)] \
+                if has_context else []
+            ),
         )
         arguments = {'ctx': object(), 'a': 1}
         if not enabled:
