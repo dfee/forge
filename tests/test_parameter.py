@@ -4,7 +4,7 @@ import pytest
 
 import forge._parameter
 from forge._parameter import (
-    ParameterMap,
+    FParameter,
     VarPositional,
     VarKeyword,
     cls_,
@@ -20,7 +20,7 @@ empty = inspect.Parameter.empty
 dummy_converter = lambda ctx, name, value: (ctx, name, value)
 dummy_validator = lambda ctx, name, value: None
 
-PMAP_DEFAULTS = dict(
+FPARAM_DEFAULTS = dict(
     default=inspect.Parameter.empty,
     type=inspect.Parameter.empty,
     converter=None,
@@ -28,20 +28,20 @@ PMAP_DEFAULTS = dict(
     is_contextual=False
 )
 
-PMAP_POS_DEFAULTS = dict(
-    PMAP_DEFAULTS,
+FPARAM_POS_DEFAULTS = dict(
+    FPARAM_DEFAULTS,
     kind=inspect.Parameter.POSITIONAL_ONLY,
     is_contextual=False,
 )
 
-PMAP_POK_DEFAULTS = dict(
-    PMAP_DEFAULTS,
+FPARAM_POK_DEFAULTS = dict(
+    FPARAM_DEFAULTS,
     kind=inspect.Parameter.POSITIONAL_OR_KEYWORD,
     is_contextual=False,
 )
 
-PMAP_CTX_DEFAULTS = dict(
-    PMAP_DEFAULTS,
+FPARAM_CTX_DEFAULTS = dict(
+    FPARAM_DEFAULTS,
     kind=inspect.Parameter.POSITIONAL_OR_KEYWORD,
     is_contextual=True,
     default=empty,
@@ -49,22 +49,22 @@ PMAP_CTX_DEFAULTS = dict(
     validator=None,
 )
 
-PMAP_VPO_DEFAULTS = dict(
-    PMAP_DEFAULTS,
+FPARAM_VPO_DEFAULTS = dict(
+    FPARAM_DEFAULTS,
     kind=inspect.Parameter.VAR_POSITIONAL,
     is_contextual=False,
     default=empty,
     type=empty,
 )
 
-PMAP_KWO_DEFAULTS = dict(
-    PMAP_DEFAULTS,
+FPARAM_KWO_DEFAULTS = dict(
+    FPARAM_DEFAULTS,
     kind=inspect.Parameter.KEYWORD_ONLY,
     is_contextual=False,
 )
 
-PMAP_VKW_DEFAULTS = dict(
-    PMAP_DEFAULTS,
+FPARAM_VKW_DEFAULTS = dict(
+    FPARAM_DEFAULTS,
     kind=inspect.Parameter.VAR_KEYWORD,
     is_contextual=False,
     default=empty,
@@ -72,7 +72,7 @@ PMAP_VKW_DEFAULTS = dict(
 )
 
 
-class TestParameterMap:
+class TestFParameter:
     # pylint: disable=E1101, no-member
     @pytest.mark.parametrize(('kwargs', 'expected'), [
         pytest.param(
@@ -153,9 +153,9 @@ class TestParameterMap:
         ),
     ])
     def test__str__and__repr__(self, kwargs, expected):
-        pmap = ParameterMap(**kwargs)
-        assert str(pmap) == expected
-        assert repr(pmap) == '<ParameterMap "{}">'.format(expected)
+        fparam = FParameter(**kwargs)
+        assert str(fparam) == expected
+        assert repr(fparam) == '<FParameter "{}">'.format(expected)
 
     @pytest.mark.parametrize(('rkey', 'rval'), [
         pytest.param('kind', inspect.Parameter.KEYWORD_ONLY, id='kind'),
@@ -167,17 +167,17 @@ class TestParameterMap:
         pytest.param('validator', dummy_validator, id='validator'),
     ])
     def test_replace(self, rkey, rval):
-        pmap = ParameterMap(
+        fparam = FParameter(
             kind=inspect.Parameter.POSITIONAL_ONLY,
             name=None,
             interface_name=None,
         )
-        pmap2 = pmap.replace(**{rkey: rval}) # pylint: disable=E1101, no-member
-        for k, v in dict(pmap._asdict(), **{rkey: rval}).items():
+        fparam2 = fparam.replace(**{rkey: rval}) # pylint: disable=E1101, no-member
+        for k, v in dict(fparam._asdict(), **{rkey: rval}).items():
             if k in ('name', 'interface_name') and \
                 rkey in ('name', 'interface_name'):
                 v = rval
-            assert getattr(pmap2, k) == v
+            assert getattr(fparam2, k) == v
 
     def test_parameter(self):
         kwargs = dict(
@@ -187,21 +187,21 @@ class TestParameterMap:
             default=None,
             type=int,
         )
-        param = ParameterMap(**kwargs).parameter
+        param = FParameter(**kwargs).parameter
         assert param.kind == kwargs['kind']
         assert param.name == kwargs['name']
         assert param.default == kwargs['default']
         assert param.annotation == kwargs['type']
 
     def test_parameter_wo_names_raises(self):
-        pmap = ParameterMap(
+        fparam = FParameter(
             kind=inspect.Parameter.POSITIONAL_ONLY,
             name=None,
             interface_name=None,
         )
         with pytest.raises(TypeError) as excinfo:
             # pylint: disable=W0104, pointless-statement
-            pmap.parameter
+            fparam.parameter
         assert excinfo.value.args[0] == 'Cannot generate an unnamed parameter'
 
     def test_interface_parameter(self):
@@ -212,32 +212,32 @@ class TestParameterMap:
             default=None,
             type=int,
         )
-        param = ParameterMap(**kwargs).interface_parameter
+        param = FParameter(**kwargs).interface_parameter
         assert param.kind == kwargs['kind']
         assert param.name == kwargs['interface_name']
         assert param.default == kwargs['default']
         assert param.annotation == kwargs['type']
 
     def test_interface_parameter_wo_names_raises(self):
-        pmap = ParameterMap(
+        fparam = FParameter(
             kind=inspect.Parameter.POSITIONAL_ONLY,
             name=None,
             interface_name=None,
         )
         with pytest.raises(TypeError) as excinfo:
             # pylint: disable=W0104, pointless-statement
-            pmap.interface_parameter
+            fparam.interface_parameter
         assert excinfo.value.args[0] == 'Cannot generate an unnamed parameter'
 
     def test_defaults(self):
-        pmap = ParameterMap(
+        fparam = FParameter(
             kind=inspect.Parameter.POSITIONAL_ONLY,
             name='dummy',
             interface_name='dummy',
         )
-        assert pmap.kind == inspect.Parameter.POSITIONAL_ONLY
-        for k, v in PMAP_DEFAULTS.items():
-            assert getattr(pmap, k) == v
+        assert fparam.kind == inspect.Parameter.POSITIONAL_ONLY
+        for k, v in FPARAM_DEFAULTS.items():
+            assert getattr(fparam, k) == v
 
     def test_from_parameter(self):
         kwargs = dict(
@@ -247,16 +247,16 @@ class TestParameterMap:
             default=3,
         )
         param = inspect.Parameter(**kwargs)
-        pmap = ParameterMap.from_parameter(param)
+        fparam = FParameter.from_parameter(param)
         for k, v in dict(
-                PMAP_DEFAULTS,
+                FPARAM_DEFAULTS,
                 kind=kwargs['kind'],
                 name=kwargs['name'],
                 interface_name=kwargs['name'],
                 type=kwargs['annotation'],
                 default=kwargs['default'],
             ).items():
-            assert getattr(pmap, k) == v
+            assert getattr(fparam, k) == v
 
     @pytest.mark.parametrize(('extra_in', 'extra_out'), [
         pytest.param(
@@ -285,9 +285,9 @@ class TestParameterMap:
             converter=dummy_converter,
             validator=dummy_validator,
         )
-        pmap = ParameterMap.create_positional_only(**kwargs, **extra_in)
-        assert isinstance(pmap, ParameterMap)
-        assert pmap._asdict() == {**PMAP_POS_DEFAULTS, **kwargs, **extra_out}
+        fparam = FParameter.create_positional_only(**kwargs, **extra_in)
+        assert isinstance(fparam, FParameter)
+        assert fparam._asdict() == {**FPARAM_POS_DEFAULTS, **kwargs, **extra_out}
 
     @pytest.mark.parametrize(('extra_in', 'extra_out'), [
         pytest.param(
@@ -316,9 +316,9 @@ class TestParameterMap:
             converter=dummy_converter,
             validator=dummy_validator,
         )
-        pmap = ParameterMap.create_positional_or_keyword(**kwargs, **extra_in)
-        assert isinstance(pmap, ParameterMap)
-        assert pmap._asdict() == {**PMAP_POK_DEFAULTS, **kwargs, **extra_out}
+        fparam = FParameter.create_positional_or_keyword(**kwargs, **extra_in)
+        assert isinstance(fparam, FParameter)
+        assert fparam._asdict() == {**FPARAM_POK_DEFAULTS, **kwargs, **extra_out}
 
     @pytest.mark.parametrize(('extra_in', 'extra_out'), [
         pytest.param(
@@ -342,9 +342,9 @@ class TestParameterMap:
     ])
     def test_create_contextual(self, extra_in, extra_out):
         kwargs = dict(type=int)
-        pmap = ParameterMap.create_contextual(**kwargs, **extra_in)
-        assert isinstance(pmap, ParameterMap)
-        assert pmap._asdict() == {**PMAP_CTX_DEFAULTS, **kwargs, **extra_out}
+        fparam = FParameter.create_contextual(**kwargs, **extra_in)
+        assert isinstance(fparam, FParameter)
+        assert fparam._asdict() == {**FPARAM_CTX_DEFAULTS, **kwargs, **extra_out}
 
     def test_create_var_positional(self):
         kwargs = dict(
@@ -352,10 +352,10 @@ class TestParameterMap:
             converter=dummy_converter,
             validator=dummy_validator,
         )
-        pmap = ParameterMap.create_var_positional(**kwargs)
-        assert isinstance(pmap, ParameterMap)
-        assert pmap._asdict() == dict(
-            PMAP_VPO_DEFAULTS,
+        fparam = FParameter.create_var_positional(**kwargs)
+        assert isinstance(fparam, FParameter)
+        assert fparam._asdict() == dict(
+            FPARAM_VPO_DEFAULTS,
             name=kwargs['name'],
             interface_name=kwargs['name'],
             converter=kwargs['converter'],
@@ -371,10 +371,10 @@ class TestParameterMap:
             converter=dummy_converter,
             validator=dummy_validator,
         )
-        pmap = ParameterMap.create_keyword_only(**kwargs)
-        assert isinstance(pmap, ParameterMap)
-        for k, v in dict(PMAP_KWO_DEFAULTS, **kwargs).items():
-            assert getattr(pmap, k) == v
+        fparam = FParameter.create_keyword_only(**kwargs)
+        assert isinstance(fparam, FParameter)
+        for k, v in dict(FPARAM_KWO_DEFAULTS, **kwargs).items():
+            assert getattr(fparam, k) == v
 
     def test_create_var_keyword(self):
         kwargs = dict(
@@ -382,10 +382,10 @@ class TestParameterMap:
             converter=dummy_converter,
             validator=dummy_validator,
         )
-        pmap = ParameterMap.create_var_keyword(**kwargs)
-        assert isinstance(pmap, ParameterMap)
-        assert pmap._asdict() == dict(
-            PMAP_VKW_DEFAULTS,
+        fparam = FParameter.create_var_keyword(**kwargs)
+        assert isinstance(fparam, FParameter)
+        assert fparam._asdict() == dict(
+            FPARAM_VKW_DEFAULTS,
             name=kwargs['name'],
             interface_name=kwargs['name'],
             converter=kwargs['converter'],
@@ -395,7 +395,7 @@ class TestParameterMap:
 
 class TestVarPositional:
     @staticmethod
-    def assert_iterable_and_get_pmap(varp):
+    def assert_iterable_and_get_fparam(varp):
         varplist = list(varp)
         assert len(varplist) == 1
         return varplist[0]
@@ -407,10 +407,10 @@ class TestVarPositional:
             validator=dummy_validator,
         )
         varp = VarPositional()(**kwargs)
-        pmap = self.assert_iterable_and_get_pmap(varp)
-        assert isinstance(pmap, ParameterMap)
-        assert pmap._asdict() == dict(
-            PMAP_VPO_DEFAULTS,
+        fparam = self.assert_iterable_and_get_fparam(varp)
+        assert isinstance(fparam, FParameter)
+        assert fparam._asdict() == dict(
+            FPARAM_VPO_DEFAULTS,
             name=kwargs['name'],
             interface_name=kwargs['name'],
             converter=kwargs['converter'],
@@ -424,10 +424,10 @@ class TestVarPositional:
             validator=dummy_validator,
         )
         varp = VarPositional(**kwargs)
-        pmap = self.assert_iterable_and_get_pmap(varp)
-        assert isinstance(pmap, ParameterMap)
-        assert pmap._asdict() == dict(
-            PMAP_VPO_DEFAULTS,
+        fparam = self.assert_iterable_and_get_fparam(varp)
+        assert isinstance(fparam, FParameter)
+        assert fparam._asdict() == dict(
+            FPARAM_VPO_DEFAULTS,
             name=kwargs['name'],
             interface_name=kwargs['name'],
             converter=kwargs['converter'],
@@ -436,7 +436,7 @@ class TestVarPositional:
 
 class TestVarKeyword:
     @staticmethod
-    def assert_mapping_and_get_pmap(vark):
+    def assert_mapping_and_get_fparam(vark):
         varklist = list(vark.items())
         assert len(varklist) == 1
         return varklist[0]
@@ -448,11 +448,11 @@ class TestVarKeyword:
             validator=dummy_validator,
         )
         vark = VarKeyword(**kwargs)
-        name, pmap = self.assert_mapping_and_get_pmap(vark)
-        assert isinstance(pmap, ParameterMap)
+        name, fparam = self.assert_mapping_and_get_fparam(vark)
+        assert isinstance(fparam, FParameter)
         assert name == kwargs['name']
-        assert pmap._asdict() == dict(
-            PMAP_VKW_DEFAULTS,
+        assert fparam._asdict() == dict(
+            FPARAM_VKW_DEFAULTS,
             name=kwargs['name'],
             interface_name=kwargs['name'],
             converter=kwargs['converter'],
@@ -466,11 +466,11 @@ class TestVarKeyword:
             validator=dummy_validator,
         )
         vark = VarKeyword()(**kwargs)
-        name, pmap = self.assert_mapping_and_get_pmap(vark)
-        assert isinstance(pmap, ParameterMap)
+        name, fparam = self.assert_mapping_and_get_fparam(vark)
+        assert isinstance(fparam, FParameter)
         assert name == kwargs['name']
-        assert pmap._asdict() == dict(
-            PMAP_VKW_DEFAULTS,
+        assert fparam._asdict() == dict(
+            FPARAM_VKW_DEFAULTS,
             name=kwargs['name'],
             interface_name=kwargs['name'],
             converter=kwargs['converter'],
@@ -489,25 +489,25 @@ class TestConvenience:
     def test_constructors(self):
         # pylint: disable=E1101, no-member
         for conv, method in [
-                ('pos', ParameterMap.create_positional_only),
-                ('arg', ParameterMap.create_positional_or_keyword),
-                ('ctx', ParameterMap.create_contextual),
-                ('kwarg', ParameterMap.create_keyword_only),
+                ('pos', FParameter.create_positional_only),
+                ('arg', FParameter.create_positional_or_keyword),
+                ('ctx', FParameter.create_contextual),
+                ('kwarg', FParameter.create_keyword_only),
             ]:
             assert getattr(forge._parameter, conv) == method
 
     def test_self_(self):
-        assert isinstance(self_, ParameterMap)
+        assert isinstance(self_, FParameter)
         assert self_._asdict() == dict(
-            **PMAP_CTX_DEFAULTS,
+            **FPARAM_CTX_DEFAULTS,
             name='self',
             interface_name='self',
         )
 
     def test_cls_(self):
-        assert isinstance(cls_, ParameterMap)
+        assert isinstance(cls_, FParameter)
         assert cls_._asdict() == dict(
-            **PMAP_CTX_DEFAULTS,
+            **FPARAM_CTX_DEFAULTS,
             name='cls',
             interface_name='cls',
         )

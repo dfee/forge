@@ -4,7 +4,7 @@ import typing
 
 from forge._exceptions import ParameterError
 from forge._marker import void
-from forge._parameter import ParameterMap
+from forge._parameter import FParameter
 
 
 POSITIONAL_ONLY = inspect.Parameter.POSITIONAL_ONLY
@@ -16,7 +16,7 @@ VAR_KEYWORD = inspect.Parameter.VAR_KEYWORD
 
 TGenericCallable = typing.Callable[..., typing.Any]
 TUnionParameter = \
-    typing.TypeVar('TUnionParameter', inspect.Parameter, ParameterMap)
+    typing.TypeVar('TUnionParameter', inspect.Parameter, FParameter)
 
 
 def hasparam(

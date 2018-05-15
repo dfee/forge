@@ -100,7 +100,7 @@ You can also supply type annotations for usage with linters like mypy:
 Validating a parameter
 ----------------------
 
-You can validate arguments by either passing a validator or an iterable (such as a list or tuple) of validators to your ParameterMap constructor.
+You can validate arguments by either passing a validator or an iterable (such as a list or tuple) of validators to your FParameter constructor.
 
 .. code-block:: python
 
@@ -158,7 +158,7 @@ You can optionally provide a context parameter, such as ``self``, ``cls``, or cr
 Converting a parameter
 ----------------------
 
-You can convert an argument by passing a conversion function to your ParameterMap constructor.
+You can convert an argument by passing a conversion function to your FParameter constructor.
 
 .. code-block:: python
 
@@ -178,7 +178,7 @@ You can convert an argument by passing a conversion function to your ParameterMa
   >>> shout('hello over there')
   HELLO OVER THERE
 
-You can optionally provide a context parameter, such as ``self``, ``cls``, or create your own named ParameterMap with ``forge.ctx('myparam')``, and use that alongside conversion:
+You can optionally provide a context parameter, such as ``self``, ``cls``, or create your own named FParameter with ``forge.ctx('myparam')``, and use that alongside conversion:
 
 .. code-block:: python
 
@@ -398,7 +398,7 @@ So go on, ``forge`` some (function) signatures for fun and profit.
 
 Advanced Usage
 ==============
-You can use the ``forge.Forger`` class directly, which is very useful when you're decorating functions and want to side-load certain parameters.
+You can use the ``forge.FSignature`` class directly, which is very useful when you're decorating functions and want to side-load certain parameters.
 
 Typically, the code we use today, looks like this:
 
@@ -455,10 +455,10 @@ Users of the function aren't supposed to provide this functionality. Forge paves
       return Context()
 
   def add_context(func):
-      forger = forge.Forger.from_callable(func)
-      forger.pop(0)
+      fsig = forge.FSignature.from_callable(func)
+      fsig.pop(0)
 
-      @forger
+      @fsig
       def inner(*args, **kwargs):
           ctx = get_context_from_somewhere()
           return func(ctx, *args, **kwargs)

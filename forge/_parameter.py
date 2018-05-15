@@ -1,5 +1,6 @@
 import collections
 import collections.abc
+import functools
 import inspect
 import types
 import typing
@@ -26,7 +27,22 @@ _validator_type = typing.Optional[
 ]
 
 
-class ParameterMap(immutable.Struct):
+class Factory(immutable.Struct):
+    # TODO: test
+    __slots__ = ('factory',)
+
+    def __init__(self, factory):
+        # pylint: disable=C0102, blacklisted-name
+        super().__init__(factory=factory)
+
+    def __repr__(self):
+        return '<{} {}>'.format(type(self).__name__, self.factory.__qualname__)
+
+    def __call__(self):
+        return self.factory()
+
+
+class FParameter(immutable.Struct):
     __slots__ = (
         'kind',
         'name',
@@ -57,6 +73,7 @@ class ParameterMap(immutable.Struct):
             interface_name=interface_name or name,
             default=void_to_empty(default),
             type=void_to_empty(type),
+            # TODO: pytest
             converter=converter,
             validator=validator,
             is_contextual=is_contextual,
@@ -99,6 +116,43 @@ class ParameterMap(immutable.Struct):
 
     def __repr__(self) -> str:
         return '<{} "{}">'.format(type(self).__name__, str(self))
+
+    def apply_default(self, value):
+        # TODO: test
+        if value is not void:
+            return value
+        elif isinstance(self.default, Factory):
+            return self.default()
+        return self.default
+
+    def apply_conversion(self, ctx, name, value):
+        # TODO: test
+        if self.converter is None:
+            return value
+        elif isinstance(self.converter, typing.Iterable):
+            return functools.reduce(
+                lambda val, func: func(ctx, name, val),
+                [value, *self.converter],
+            )
+        return self.converter(ctx, name, value)
+
+    def apply_validation(self, ctx, name, value):
+        # TODO: test
+        if self.validator is not None:
+            self.validator(ctx, name, value)
+        return value
+
+    def __call__(
+            self,
+            ctx: typing.Any,
+            name: str,
+            value: typing.Any = void
+        ) -> typing.Any:
+        return self.apply_validation(
+            ctx,
+            name,
+            self.apply_conversion(ctx, name, self.apply_default(value))
+        )
 
     @property
     def parameter(self) -> inspect.Parameter:
@@ -154,7 +208,7 @@ class ParameterMap(immutable.Struct):
         })
 
     @classmethod
-    def from_parameter(cls, parameter: inspect.Parameter) -> 'ParameterMap':
+    def from_parameter(cls, parameter: inspect.Parameter) -> 'FParameter':
         return cls(  # type: ignore
             kind=parameter.kind,
             name=parameter.name,
@@ -173,7 +227,7 @@ class ParameterMap(immutable.Struct):
             type=void,
             converter=None,
             validator=None
-        ) -> 'ParameterMap':
+        ) -> 'FParameter':
         # pylint: disable=W0622, redefined-builtin
         return cls(  # type: ignore
             kind=inspect.Parameter.POSITIONAL_ONLY,
@@ -195,7 +249,7 @@ class ParameterMap(immutable.Struct):
             type=void,
             converter=None,
             validator=None
-        ) -> 'ParameterMap':
+        ) -> 'FParameter':
         # pylint: disable=W0622, redefined-builtin
         return cls(  # type: ignore
             kind=inspect.Parameter.POSITIONAL_OR_KEYWORD,
@@ -214,7 +268,7 @@ class ParameterMap(immutable.Struct):
             interface_name=None,
             *,
             type=void
-        ) -> 'ParameterMap':
+        ) -> 'FParameter':
         # pylint: disable=W0622, redefined-builtin
         return cls(  # type: ignore
             kind=inspect.Parameter.POSITIONAL_OR_KEYWORD,
@@ -235,7 +289,7 @@ class ParameterMap(immutable.Struct):
             type=void,
             converter=None,
             validator=None
-        ) -> 'ParameterMap':
+        ) -> 'FParameter':
         # pylint: disable=W0622, redefined-builtin
         return cls(  # type: ignore
             kind=inspect.Parameter.KEYWORD_ONLY,
@@ -254,7 +308,7 @@ class ParameterMap(immutable.Struct):
             *,
             converter=None,
             validator=None
-        ) -> 'ParameterMap':
+        ) -> 'FParameter':
         # pylint: disable=W0622, redefined-builtin
         return cls(  # type: ignore
             kind=inspect.Parameter.VAR_POSITIONAL,
@@ -272,7 +326,7 @@ class ParameterMap(immutable.Struct):
             *,
             converter=None,
             validator=None
-        ) -> 'ParameterMap':
+        ) -> 'FParameter':
         # pylint: disable=W0622, redefined-builtin
         return cls(  # type: ignore
             kind=inspect.Parameter.VAR_KEYWORD,
@@ -307,9 +361,9 @@ class VarPositional(collections.abc.Iterable):
         return self._name or self._default_name
 
     @property
-    def param(self) -> ParameterMap:
+    def param(self) -> FParameter:
         # pylint: disable=E1101, no-member
-        return ParameterMap.create_var_positional(
+        return FParameter.create_var_positional(
             name=self.name,
             converter=self.converter,
             validator=self.validator,
@@ -356,15 +410,15 @@ class VarKeyword(collections.abc.Mapping):
         return self._name or self._default_name
 
     @property
-    def param(self) -> ParameterMap:
+    def param(self) -> FParameter:
         # pylint: disable=E1101, no-member
-        return ParameterMap.create_var_keyword(
+        return FParameter.create_var_keyword(
             name=self.name,
             converter=self.converter,
             validator=self.validator
         )
 
-    def __getitem__(self, key: str) -> ParameterMap:
+    def __getitem__(self, key: str) -> FParameter:
         if self.name == key:
             return self.param
         raise KeyError(key)
@@ -391,11 +445,11 @@ class VarKeyword(collections.abc.Mapping):
 
 # pylint: disable=C0103, invalid-name
 # pylint: disable=E1101, no-member
-pos = ParameterMap.create_positional_only
-arg = ParameterMap.create_positional_or_keyword
+pos = FParameter.create_positional_only
+arg = FParameter.create_positional_or_keyword
 args = VarPositional()
-kwarg = ParameterMap.create_keyword_only
+kwarg = FParameter.create_keyword_only
 kwargs = VarKeyword()
-ctx = ParameterMap.create_contextual
+ctx = FParameter.create_contextual
 self_ = ctx('self')
 cls_ = ctx('cls')

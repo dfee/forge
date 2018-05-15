@@ -1,5 +1,9 @@
+from ._config import (
+    get_run_validators,
+    set_run_validators,
+)
 from ._parameter import (
-    ParameterMap,
+    FParameter,
     arg,
     args,
     cls_ as cls,
@@ -10,12 +14,10 @@ from ._parameter import (
     self_ as self,
 )
 from ._signature import (
-    Forger,
+    FSignature,
     SignatureMapper,
-    get_run_validators,
-    set_run_validators,
     returns,
 )
 from ._marker import void
 
-ry = sign = Forger # pylint: disable=C0103, invalid-name
+ry = sign = FSignature # pylint: disable=C0103, invalid-name

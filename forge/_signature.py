@@ -1,3 +1,4 @@
+from collections import OrderedDict
 import collections.abc
 import functools
 import inspect
@@ -9,7 +10,7 @@ from forge._marker import (
     void,
     void_to_empty,
 )
-from forge._parameter import ParameterMap
+from forge._parameter import FParameter
 from forge._utils import (
     get_var_positional_parameter,
     get_var_keyword_parameter,
@@ -31,26 +32,6 @@ pk_strings = {
     KEYWORD_ONLY: 'keyword-only',
     VAR_KEYWORD: 'variable-keyword',
 }
-
-_run_validators = True
-
-
-def get_run_validators() -> bool:
-    """
-    Return whether or not validators are run.
-    """
-    return _run_validators
-
-
-def set_run_validators(run: bool) -> None:
-    """
-    Set whether or not validators are run.  By default, they are run.
-    """
-    # pylint: disable=W0603, global-statement
-    if not isinstance(run, bool):
-        raise TypeError("'run' must be bool.")
-    global _run_validators
-    _run_validators = run
 
 
 def returns(
@@ -90,15 +71,10 @@ class CallArguments(immutable.Struct):
             else signature.bind(*self.args, **self.kwargs)
 
 
-def ident_t(obj):
-    return obj
-
-
-def make_transform(
-        from_: inspect.Signature,
-        to_: inspect.Signature,
-        keymap_hints: typing.Optional[typing.Dict[str, str]] = None,
-    ) -> typing.Callable[[typing.Any], CallArguments]:
+def map_parameters(
+        fsignature: 'FSignature',
+        signature: inspect.Signature,
+    ):
     '''
     Transform rules:
     1) every *to_ POSITIONAL_ONLY* must be mapped to
@@ -107,137 +83,114 @@ def make_transform(
     4) *from_ VAR_POSITIONAL* requires *to_ VAR_POSITIONAL*
     5) *from_ VAR_KEYWORD* requires *to_ VAR_KEYWORD*
     '''
-    # pylint: disable=R0914, too-many-locals
-    keymap_hints = keymap_hints or {}
-    ikeymap_hints = {v: k for k, v in keymap_hints.items()}
-
-    make_index = lambda sig, *excl: {
-        param.name: param for param in sig.parameters.values()
-        if param not in excl
+    # pylint: disable=W0622, redefined-builtin
+    param_t_var_po = get_var_positional_parameter(*fsignature)
+    param_t_var_kw = get_var_keyword_parameter(*fsignature)
+    param_t_idx = {
+        param_t.interface_name: param_t
+        for param_t in fsignature
+        if param_t not in (param_t_var_po, param_t_var_kw)
     }
 
-    from_var_po = get_var_positional_parameter(*from_.parameters.values())
-    from_var_kw = get_var_keyword_parameter(*from_.parameters.values())
-    from_params = make_index(from_, from_var_po, from_var_kw)
+    param_var_po = get_var_positional_parameter(*signature.parameters.values())
+    param_var_kw = get_var_keyword_parameter(*signature.parameters.values())
+    param_idx = {
+        param.name: param
+        for param in signature.parameters.values()
+        if param not in (param_var_po, param_var_kw)
+    }
 
-    to_var_po = get_var_positional_parameter(*to_.parameters.values())
-    to_var_kw = get_var_keyword_parameter(*to_.parameters.values())
-    to_params = make_index(to_, to_var_po, to_var_kw)
-
-    ikeymap = {}
-    # TODO: improve error messages
-    for to_name in list(to_params):
-        to_param = to_params.pop(to_name)
+    mapping = {} # type: typing.MutableMapping[str, str]
+    for name in list(param_idx):
+        param = param_idx.pop(name)
         try:
-            from_name = ikeymap_hints.get(to_name, to_name)
-            from_params.pop(from_name)
+            param_t = param_t_idx.pop(name)
         except KeyError:
-            if to_param.default is not inspect.Parameter.empty:
+            if param.default is not inspect.Parameter.empty:
+                # masked mapping, e.g. f() -> g(a=1)
                 continue
 
-            kind_repr = pk_strings[to_param.kind]
+            # invalid mapping, e.g. f() -> g(a)
+            kind_repr = pk_strings[param.kind]
             raise TypeError(
                 "Missing requisite mapping to non-default {kind_repr} "
-                "parameter '{to_name}'".\
-                    format(kind_repr=kind_repr, to_name=to_name)
+                "parameter '{pri_name}'".\
+                    format(kind_repr=kind_repr, pri_name=name)
             )
         else:
-            ikeymap[to_name] = from_name
+            mapping[param_t.name] = name
 
-    if from_var_po and not to_var_po:
-        kind_repr = pk_strings[VAR_POSITIONAL]
-        raise TypeError(
-            "Missing requisite mapping from {kind_repr} parameter "
-            "'{from_name}'".\
-                format(kind_repr=kind_repr, from_name=from_var_po.name)
-        )
-    if not to_var_kw:
-        kind_repr = pk_strings[VAR_KEYWORD]
-        if from_var_kw:
+    if param_t_var_po:
+        if not param_var_po:
+            # invalid mapping, e.g. f(*args) -> g()
+            kind_repr = pk_strings[VAR_POSITIONAL]
             raise TypeError(
                 "Missing requisite mapping from {kind_repr} parameter "
-                "'{from_name}'".\
-                    format(kind_repr=kind_repr, from_name=from_var_kw.name)
+                "'{param_t_var_po.name}'".\
+                    format(kind_repr=kind_repr, param_t_var_po=param_t_var_po)
             )
-        elif from_params:
+        # var-positional mapping, e.g. f(*args) -> g(*args)
+        mapping[param_t_var_po.name] = param_var_po.name
+
+    if param_t_var_kw:
+        if not param_var_kw:
+            # invalid mapping, e.g. f(**kwargs) -> g()
+            kind_repr = pk_strings[VAR_KEYWORD]
+            raise TypeError(
+                "Missing requisite mapping from {kind_repr} parameter "
+                "'{param_t_var_kw.name}'".\
+                    format(kind_repr=kind_repr, param_t_var_kw=param_t_var_kw)
+            )
+        mapping[param_t_var_kw.name] = param_var_kw.name
+
+    if param_t_idx:
+        if not param_var_kw:
+            # invalid mapping, e.g. f(a) -> g()
             raise TypeError(
                 "Missing requisite mapping from parameters ({})".\
-                    format(', '.join(from_params))
+                    format(', '.join([pt.name for pt in param_t_idx.values()]))
             )
+        for param_t in param_t_idx.values():
+            mapping[param_t.name] = param_var_kw.name
 
-    def _transform(call_arguments: CallArguments) -> CallArguments:
-        # nonlocals: from_, to_, ikeymap,
-        # to_var_po, to_var_kw, from_var_po, from_var_kw
-        fba = call_arguments.to_bound_arguments(from_)
-        fba.apply_defaults()
-        tba = to_.bind_partial()
-        tba.apply_defaults()
-
-        for to_param in to_.parameters.values():
-            if to_param.kind in (VAR_POSITIONAL, VAR_KEYWORD):
-                continue
-            elif to_param.name not in ikeymap:
-                # i.e. not mapped; e.g. from_() -> to_(a=1); >>> func()
-                continue
-            # i.e. argument supplied; e.g. from_(a) -> to_(a); >>> func(1)
-            tba.arguments[to_param.name] = \
-                fba.arguments.pop(ikeymap[to_param.name])
-
-        if from_var_po:
-            # pylint: disable=E0601, used-before-assignment
-            nonlocal to_var_po
-            to_var_po = typing.cast(inspect.Parameter, to_var_po)
-            tba.arguments[to_var_po.name] = fba.arguments.pop(from_var_po.name)
-
-        if from_var_kw:
-            # pylint: disable=E0601, used-before-assignment
-            nonlocal to_var_kw
-            to_var_kw = typing.cast(inspect.Parameter, to_var_kw)
-            tba.arguments[to_var_kw.name] = fba.arguments.pop(from_var_kw.name)
-
-        if to_var_kw and fba.arguments:
-            tba.arguments[to_var_kw.name].update(**fba.arguments)
-
-        # pylint: disable=E1101, no-member
-        return CallArguments.from_bound_arguments(tba)
-    return _transform
+    return mapping
 
 
-class Forger(collections.abc.MutableSequence):
+class FSignature(collections.abc.MutableSequence):
     # pylint: disable=R0901, too-many-ancestors
     @staticmethod
-    def validate(*pmaps):
+    def validate(*fparams):
         pname_set = set()
         iname_set = set()
-        for i, current in enumerate(pmaps):
-            if not isinstance(current, ParameterMap):
+        for i, current in enumerate(fparams):
+            if not isinstance(current, FParameter):
                 raise TypeError(
-                    "Received non-ParameterMap '{}'".format(current)
+                    "Received non-FParameter '{}'".format(current)
                 )
             elif not (current.name and current.interface_name):
                 raise ValueError(
-                    "Received unnamed ParameterMap: '{}'".format(current)
+                    "Received unnamed FParameter: '{}'".format(current)
                 )
             elif current.is_contextual and i > 0:
                 raise TypeError(
-                    'Only the first ParameterMap can be contextual'
+                    'Only the first FParameter can be contextual'
                 )
 
             if current.name in pname_set:
                 raise ValueError(
-                    "Received multiple ParameterMaps with name '{}'".\
+                    "Received multiple FParameters with name '{}'".\
                         format(current.name)
                 )
             pname_set.add(current.name)
 
             if current.interface_name in iname_set:
                 raise ValueError(
-                    "Received multiple ParameterMaps with interface_name "
+                    "Received multiple FParameters with interface_name "
                     "'{}'".format(current.interface_name)
                 )
             iname_set.add(current.interface_name)
 
-            last = pmaps[i-1] if i > 0 else None
+            last = fparams[i-1] if i > 0 else None
             if not last:
                 continue
 
@@ -252,20 +205,20 @@ class Forger(collections.abc.MutableSequence):
             if current.kind is last.kind:
                 if current.kind is VAR_POSITIONAL:
                     raise TypeError(
-                        'Received multiple variable-positional ParameterMaps'
+                        'Received multiple variable-positional FParameters'
                     )
                 elif current.kind is VAR_KEYWORD:
                     raise TypeError(
-                        'Received multiple variable-keyword ParameterMaps'
+                        'Received multiple variable-keyword FParameters'
                     )
                 elif current.kind in (POSITIONAL_ONLY, POSITIONAL_OR_KEYWORD) \
                     and last.default is not inspect.Parameter.empty \
                     and current.default is inspect.Parameter.empty:
                     raise SyntaxError(
-                        'non-default ParameterMap follows default ParameterMap'
+                        'non-default FParameter follows default FParameter'
                     )
 
-    def __init__(self, *args: ParameterMap, **kwargs: ParameterMap) -> None:
+    def __init__(self, *args: FParameter, **kwargs: FParameter) -> None:
         self._data = [
             *args,
             *[
@@ -294,14 +247,14 @@ class Forger(collections.abc.MutableSequence):
             self,
             key: typing.Union[int, slice],
         ) -> typing.Any:
-        # typing.Union[ParameterMap, typing.Sequence[ParameterMap]]
+        # typing.Union[FParameter, typing.Sequence[FParameter]]
         # https://github.com/python/mypy/issues/4108
         return self._data.__getitem__(key)
 
     def __setitem__(
             self,
             key: typing.Union[slice, int],
-            value: typing.Union[typing.Iterable[ParameterMap], ParameterMap],
+            value: typing.Union[typing.Iterable[FParameter], FParameter],
         ) -> None:
         temp = list(self._data)
         temp.__setitem__(key, value)  # type: ignore
@@ -316,7 +269,7 @@ class Forger(collections.abc.MutableSequence):
     def __len__(self) -> int:
         return len(self._data)
 
-    def insert(self, index: int, value: ParameterMap) -> None:
+    def insert(self, index: int, value: FParameter) -> None:
         temp = list(self._data)
         temp.insert(index, value)
         self.validate(*temp)
@@ -340,14 +293,18 @@ class Forger(collections.abc.MutableSequence):
         return wrapper
 
     @classmethod
-    def from_callable(cls, callable: typing.Callable) -> 'Forger':
-        # pylint: disable=W0622, redefined-builtin
-        sig = inspect.signature(callable)
+    def from_signature(cls, signature: inspect.Signature) -> 'FSignature':
+        # TODO: test
         # pylint: disable=E1101, no-member
         return cls(*[
-            ParameterMap.from_parameter(param)
-            for param in sig.parameters.values()
+            FParameter.from_parameter(param)
+            for param in signature.parameters.values()
         ])
+
+    @classmethod
+    def from_callable(cls, callable: typing.Callable) -> 'FSignature':
+        # pylint: disable=W0622, redefined-builtin
+        return cls.from_signature(inspect.signature(callable))
 
     @property
     def context(self):
@@ -361,35 +318,13 @@ class Forger(collections.abc.MutableSequence):
     def var_keyword(self):
         return get_var_keyword_parameter(*self)
 
-    @property
-    def converters(self):
-        return {
-            pmap.name: pmap.converter
-            for pmap in self if pmap.converter
-        }
-
-    @property
-    def validators(self):
-        return {
-            pmap.name: pmap.validator
-            for pmap in self if pmap.validator
-        }
-
-    @property
-    def public_parameters(self):
-        return [pmap.parameter for pmap in self]
-
-    @property
-    def interface_parameters(self):
-        return [pmap.interface_parameter for pmap in self]
-
     def make_signature(self, interface=False, return_annotation=void):
         return inspect.Signature(
             parameters=[
-                pmap.interface_parameter \
+                fparams.interface_parameter \
                     if interface \
-                    else pmap.parameter
-                for pmap in self
+                    else fparams.parameter
+                for fparams in self
             ],
             return_annotation=void_to_empty(return_annotation),
         )
@@ -410,56 +345,35 @@ class Forger(collections.abc.MutableSequence):
 
         return SignatureMapper(  # type: ignore
             callable=callable,
-            has_context=bool(self.context),
             sig_public=sig_public,
-            sig_interface=sig_interface,
-            converters=types.MappingProxyType(self.converters),
-            validators=types.MappingProxyType(self.validators),
-            tf_interface=make_transform(
-                sig_public,
-                sig_interface,
-                {p.name: p.interface_name for p in self},
-            ),
-            tf_private=make_transform(sig_interface, sig_private),
+            parameter_transforms=self._data,
+            parameter_mapping=map_parameters(self, inspect.signature(callable))
         )
 
 
 class SignatureMapper(immutable.Struct):
     __slots__ = (
         'callable',
-        'has_context',
         'sig_public',
-        'sig_interface',
-        'converters',
-        'validators',
-        'tf_interface',
-        'tf_private',
+        'parameter_transforms',
+        'parameter_mapping',
     )
 
     def __init__(
             self,
             callable: typing.Callable[..., typing.Any],
-            has_context: bool,
             sig_public: inspect.Signature,
-            sig_interface: inspect.Signature,
-            converters: types.MappingProxyType = types.MappingProxyType({}),
-            validators: types.MappingProxyType = types.MappingProxyType({}),
-            tf_interface: typing.Callable[[CallArguments], CallArguments] = \
-                ident_t,
-            tf_private: typing.Callable[[CallArguments], CallArguments] = \
-                ident_t,
+            parameter_transforms: typing.Optional[typing.Iterable] = None,
+            parameter_mapping: types.MappingProxyType = \
+                types.MappingProxyType({})
         ) -> None:
         # pylint: disable=W0622, redefined-builtin
         # pylint: disable=R0913, too-many-arguments
         super().__init__(
             callable=callable,
-            has_context=has_context,
             sig_public=sig_public,
-            sig_interface=sig_interface,
-            converters=types.MappingProxyType(converters),
-            validators=types.MappingProxyType(validators),
-            tf_interface=tf_interface,
-            tf_private=tf_private
+            parameter_transforms=parameter_transforms,
+            parameter_mapping=types.MappingProxyType(parameter_mapping or {}),
         )
 
     def __call__(
@@ -468,7 +382,7 @@ class SignatureMapper(immutable.Struct):
             **kwargs: typing.Any
         ) -> typing.Any:
         try:
-            bound = self.sig_public.bind(*args, **kwargs)
+            pub_ba = self.sig_public.bind(*args, **kwargs)
         except TypeError as exc:
             raise TypeError(
                 '{callable_name}() {message}'.format(
@@ -477,14 +391,52 @@ class SignatureMapper(immutable.Struct):
                 ),
             )
 
-        bound.apply_defaults()
-        self.convert(bound.arguments)
-        self.validate(bound.arguments)
+        pts = OrderedDict([(pt.name, pt) for pt in self.parameter_transforms])
+        ctx = self._get_context(pub_ba.arguments)
+        arguments = OrderedDict([
+            (name, pts[name](ctx, name, value))
+            for name, value in pub_ba.arguments.items()
+        ])
+        pub_ba.arguments.update(arguments)
 
-        # pylint: disable=E1101, no-member
-        # pylint: disable=E1121, too-many-function-args
-        call_args = CallArguments.from_bound_arguments(bound)
-        return self.tf_private(self.tf_interface(call_args))  # type: ignore
+        pri_ba = self.sig_private.bind_partial()
+        pri_ba.apply_defaults()
+
+        try:
+            pri_var_po_name = get_var_positional_parameter(
+                self.sig_private.parameters.values()
+            )
+        except AttributeError:
+            pri_var_po_name = None
+
+        try:
+            pri_var_kw_name = get_var_keyword_parameter(
+                self.sig_private.parameters.values()
+            )
+        except AttributeError:
+            pri_var_kw_name = None
+
+        try:
+            pub_var_kw_name = get_var_keyword_parameter(
+                self.sig_public.parameters.values()
+            )
+        except AttributeError:
+            pub_var_kw_name = None
+
+
+        for k, v in pub_ba.arguments.items():
+            if k == pri_var_po_name:
+                # only pub_var_po can map to pri_var_po
+                pri_ba.arguments[pri_var_po_name] = v
+            elif k == pri_var_kw_name:
+                if k == pub_var_kw_name:
+                    pri_ba.arguments[pri_var_kw_name][k] = v
+                else:
+                    pri_ba.arguments[pri_var_kw_name][k].update(v)
+            else:
+                pri_ba.arguments[k] = v
+
+        return CallArguments.from_bound_arguments(pri_ba)
 
     def __repr__(self) -> str:
         pubstr = stringify_parameters(
@@ -495,36 +447,19 @@ class SignatureMapper(immutable.Struct):
         )
         return '<{} ({}) -> ({})>'.format(type(self).__name__, pubstr, privstr)
 
+
     def _get_context(
             self,
             arguments: typing.MutableMapping[str, typing.Any]
         ) -> typing.Any:
-        if not self.has_context:
+        try:
+            pt1 = self.parameter_transforms[0]
+        except IndexError:
             return None
-        param_ctx = next(iter(self.sig_public.parameters.values()))
-        return arguments[param_ctx.name]
+        return arguments[pt1.name] \
+            if pt1.is_contextual \
+            else None
 
     @property
     def sig_private(self):
         return inspect.signature(self.callable)
-
-    def convert(
-            self,
-            arguments: typing.MutableMapping[str, typing.Any]
-        ) -> None:
-        context = self._get_context(arguments)
-        for k, v in self.converters.items():
-            arguments[k] = v(context, k, arguments[k])
-
-    def validate(
-            self,
-            arguments: typing.MutableMapping[str, typing.Any]
-        ) -> None:
-        context = self._get_context(arguments)
-        if get_run_validators():
-            for k, validator in self.validators.items():
-                if isinstance(validator, typing.Iterable):
-                    for v in validator:
-                        v(context, k, arguments[k])
-                else:
-                    validator(context, k, arguments[k])

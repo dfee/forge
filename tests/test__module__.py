@@ -7,6 +7,7 @@ import forge
 def test_namespace():
     private_ptn = re.compile(r'^\_[a-zA-Z]')
     assert set(filter(private_ptn.match, forge.__dict__.keys())) == set([
+        '_config',
         '_exceptions',
         '_immutable',
         '_marker',
@@ -18,7 +19,7 @@ def test_namespace():
     public_ptn = re.compile(r'^[a-zA-Z]')
     assert set(filter(public_ptn.match, forge.__dict__.keys())) == set([
         # Parameters
-        'ParameterMap',
+        'FParameter',
         'arg',
         'args',
         'cls',
@@ -28,7 +29,7 @@ def test_namespace():
         'pos',
         'self',
         # Signature
-        'Forger',
+        'FSignature',
         'SignatureMapper',
         'returns',
         'ry',
@@ -42,7 +43,7 @@ def test_namespace():
 
 def test_nicknames():
     for nickname, official in {
-            'ry': 'Forger',
-            'sign': 'Forger',
+            'ry': 'FSignature',
+            'sign': 'FSignature',
         }.items():
         assert getattr(forge, official) is getattr(forge, nickname)
