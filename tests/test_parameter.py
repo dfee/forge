@@ -11,6 +11,7 @@ from forge._parameter import (
     FParameter,
     VarPositional,
     VarKeyword,
+    _default_or_factory,
     cls_,
     self_,
 )
@@ -26,6 +27,8 @@ dummy_converter = lambda ctx, name, value: (ctx, name, value)
 dummy_validator = lambda ctx, name, value: None
 
 FPARAM_DEFAULTS = dict(
+    name=None,
+    interface_name=None,
     default=inspect.Parameter.empty,
     type=inspect.Parameter.empty,
     converter=None,
@@ -93,8 +96,35 @@ class TestFactory:
         mock.assert_called_once_with()
 
 
+dummy_func = lambda: None
+
+@pytest.mark.parametrize(('default', 'factory', 'result'), [
+    pytest.param(1, void, 1, id='default'),
+    pytest.param(void, dummy_func, Factory(dummy_func), id='factory'),
+    pytest.param(void, void, inspect.Parameter.empty, id='neither'),
+    pytest.param(1, dummy_func, None, id='both'),
+])
+def test_default_or_factory(default, factory, result):
+    if result is not None:
+        assert _default_or_factory(default, factory) == result
+        return
+
+    with pytest.raises(TypeError) as excinfo:
+        _default_or_factory(default, factory)
+    assert excinfo.value.args[0] == \
+        'expected either "default" or "factory", received both'
+
+
 class TestFParameter:
     # pylint: disable=E1101, no-member
+    def test__init__default_or_factory(self):
+        fparam = FParameter(
+            inspect.Parameter.POSITIONAL_ONLY,
+            factory=dummy_func,
+        )
+        assert isinstance(fparam.default, Factory)
+        assert fparam.default.factory == dummy_func
+
     @pytest.mark.parametrize(('kwargs', 'expected'), [
         pytest.param(
             {
@@ -259,6 +289,7 @@ class TestFParameter:
     @pytest.mark.parametrize(('rkey', 'rval'), [
         pytest.param('kind', inspect.Parameter.KEYWORD_ONLY, id='kind'),
         pytest.param('default', 1, id='default'),
+        pytest.param('factory', dummy_func, id='factory'),
         pytest.param('type', int, id='type'),
         pytest.param('name', 'b', id='name'),
         pytest.param('interface_name', 'b', id='interface_name'),
@@ -270,12 +301,16 @@ class TestFParameter:
             kind=inspect.Parameter.POSITIONAL_ONLY,
             name=None,
             interface_name=None,
+            default=None,
         )
-        fparam2 = fparam.replace(**{rkey: rval}) # pylint: disable=E1101, no-member
-        for k, v in dict(fparam._asdict(), **{rkey: rval}).items():
+        # pylint: disable=E1101, no-member
+        fparam2 = fparam.replace(**{rkey: rval})
+        for k, v in immutable.asdict(fparam2).items():
             if k in ('name', 'interface_name') and \
                 rkey in ('name', 'interface_name'):
                 v = rval
+            elif k == 'default' and rkey == 'factory':
+                v = Factory(dummy_func)
             assert getattr(fparam2, k) == v
 
     def test_parameter(self):
@@ -329,11 +364,7 @@ class TestFParameter:
         assert excinfo.value.args[0] == 'Cannot generate an unnamed parameter'
 
     def test_defaults(self):
-        fparam = FParameter(
-            kind=inspect.Parameter.POSITIONAL_ONLY,
-            name='dummy',
-            interface_name='dummy',
-        )
+        fparam = FParameter(inspect.Parameter.POSITIONAL_ONLY)
         assert fparam.kind == inspect.Parameter.POSITIONAL_ONLY
         for k, v in FPARAM_DEFAULTS.items():
             assert getattr(fparam, k) == v
@@ -376,17 +407,26 @@ class TestFParameter:
             {'name': 'a', 'interface_name': 'b'},
             id='name_and_interface_name',
         ),
+        pytest.param(
+            {'default': 1},
+            {'default': 1},
+            id='default',
+        ),
+        pytest.param(
+            {'factory': dummy_func},
+            {'default': Factory(dummy_func)},
+            id='factory',
+        ),
     ])
     def test_create_positional_only(self, extra_in, extra_out):
         kwargs = dict(
-            default=None,
             type=int,
             converter=dummy_converter,
             validator=dummy_validator,
         )
         fparam = FParameter.create_positional_only(**kwargs, **extra_in)
         assert isinstance(fparam, FParameter)
-        assert fparam._asdict() == \
+        assert immutable.asdict(fparam) == \
             {**FPARAM_POS_DEFAULTS, **kwargs, **extra_out}
 
     @pytest.mark.parametrize(('extra_in', 'extra_out'), [
@@ -408,17 +448,26 @@ class TestFParameter:
             {'name': 'a', 'interface_name': 'b'},
             id='name_and_interface_name',
         ),
+        pytest.param(
+            {'default': 1},
+            {'default': 1},
+            id='default',
+        ),
+        pytest.param(
+            {'factory': dummy_func},
+            {'default': Factory(dummy_func)},
+            id='factory',
+        ),
     ])
     def test_create_positional_or_keyword(self, extra_in, extra_out):
         kwargs = dict(
-            default=None,
             type=int,
             converter=dummy_converter,
             validator=dummy_validator,
         )
         fparam = FParameter.create_positional_or_keyword(**kwargs, **extra_in)
         assert isinstance(fparam, FParameter)
-        assert fparam._asdict() == \
+        assert immutable.asdict(fparam) == \
             {**FPARAM_POK_DEFAULTS, **kwargs, **extra_out}
 
     @pytest.mark.parametrize(('extra_in', 'extra_out'), [
@@ -445,7 +494,7 @@ class TestFParameter:
         kwargs = dict(type=int)
         fparam = FParameter.create_contextual(**kwargs, **extra_in)
         assert isinstance(fparam, FParameter)
-        assert fparam._asdict() == \
+        assert immutable.asdict(fparam) == \
             {**FPARAM_CTX_DEFAULTS, **kwargs, **extra_out}
 
     def test_create_var_positional(self):
@@ -456,7 +505,7 @@ class TestFParameter:
         )
         fparam = FParameter.create_var_positional(**kwargs)
         assert isinstance(fparam, FParameter)
-        assert fparam._asdict() == dict(
+        assert immutable.asdict(fparam) == dict(
             FPARAM_VPO_DEFAULTS,
             name=kwargs['name'],
             interface_name=kwargs['name'],
@@ -464,19 +513,30 @@ class TestFParameter:
             validator=kwargs['validator'],
         )
 
-    def test_create_keyword_only(self):
+    @pytest.mark.parametrize(('extra_in', 'extra_out'), [
+        pytest.param(
+            {'default': 1},
+            {'default': 1},
+            id='default',
+        ),
+        pytest.param(
+            {'factory': dummy_func},
+            {'default': Factory(dummy_func)},
+            id='factory',
+        ),
+    ])
+    def test_create_keyword_only(self, extra_in, extra_out):
         kwargs = dict(
             interface_name='a',
             name='b',
-            default=None,
             type=int,
             converter=dummy_converter,
             validator=dummy_validator,
         )
-        fparam = FParameter.create_keyword_only(**kwargs)
+        fparam = FParameter.create_positional_or_keyword(**kwargs, **extra_in)
         assert isinstance(fparam, FParameter)
-        for k, v in dict(FPARAM_KWO_DEFAULTS, **kwargs).items():
-            assert getattr(fparam, k) == v
+        assert immutable.asdict(fparam) == \
+            {**FPARAM_POK_DEFAULTS, **kwargs, **extra_out}
 
     def test_create_var_keyword(self):
         kwargs = dict(
@@ -486,7 +546,7 @@ class TestFParameter:
         )
         fparam = FParameter.create_var_keyword(**kwargs)
         assert isinstance(fparam, FParameter)
-        assert fparam._asdict() == dict(
+        assert immutable.asdict(fparam) == dict(
             FPARAM_VKW_DEFAULTS,
             name=kwargs['name'],
             interface_name=kwargs['name'],
@@ -511,7 +571,7 @@ class TestVarPositional:
         varp = VarPositional()(**kwargs)
         fparam = self.assert_iterable_and_get_fparam(varp)
         assert isinstance(fparam, FParameter)
-        assert fparam._asdict() == dict(
+        assert immutable.asdict(fparam) == dict(
             FPARAM_VPO_DEFAULTS,
             name=kwargs['name'],
             interface_name=kwargs['name'],
@@ -528,7 +588,7 @@ class TestVarPositional:
         varp = VarPositional(**kwargs)
         fparam = self.assert_iterable_and_get_fparam(varp)
         assert isinstance(fparam, FParameter)
-        assert fparam._asdict() == dict(
+        assert immutable.asdict(fparam) == dict(
             FPARAM_VPO_DEFAULTS,
             name=kwargs['name'],
             interface_name=kwargs['name'],
@@ -553,7 +613,7 @@ class TestVarKeyword:
         name, fparam = self.assert_mapping_and_get_fparam(vark)
         assert isinstance(fparam, FParameter)
         assert name == kwargs['name']
-        assert fparam._asdict() == dict(
+        assert immutable.asdict(fparam) == dict(
             FPARAM_VKW_DEFAULTS,
             name=kwargs['name'],
             interface_name=kwargs['name'],
@@ -571,7 +631,7 @@ class TestVarKeyword:
         name, fparam = self.assert_mapping_and_get_fparam(vark)
         assert isinstance(fparam, FParameter)
         assert name == kwargs['name']
-        assert fparam._asdict() == dict(
+        assert immutable.asdict(fparam) == dict(
             FPARAM_VKW_DEFAULTS,
             name=kwargs['name'],
             interface_name=kwargs['name'],
@@ -600,16 +660,16 @@ class TestConvenience:
 
     def test_self_(self):
         assert isinstance(self_, FParameter)
-        assert self_._asdict() == dict(
-            **FPARAM_CTX_DEFAULTS,
+        assert immutable.asdict(self_) == dict(
+            FPARAM_CTX_DEFAULTS,
             name='self',
             interface_name='self',
         )
 
     def test_cls_(self):
         assert isinstance(cls_, FParameter)
-        assert cls_._asdict() == dict(
-            **FPARAM_CTX_DEFAULTS,
+        assert immutable.asdict(cls_) == dict(
+            FPARAM_CTX_DEFAULTS,
             name='cls',
             interface_name='cls',
         )

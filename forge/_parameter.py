@@ -2,7 +2,6 @@ import collections
 import collections.abc
 import functools
 import inspect
-import types
 import typing
 
 import forge._immutable as immutable
@@ -11,19 +10,19 @@ from forge._marker import (
     void_to_empty,
 )
 
+_ctx_callable_type = typing.Callable[[typing.Any, str, typing.Any], typing.Any]
+
 # pylint: disable=W0212, protected-access, W0212, invalid-name
 _kind_type = inspect._ParameterKind
 _is_contextual_type = bool
 # pylint: enable=W0212, protected-access, W0212, invalid-name
 _name_type = typing.Optional[str]
 _default_type = typing.Any
+_factory_type = typing.Callable[[], typing.Any]
 _type_type = typing.Any
-_converter_type = typing.Optional[types.FunctionType]
+_converter_type = typing.Optional[_ctx_callable_type]
 _validator_type = typing.Optional[
-    typing.Union[
-        types.FunctionType,
-        typing.Iterable[types.FunctionType]
-    ]
+    typing.Union[_ctx_callable_type, typing.Iterable[_ctx_callable_type]]
 ]
 
 
@@ -39,6 +38,18 @@ class Factory(immutable.Immutable):
 
     def __call__(self):
         return self.factory()
+
+
+def _default_or_factory(default, factory):
+    if factory is not void:
+        if default is not void:
+            raise TypeError(
+                'expected either "default" or "factory", received both'
+            )
+        return Factory(factory)
+    elif default is void:
+        return inspect.Parameter.empty
+    return default
 
 
 class FParameter(immutable.Immutable):
@@ -59,6 +70,7 @@ class FParameter(immutable.Immutable):
             name: _name_type = None,
             interface_name: _name_type = None,
             default: _default_type = void,
+            factory: _factory_type = void,
             type: _type_type = void,
             converter: _converter_type = None,
             validator: _validator_type = None,
@@ -70,7 +82,7 @@ class FParameter(immutable.Immutable):
             kind=kind,
             name=name or interface_name,
             interface_name=interface_name or name,
-            default=void_to_empty(default),
+            default=_default_or_factory(default, factory),
             type=void_to_empty(type),
             converter=converter,
             validator=validator,
@@ -172,9 +184,6 @@ class FParameter(immutable.Immutable):
             annotation=self.type,
         )
 
-    def _asdict(self):
-        return immutable.asdict(self)
-
     def replace(
             self,
             *,
@@ -182,6 +191,7 @@ class FParameter(immutable.Immutable):
             name=void,
             interface_name=void,
             default=void,
+            factory=void,
             type=void,
             converter=void,
             validator=void,
@@ -190,6 +200,8 @@ class FParameter(immutable.Immutable):
         # pylint: disable=E1120, no-value-for-parameter
         # pylint: disable=W0622, redefined-builtin
         # pylint: disable=R0913, too-many-arguments
+        if default is not void or factory is not void:
+            default = _default_or_factory(default, factory)
         return immutable.replace(self, **{
             k: v for k, v in {
                 'kind': kind,
@@ -220,6 +232,7 @@ class FParameter(immutable.Immutable):
             interface_name=None,
             *,
             default=void,
+            factory=void,
             type=void,
             converter=None,
             validator=None
@@ -229,7 +242,8 @@ class FParameter(immutable.Immutable):
             kind=inspect.Parameter.POSITIONAL_ONLY,
             name=name,
             interface_name=interface_name,
-            default=void_to_empty(default),
+            default=default,
+            factory=factory,
             type=void_to_empty(type),
             converter=converter,
             validator=validator
@@ -242,6 +256,7 @@ class FParameter(immutable.Immutable):
             interface_name=None,
             *,
             default=void,
+            factory=void,
             type=void,
             converter=None,
             validator=None
@@ -251,7 +266,8 @@ class FParameter(immutable.Immutable):
             kind=inspect.Parameter.POSITIONAL_OR_KEYWORD,
             name=name,
             interface_name=interface_name,
-            default=void_to_empty(default),
+            default=default,
+            factory=factory,
             type=void_to_empty(type),
             converter=converter,
             validator=validator,
@@ -282,6 +298,7 @@ class FParameter(immutable.Immutable):
             interface_name=None,
             *,
             default=void,
+            factory=void,
             type=void,
             converter=None,
             validator=None
@@ -291,7 +308,8 @@ class FParameter(immutable.Immutable):
             kind=inspect.Parameter.KEYWORD_ONLY,
             name=name,
             interface_name=interface_name,
-            default=void_to_empty(default),
+            default=default,
+            factory=factory,
             type=void_to_empty(type),
             converter=converter,
             validator=validator,

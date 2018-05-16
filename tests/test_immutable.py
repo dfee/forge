@@ -3,7 +3,6 @@ import pytest
 from forge._exceptions import ImmutableInstanceError
 from forge._immutable import (
     Immutable,
-    ImmutableInstanceError,
     asdict,
     replace,
 )
