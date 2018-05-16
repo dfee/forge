@@ -382,7 +382,7 @@ class Mapper(immutable.Immutable):
 
 def sign(
         *fparameters: FParameter,
-        **named_fparameters: FParameter,
+        **named_fparameters: FParameter
     ) -> typing.Callable[..., typing.Any]:
     fsignature = FSignature(*fparameters, **named_fparameters)
     def wrapper(callable):
@@ -401,7 +401,7 @@ def sign(
 
 def resign(
         *fparameters: FParameter,
-        **named_fparameters: FParameter,
+        **named_fparameters: FParameter
     ) -> typing.Callable[..., typing.Any]:
     fsignature = FSignature(*fparameters, **named_fparameters)
     def reviser(callable):
