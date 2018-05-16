@@ -1,16 +1,22 @@
 import inspect
-import types
 from unittest.mock import Mock
 
 import pytest
 
 import forge
 import forge._signature
+from forge._marker import (
+    void,
+    void_to_empty,
+)
 from forge._parameter import FParameter
 from forge._signature import (
     CallArguments,
     FSignature,
-    SignatureMapper,
+    Mapper,
+    pk_strings,
+    sign,
+    resign,
 )
 
 # pylint: disable=C0103, invalid-name
@@ -21,7 +27,6 @@ from forge._signature import (
 
 
 empty = inspect.Parameter.empty
-sign = FSignature
 
 POSITIONAL_ONLY = inspect.Parameter.POSITIONAL_ONLY  # type: ignore
 POSITIONAL_OR_KEYWORD = inspect.Parameter.POSITIONAL_OR_KEYWORD  # type: ignore
@@ -63,6 +68,15 @@ class TestCallArguments:
         assert call_args.to_bound_arguments(sig, partial=partial) == \
             sig.bind_partial(*call_args.args, **call_args.kwargs)
 
+    @pytest.mark.parametrize(('args', 'kwargs', 'expected'), [
+        pytest.param((0,), {}, '0', id='args_only'),
+        pytest.param((), {'a': 1}, 'a=1', id='kwargs_only'),
+        pytest.param((0,), {'a': 1}, '0, a=1', id='args_and_kwargs'),
+        pytest.param((), {}, '', id='neither_args_nor_kwargs'),
+    ])
+    def test__repr__(self, args, kwargs, expected):
+        assert repr(CallArguments(*args, **kwargs)) == \
+            '<CallArguments ({})>'.format(expected)
 
 class TestReturns:
     def test_no__signature__(self):
@@ -78,19 +92,6 @@ class TestReturns:
 
         myfunc = forge.returns(int)(myfunc)
         assert myfunc.__signature__.return_annotation == int
-
-
-def make_pos_signature(name, default=empty):
-    return inspect.Signature(parameters=[
-        inspect.Parameter(name, POSITIONAL_ONLY, default=default)
-    ])
-
-
-def make_pok_signature(name, default=empty):
-    return inspect.Signature(parameters=[
-        inspect.Parameter(name, POSITIONAL_OR_KEYWORD, default=default)
-    ])
-
 
 
 class TestFSignature:
@@ -179,6 +180,12 @@ class TestFSignature:
             'non-default FParameter follows default FParameter'
         )
 
+    def test_validate_default_kw_only_follows_non_default_kw_only(self):
+        FSignature.validate(
+            forge.kwarg('a', default=None),
+            forge.kwarg('b'),
+        )
+
     def test_validate_multiple_parameters(self):
         FSignature.validate(
             forge.pos('a'),
@@ -202,78 +209,42 @@ class TestFSignature:
     def test__getitem__(self):
         fparam = forge.arg('a')
         fsig = FSignature(fparam)
-        assert fsig[0] is fparam
-
-    def test__setitem__(self):
-        fparam1, fparam2 = forge.arg('a'), forge.arg('b')
-        fsig = FSignature(fparam1)
-        fsig[0] = fparam2
-        assert fsig[0] is fparam2
-
-    def test__setitem__invalid_raises(self):
-        fsig = FSignature(forge.pos('a'), forge.pos('b'))
-        with pytest.raises(SyntaxError) as excinfo:
-            fsig[0] = forge.arg('a')
-        assert excinfo.value.args[0] == (
-            "b of kind 'POSITIONAL_ONLY' follows a of kind "
-            "'POSITIONAL_OR_KEYWORD'"
-        )
-
-    def test__delitem__(self):
-        fsig = FSignature(forge.arg('a'))
-        del fsig[0]
-        assert not fsig
+        assert fsig['a'] is fparam
 
     def test__len__(self):
         assert len(FSignature(forge.arg('a'))) == 1
 
-    def test_insert(self):
-        fparam1, fparam2, fparam3 = forge.arg('a'), forge.arg('b'), forge.arg('c')
-        fsig = FSignature(fparam1, fparam3)
-        fsig.insert(1, fparam2)
-        assert list(fsig) == [fparam1, fparam2, fparam3]
-
-    def test_insert_invalid_raises(self):
-        fsig = FSignature(forge.pos('a'))
-        with pytest.raises(SyntaxError) as excinfo:
-            fsig.insert(0, forge.arg('b'))
-        assert excinfo.value.args[0] == (
-            "a of kind 'POSITIONAL_ONLY' follows b of kind "
-            "'POSITIONAL_OR_KEYWORD'"
-        )
+    def test__iter__(self):
+        fparam = forge.arg('a')
+        fsig = FSignature(fparam)
+        assert dict(fsig) == {fparam.name: fparam}
     # End MutableSequence Tests
 
-    def test__call__(self, monkeypatch):
-        # pylint: disable=W0613, unused-argument
-        fsig = forge.FSignature(forge.arg('a'))
-        def func(a):
-            return a
-
-        captured_mapping = None
-        make_mapper_func = fsig.make_mapper
-        def intercept_mapping(*args, **kwargs):
-            nonlocal captured_mapping
-            captured_mapping = make_mapper_func(*args, **kwargs)
-            return captured_mapping
-
-        fsig.make_mapper = Mock(side_effect=intercept_mapping)
-        wrapped = fsig(func)
-
-        assert wrapped.__wrapped__ is func
-        assert isinstance(captured_mapping, SignatureMapper)
-        assert wrapped.__signature_mapper__ is captured_mapping
-        assert isinstance(wrapped.__signature__, inspect.Signature)
-        assert wrapped.__signature__ is captured_mapping.sig_public
-
-        obj = object()
-        assert wrapped(obj) is obj
+    def test_from_signature(self):
+        sig = inspect.Signature([
+            inspect.Parameter(
+                'a',
+                POSITIONAL_OR_KEYWORD,
+                default=0,
+                annotation=int,
+            ),
+        ])
+        fsig = FSignature.from_signature(sig)
+        assert len(fsig) == 1
+        assert fsig['a'] == FParameter(
+            kind=POSITIONAL_OR_KEYWORD,
+            name='a',
+            interface_name='a',
+            default=0,
+            type=int,
+        )
 
     def test_from_callable(self):
         def func(a: int = 0):
             return a
         fsig = FSignature.from_callable(func)
         assert len(fsig) == 1
-        assert fsig[0] == FParameter(
+        assert fsig['a'] == FParameter(
             kind=inspect.Parameter.POSITIONAL_OR_KEYWORD,
             name='a',
             interface_name='a',
@@ -283,197 +254,325 @@ class TestFSignature:
 
     def test_var_positional(self):
         fsig = FSignature(*forge.args)
-        assert fsig[0] == fsig.var_positional
+        assert fsig['args'] == fsig.var_positional
 
     def test_var_keyword(self):
         fsig = FSignature(**forge.kwargs)
-        assert fsig[0] == fsig.var_keyword
+        assert fsig['kwargs'] == fsig.var_keyword
 
     def test_context(self):
         fsig = FSignature(forge.self)
-        assert fsig[0] == fsig.context
-
-    @pytest.mark.parametrize(('returns',), [(None,), (empty,)])
-    @pytest.mark.parametrize(('interface',), [(False,), (True,)])
-    def test_make_signature(self, returns, interface):
-        pname, iname = 'pname', 'iname'
-        fsig = FSignature(forge.arg(pname, iname))
-        signature = fsig.make_signature(
-            interface=interface,
-            return_annotation=returns,
-        )
-        expected_name = iname if interface else pname
-        assert signature.parameters == {
-            expected_name: inspect.Parameter(
-                name=expected_name,
-                kind=POSITIONAL_OR_KEYWORD,
-            ),
-        }
-        assert signature.return_annotation == returns
-
-    def test_make_mapper(self):
-        converter, validator = lambda: None, lambda: None
-        fsig = FSignature(
-            forge.arg('a', 'b', converter=converter, validator=validator),
-        )
-        # pylint: disable=C0321, multiple-statements
-        # pylint: disable=W0613, unused-argument
-        def func(*, b: int = 0) -> int: pass
-        mapper = fsig.make_mapper(func)
-
-        for k, v in dict(
-                callable=func,
-                sig_public=inspect.Signature(parameters=[
-                    inspect.Parameter(
-                        name='a',
-                        kind=inspect.Parameter.POSITIONAL_OR_KEYWORD,
-                    ),
-                ], return_annotation=int),
-            ).items():
-            assert getattr(mapper, k) == v
-
-        pre_tf_interface = CallArguments(1)
-        # post_tf_interface = mapper.tf_interface(pre_tf_interface)
-        # assert pre_tf_interface == post_tf_interface
-
-        # post_tf_private = mapper.tf_private(post_tf_interface)
-        # assert post_tf_private == CallArguments(b=1)
+        assert fsig['self'] == fsig.context
 
 
-# class TestSignatureMapper:
-#     @pytest.fixture
-#     def mapper_factory(self):
-#         defaults = dict(
-#             callable=lambda: None,
-#             has_context=False,
-#             sig_public=inspect.Signature(),
-#             sig_interface=inspect.Signature(),
-#         )
+class TestMapper:
+    @staticmethod
+    def make_param(name, kind, default=void):
+        return inspect.Parameter(name, kind, default=void_to_empty(default)) \
+            if kind is not None \
+            else None
 
-#         def _make(*, converters=None, validators=None, **kwargs):
-#             if converters:
-#                 kwargs['converters'] = types.MappingProxyType(converters)
-#             if validators:
-#                 kwargs['validators'] = types.MappingProxyType(validators)
-#             kwargs = {**defaults, **kwargs}
-#             return SignatureMapper(**kwargs)
+    def test__repr__(self):
+        fsignature = FSignature(forge.pos('a', 'b'))
+        callable_ = lambda *, b: None
+        mapper = Mapper(fsignature, callable_)
+        assert repr(mapper) == '<Mapper (a, /) -> (*, b)>'
 
-#         return _make
+    @pytest.mark.parametrize(('has_context',), [(True,), (False,)])
+    def test_get_context(self, has_context):
+        fparam = forge.ctx('param') \
+            if has_context \
+            else forge.arg('param')
+        fsig = FSignature(fparam)
+        mapper = Mapper(fsig, lambda param: None)
 
-#     def test__repr__(self, mapper_factory):
-#         mapper = mapper_factory(
-#             callable=lambda *, b: None,
-#             sig_public=inspect.Signature(parameters=[
-#                 inspect.Parameter('a', POSITIONAL_ONLY)
-#             ]),
-#         )
-#         assert repr(mapper) == '<SignatureMapper (a, /) -> (*, b)>'
+        kwargs = {'param': object()}
+        ctx = mapper.get_context(**kwargs)
+        assert ctx == (kwargs['param'] if has_context else None)
 
-#     @pytest.mark.parametrize(('has_context',), [(True,), (False,)])
-#     def test_convert(self, mapper_factory, has_context):
-#         mapper = mapper_factory(
-#             has_context=has_context,
-#             converters={'a': lambda ctx, k, v: (ctx, k, v)},
-#             sig_public=inspect.Signature(
-#                 [inspect.Parameter('ctx', POSITIONAL_OR_KEYWORD)] \
-#                 if has_context else []
-#             ),
-#         )
-#         arguments = {'ctx': object(), 'a': 1}
-#         mapper.convert(arguments)
-#         assert arguments == {
-#             'ctx': arguments['ctx'],
-#             'a': (arguments['ctx'] if has_context else None, 'a', 1),
-#         }
+    @pytest.mark.parametrize(('from_kind',), [
+        pytest.param(POSITIONAL_ONLY, id='from_positional_only'),
+        pytest.param(POSITIONAL_OR_KEYWORD, id='from_positional_or_keyword'),
+        pytest.param(POSITIONAL_OR_KEYWORD, id='from_keyword_only'),
+    ])
+    @pytest.mark.parametrize(('to_kind',), [
+        pytest.param(POSITIONAL_ONLY, id='to_positional_only'),
+        pytest.param(POSITIONAL_OR_KEYWORD, id='to_positional_or_keyword'),
+        pytest.param(POSITIONAL_OR_KEYWORD, id='to_keyword_only'),
+        pytest.param(VAR_KEYWORD, id='to_var_keyword'),
+    ])
+    @pytest.mark.parametrize(('vary_name',), [
+        pytest.param(True, id='varied_name'),
+        pytest.param(False, id='same_name'),
+    ])
+    def test__call__params_mapped(self, from_kind, to_kind, vary_name):
+        from_name, to_name = ('p1', 'p1') if not vary_name else ('p1', 'p2')
+        fsig = FSignature(FParameter(from_kind, from_name, to_name))
+        func = lambda: None
+        func.__signature__ = \
+            inspect.Signature([inspect.Parameter(to_name, to_kind)])
+        mapper = Mapper(fsig, func)
 
-#     @pytest.mark.parametrize(('plural',), [(True,), (False,)])
-#     @pytest.mark.parametrize(('has_context',), [(True,), (False,)])
-#     @pytest.mark.parametrize(('enabled',), [(True,), (False,)])
-#     def test_validate(self, mapper_factory, plural, has_context, enabled):
-#         called_with = None
-#         def validator(ctx, k, v):
-#             nonlocal called_with
-#             called_with = (ctx, k, v)
-#         mapper = mapper_factory(
-#             has_context=has_context,
-#             validators={'a': [validator] if plural else validator},
-#             sig_public=inspect.Signature(
-#                 [inspect.Parameter('ctx', POSITIONAL_OR_KEYWORD)] \
-#                 if has_context else []
-#             ),
-#         )
-#         arguments = {'ctx': object(), 'a': 1}
-#         if not enabled:
-#             # TODO: @pytest.mark.usefixtures('reset_run_validators')
-#             set_run_validators(False)
+        call_args = CallArguments(**{from_name: 1}) \
+            if from_kind in (KEYWORD_ONLY, VAR_KEYWORD) \
+            else CallArguments(1)
+        expected = CallArguments(**{to_name: 1}) \
+            if to_kind in (KEYWORD_ONLY, VAR_KEYWORD) \
+            else CallArguments(1)
+        result = mapper(*call_args.args, **call_args.kwargs)
+        assert result == expected
 
-#         mapper.validate(arguments)
-#         if enabled:
-#             assert called_with == \
-#                 (arguments['ctx'] if has_context else None, 'a', 1)
+    @pytest.mark.parametrize(('vary_name',), [
+        pytest.param(True, id='varied_name'),
+        pytest.param(False, id='same_name'),
+    ])
+    def test__call__vpo_param_mapped(self, vary_name):
+        from_name, to_name = ('p1', 'p1') if not vary_name else ('p1', 'p2')
+        fsig = FSignature(FParameter(VAR_POSITIONAL, from_name, to_name))
+        func = lambda: None
+        func.__signature__ = \
+            inspect.Signature([inspect.Parameter(to_name, VAR_POSITIONAL)])
+        mapper = Mapper(fsig, func)
 
-#     def test__call__(self, mapper_factory):
-#         called = dict(
-#             convert=False,
-#             validate=False,
-#             tf_interface=False,
-#             tf_private=False,
-#         )
-#         def convert(ctx, k, v):  # pylint: disable=W0613, unused-argument
-#             nonlocal called
-#             called['convert'] = True
-#             return v
+        call_args = CallArguments(1, 2, 3)
+        assert mapper(*call_args.args) == call_args
 
-#         def validate(ctx, k, v):  # pylint: disable=W0613, unused-argument
-#             nonlocal called
-#             called['validate'] = True
+    @pytest.mark.parametrize(('vary_name',), [
+        pytest.param(True, id='varied_name'),
+        pytest.param(False, id='same_name'),
+    ])
+    def test__call__vkw_param_mapped(self, vary_name):
+        from_name, to_name = ('p1', 'p1') if not vary_name else ('p1', 'p2')
+        fsig = FSignature(FParameter(VAR_KEYWORD, from_name, to_name))
+        func = lambda: None
+        func.__signature__ = \
+            inspect.Signature([inspect.Parameter(to_name, VAR_KEYWORD)])
+        mapper = Mapper(fsig, func)
 
-#         def tf_interface(call_args):
-#             nonlocal called
-#             called['tf_interface'] = True
-#             return call_args
+        call_args = CallArguments(a=1, b=2, c=3)
+        assert mapper(**call_args.kwargs) == call_args
 
-#         def tf_private(call_args):
-#             nonlocal called
-#             called['tf_private'] = True
-#             return call_args
+    def test__call__binding_error_raises_named(self):
+        fsig = FSignature(forge.arg('a'))
+        def func(a):
+            # pylint: disable=W0613, unused-argument
+            pass
+        mapper = Mapper(fsig, func)
+        with pytest.raises(TypeError) as excinfo:
+            mapper()
+        assert excinfo.value.args[0] == \
+            "func() missing a required argument: 'a'"
 
-#         sig = inspect.Signature(parameters=[
-#             inspect.Parameter('a', POSITIONAL_ONLY),
-#             inspect.Parameter('b', KEYWORD_ONLY),
-#         ])
+    @pytest.mark.parametrize(('from_name', 'to_name'), [
+        pytest.param('a', 'a', id='same_name'),
+        pytest.param('a', 'b', id='diff_name'),
+    ])
+    @pytest.mark.parametrize(('from_kind',), [
+        pytest.param(None, id='no_parameter'), # i.e. map: sig() -> sig(a=1)
+        pytest.param(POSITIONAL_ONLY, id='positional_only'),
+        pytest.param(POSITIONAL_OR_KEYWORD, id='positional_or_keyword'),
+        pytest.param(POSITIONAL_OR_KEYWORD, id='keyword_only'),
+    ])
+    @pytest.mark.parametrize(('to_kind',), [
+        pytest.param(POSITIONAL_ONLY, id='positional_only'),
+        pytest.param(POSITIONAL_OR_KEYWORD, id='positional_or_keyword'),
+        pytest.param(KEYWORD_ONLY, id='keyword_only'),
+    ])
+    @pytest.mark.parametrize(('from_default', 'to_default'), [
+        pytest.param('from_def', void, id='from_default'),
+        pytest.param(void, 'to_def', id='to_default'),
+        pytest.param('from_def', 'to_def', id='default_from_and_default_to'),
+    ])
+    def test_map_parameters_to_non_var_parameter(
+            self,
+            from_name,
+            from_kind,
+            from_default,
+            to_name,
+            to_kind,
+            to_default,
+        ):
+        # pylint: disable=R0913, too-many-arguments
+        from_param = self.make_param(from_name, from_kind, from_default)
+        from_sig = inspect.Signature([from_param] if from_param else None)
+        fsig = FSignature.from_signature(from_sig)
+        to_param = self.make_param(to_name, to_kind, to_default)
+        to_sig = inspect.Signature([to_param])
 
-#         mapper = mapper_factory(
-#             sig_public=sig,
-#             sig_interface=sig,
-#             converters={'a': convert},
-#             validators={'a': validate},
-#             tf_interface=tf_interface,
-#             tf_private=tf_private,
-#         )
+        # Idenitfy map_parameters errors
+        expected_exc = None
+        if not from_param:
+            if to_param.default is inspect.Parameter.empty:
+                expected_exc = TypeError(
+                    "Missing requisite mapping to non-default "
+                    "{to_kind} parameter '{to_name}'".format(
+                        to_kind=pk_strings[to_param.kind],
+                        to_name=to_param.name,
+                    )
+                )
+        elif from_param.name != to_param.name:
+            if to_param.default is inspect.Parameter.empty:
+                expected_exc = TypeError(
+                    "Missing requisite mapping to non-default "
+                    "{to_kind} parameter '{to_name}'".format(
+                        to_kind=pk_strings[to_param.kind],
+                        to_name=to_param.name,
+                    )
+                )
+            else:
+                expected_exc = TypeError(
+                    'Missing requisite mapping from parameters (a)'
+                )
 
-#         expected = CallArguments(1, b=1)
-#         assert mapper(*expected.args, **expected.kwargs) == expected
-#         assert all(called.values())
+        if expected_exc:
+            with pytest.raises(type(expected_exc)) as excinfo:
+                Mapper.map_parameters(fsig, to_sig)
+            assert excinfo.value.args[0] == expected_exc.args[0]
+            return
 
-#     def test__call__binding_error_raises_named(self, mapper_factory):
-#         def myfunc(a):
-#             return a
-#         sig = inspect.Signature(parameters=[
-#             inspect.Parameter('a', POSITIONAL_ONLY)
-#         ])
-#         mapper = mapper_factory(callable=myfunc, sig_public=sig)
-#         with pytest.raises(TypeError) as excinfo:
-#             mapper()
-#         assert excinfo.value.args[0] == \
-#             "myfunc() missing a required argument: 'a'"
+        pmap = Mapper.map_parameters(fsig, to_sig)
+        expected_pmap = {from_param.name: to_param.name} if from_param else {}
+        assert pmap == expected_pmap
 
-#     def test__call__defaults_applied(self, mapper_factory):
-#         sig = inspect.Signature(parameters=[
-#             inspect.Parameter('a', POSITIONAL_OR_KEYWORD, default=1)
-#         ])
-#         mapper = mapper_factory(
-#             sig_public=sig,
-#             sig_interface=sig,
-#         )
-#         assert mapper() == mapper(1)
+    @pytest.mark.parametrize(('from_kind',), [
+        pytest.param(POSITIONAL_ONLY, id='positional_only'),
+        pytest.param(POSITIONAL_OR_KEYWORD, id='positional_or_keyword'),
+        pytest.param(VAR_POSITIONAL, id='var_positional'),
+        pytest.param(KEYWORD_ONLY, id='keyword_only'),
+        pytest.param(VAR_KEYWORD, id='var_keyword'),
+    ])
+    def test_map_parameters_to_var_positional(self, from_kind):
+        from_param = self.make_param('from_', from_kind)
+        from_sig = inspect.Signature([from_param])
+        fsig = FSignature.from_signature(from_sig)
+        to_param = self.make_param('args', VAR_POSITIONAL)
+        to_sig = inspect.Signature([to_param])
+
+        if from_param.kind is VAR_POSITIONAL:
+            pmap = Mapper.map_parameters(fsig, to_sig)
+            assert pmap == {from_param.name: to_param.name}
+            return
+
+        with pytest.raises(TypeError) as excinfo:
+            Mapper.map_parameters(fsig, to_sig)
+
+        if from_param.kind is VAR_KEYWORD:
+            assert excinfo.value.args[0] == (
+                "Missing requisite mapping from variable-keyword parameter "
+                "'from_'"
+            )
+        else:
+            assert excinfo.value.args[0] == \
+                "Missing requisite mapping from parameters (from_)"
+
+    @pytest.mark.parametrize(('from_kind',), [
+        pytest.param(POSITIONAL_ONLY, id='positional_only'),
+        pytest.param(POSITIONAL_OR_KEYWORD, id='positional_or_keyword'),
+        pytest.param(VAR_POSITIONAL, id='var_positional'),
+        pytest.param(KEYWORD_ONLY, id='keyword_only'),
+        pytest.param(VAR_KEYWORD, id='var_keyword'),
+    ])
+    def test_map_parameters_to_var_keyword(self, from_kind):
+        from_param = self.make_param('a', from_kind)
+        from_sig = inspect.Signature([from_param])
+        fsig = FSignature.from_signature(from_sig)
+        to_param = self.make_param('kwargs', VAR_KEYWORD)
+        to_sig = inspect.Signature([to_param])
+
+        expected_exc = None
+        if from_param.kind is VAR_POSITIONAL:
+            expected_exc = TypeError(
+                "Missing requisite mapping from variable-positional "
+                "parameter 'a'"
+            )
+
+        if expected_exc:
+            with pytest.raises(type(expected_exc)) as excinfo:
+                Mapper.map_parameters(fsig, to_sig)
+            assert excinfo.value.args[0] == expected_exc.args[0]
+            return
+        pmap = Mapper.map_parameters(fsig, to_sig)
+        assert pmap == {from_param.name: to_param.name}
+
+    @pytest.mark.parametrize(('from_kind',), [
+        pytest.param(POSITIONAL_ONLY, id='positional_only'),
+        pytest.param(POSITIONAL_OR_KEYWORD, id='positional_or_keyword'),
+        pytest.param(VAR_POSITIONAL, id='var_positional'),
+        pytest.param(KEYWORD_ONLY, id='keyword_only'),
+        pytest.param(VAR_KEYWORD, id='var_keyword'),
+    ])
+    def test_map_parameters_to_empty(self, from_kind):
+        from_param = self.make_param('a', from_kind)
+        from_sig = inspect.Signature([from_param])
+        fsig = FSignature.from_signature(from_sig)
+        to_sig = inspect.Signature()
+
+        with pytest.raises(TypeError) as excinfo:
+            Mapper.map_parameters(fsig, to_sig)
+        if from_param.kind in (VAR_KEYWORD, VAR_POSITIONAL):
+            assert excinfo.value.args[0] == (
+                "Missing requisite mapping from {from_kind} parameter 'a'".\
+                    format(from_kind=pk_strings[from_kind])
+            )
+        else:
+            assert excinfo.value.args[0] == \
+                "Missing requisite mapping from parameters (a)"
+
+    @pytest.mark.parametrize(('to_kind',), [
+        pytest.param(POSITIONAL_ONLY, id='positional_only'),
+        pytest.param(POSITIONAL_OR_KEYWORD, id='positional_or_keyword'),
+        pytest.param(KEYWORD_ONLY, id='keyword_only'),
+    ])
+    def test_map_parameters_from_hidden(self, to_kind):
+        fsig = FSignature()
+        to_param = self.make_param('a', to_kind, default=1)
+        to_sig = inspect.Signature([to_param])
+
+        assert Mapper.map_parameters(fsig, to_sig) == {}
+
+
+def test_sign():
+    @sign(*forge.args, **forge.kwargs)
+    def func(*args, **kwargs):
+        return CallArguments(*args, **kwargs)
+
+    assert isinstance(func.__mapper__, Mapper)
+    assert isinstance(func.__signature__, inspect.Signature)
+
+    mapper = func.__mapper__
+    assert mapper.callable == func.__wrapped__
+    assert mapper.fsignature == FSignature(*forge.args, **forge.kwargs)
+    assert mapper == Mapper(mapper.fsignature, func.__wrapped__)
+
+    func.__mapper__ = Mock(side_effect=func.__mapper__)
+    call_args = CallArguments(0, a=1)
+    assert func(*call_args.args, **call_args.kwargs) == call_args
+    func.__mapper__.assert_called_once_with(
+        *call_args.args,
+        **call_args.kwargs,
+    )
+
+
+def test_resign():
+    @sign(forge.arg('a'))
+    def func(**kwargs):
+        return CallArguments(**kwargs)
+
+    wrapped = func.__wrapped__
+    old_mapper = func.__mapper__
+
+    resigned = resign(forge.arg('b'))(func)
+    assert resigned == func
+    assert func.__wrapped__ == wrapped
+    new_mapper = func.__mapper__
+    assert new_mapper != old_mapper
+    assert isinstance(new_mapper, Mapper)
+    assert resigned.__mapper__.fsignature == FSignature(forge.arg('b'))
+
+    resigned.__mapper__ = Mock(side_effect=func.__mapper__)
+    call_args = CallArguments(b=1)
+    assert func(*call_args.args, **call_args.kwargs) == call_args
+    func.__mapper__.assert_called_once_with(
+        *call_args.args,
+        **call_args.kwargs,
+    )

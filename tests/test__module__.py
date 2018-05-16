@@ -30,20 +30,12 @@ def test_namespace():
         'self',
         # Signature
         'FSignature',
-        'SignatureMapper',
+        'Mapper',
+        'resign',
         'returns',
-        'ry',
         'sign',
         # Utils
         'get_run_validators',
         'set_run_validators',
         'void',
     ])
-
-
-def test_nicknames():
-    for nickname, official in {
-            'ry': 'FSignature',
-            'sign': 'FSignature',
-        }.items():
-        assert getattr(forge, official) is getattr(forge, nickname)

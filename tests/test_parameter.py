@@ -1,15 +1,20 @@
 import inspect
+from unittest.mock import Mock
 
 import pytest
 
+import forge._immutable as immutable
+from forge._marker import void
 import forge._parameter
 from forge._parameter import (
+    Factory,
     FParameter,
     VarPositional,
     VarKeyword,
     cls_,
     self_,
 )
+from forge._signature import CallArguments
 
 # pylint: disable=C0103, invalid-name
 # pylint: disable=R0201, no-self-use
@@ -70,6 +75,22 @@ FPARAM_VKW_DEFAULTS = dict(
     default=empty,
     type=empty,
 )
+
+
+class TestFactory:
+    def test_meta(self):
+        assert issubclass(Factory, immutable.Immutable)
+
+    def test__repr__(self):
+        def func():
+            pass
+        assert repr(Factory(func)) == '<Factory {}>'.format(func.__qualname__)
+
+    def test__call__(self):
+        mock = Mock()
+        factory = Factory(mock)
+        factory()
+        mock.assert_called_once_with()
 
 
 class TestFParameter:
@@ -156,6 +177,84 @@ class TestFParameter:
         fparam = FParameter(**kwargs)
         assert str(fparam) == expected
         assert repr(fparam) == '<FParameter "{}">'.format(expected)
+
+    @pytest.mark.parametrize(('in_', 'out_'), [
+        pytest.param(void, 1, id='void'),
+        pytest.param(0, 0, id='value'),
+    ])
+    def test_apply_default(self, in_, out_):
+        fparam = FParameter(inspect.Parameter.POSITIONAL_ONLY, default=1)
+        assert fparam.apply_default(in_) == out_
+
+    def test_apply_default_factory(self):
+        mock = Mock()
+        fparam = FParameter(
+            inspect.Parameter.POSITIONAL_ONLY,
+            default=Factory(mock),
+        )
+        assert fparam.apply_default(void) == mock.return_value
+
+    @pytest.mark.parametrize(('converter', 'in_', 'to_out_'), [
+        pytest.param(
+            lambda ctx, name, value: (ctx, name, value),
+            ('context', 'name', 1),
+            lambda in_: in_,
+            id='unit',
+        ),
+        pytest.param(
+            [lambda ctx, name, value: (ctx, name, value) for i in range(2)],
+            ('context', 'name', 1),
+            lambda in_: tuple([*in_[0:2], in_]),
+            id='list',
+        ),
+        pytest.param(
+            None,
+            ('context', 'name', 1),
+            lambda in_: in_[2],
+            id='none',
+        ),
+    ])
+    def test_apply_conversion(self, converter, in_, to_out_):
+        fparam = FParameter(
+            inspect.Parameter.POSITIONAL_ONLY,
+            converter=converter,
+        )
+        assert fparam.apply_conversion(*in_) == to_out_(in_)
+
+    @pytest.mark.parametrize(('has_validation',), [(True,), (False,)])
+    def test_apply_validation(self, has_validation):
+        called_with = None
+        def validator(*args, **kwargs):
+            nonlocal called_with
+            called_with = CallArguments(*args, **kwargs)
+
+        fparam = FParameter(
+            inspect.Parameter.POSITIONAL_ONLY,
+            validator=validator if has_validation else None,
+        )
+        args = ('context', 'name', 'value')
+        fparam.apply_validation(*args)
+        if has_validation:
+            assert called_with.args == args
+        else:
+            assert called_with is None
+
+    def test__call__(self):
+        mock_default = Mock()
+        default = Factory(mock_default)
+        converter = Mock()
+        validator = Mock()
+        fparam = FParameter(
+            inspect.Parameter.POSITIONAL_ONLY,
+            default=default,
+            converter=converter,
+            validator=validator,
+        )
+        in_ = (object(), object(), void)
+        assert fparam(*in_) == converter.return_value
+        validator.assert_called_once_with(*in_[0:2], converter.return_value)
+        converter.assert_called_once_with(*in_[0:2], mock_default.return_value)
+        mock_default.assert_called_once_with()
 
     @pytest.mark.parametrize(('rkey', 'rval'), [
         pytest.param('kind', inspect.Parameter.KEYWORD_ONLY, id='kind'),
@@ -287,7 +386,8 @@ class TestFParameter:
         )
         fparam = FParameter.create_positional_only(**kwargs, **extra_in)
         assert isinstance(fparam, FParameter)
-        assert fparam._asdict() == {**FPARAM_POS_DEFAULTS, **kwargs, **extra_out}
+        assert fparam._asdict() == \
+            {**FPARAM_POS_DEFAULTS, **kwargs, **extra_out}
 
     @pytest.mark.parametrize(('extra_in', 'extra_out'), [
         pytest.param(
@@ -318,7 +418,8 @@ class TestFParameter:
         )
         fparam = FParameter.create_positional_or_keyword(**kwargs, **extra_in)
         assert isinstance(fparam, FParameter)
-        assert fparam._asdict() == {**FPARAM_POK_DEFAULTS, **kwargs, **extra_out}
+        assert fparam._asdict() == \
+            {**FPARAM_POK_DEFAULTS, **kwargs, **extra_out}
 
     @pytest.mark.parametrize(('extra_in', 'extra_out'), [
         pytest.param(
@@ -344,7 +445,8 @@ class TestFParameter:
         kwargs = dict(type=int)
         fparam = FParameter.create_contextual(**kwargs, **extra_in)
         assert isinstance(fparam, FParameter)
-        assert fparam._asdict() == {**FPARAM_CTX_DEFAULTS, **kwargs, **extra_out}
+        assert fparam._asdict() == \
+            {**FPARAM_CTX_DEFAULTS, **kwargs, **extra_out}
 
     def test_create_var_positional(self):
         kwargs = dict(

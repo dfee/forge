@@ -4,7 +4,6 @@ from forge._exceptions import ImmutableInstanceError
 from forge._immutable import (
     Immutable,
     ImmutableInstanceError,
-    Struct,
     asdict,
     replace,
 )
@@ -52,6 +51,41 @@ class TestImmutable:
         assert hasattr(ins, '__slots__')
         assert not hasattr(ins, '__dict__')
 
+    def test__init__(self):
+        class Klass(Immutable):
+            __slots__ = ('a', 'b', 'c')
+            def __init__(self):
+                super().__init__(**dict(zip(['a', 'b', 'c'], range(3))))
+
+        ins = Klass()
+        for i, key in enumerate(Klass.__slots__):
+            assert getattr(ins, key) == i
+
+    @pytest.mark.parametrize(('val1', 'val2', 'eq'), [
+        pytest.param(1, 1, True, id='eq'),
+        pytest.param(1, 2, False, id='ne'),
+    ])
+    def test__eq__(self, val1, val2, eq):
+        class Klass(Immutable):
+            __slots__ = ('a',)
+            def __init__(self, a):
+                super().__init__(a=a)
+
+        assert (Klass(val1) == Klass(val2)) == eq
+
+    def test__eq__type(self):
+        class Klass1(Immutable):
+            __slots__ = ('a',)
+            def __init__(self, a):
+                super().__init__(a=a)
+
+        class Klass2:
+            __slots__ = ('a',)
+            def __init__(self, a):
+                self.a = a
+
+        assert Klass1(1) != Klass2(2)
+
     def test__getattr__(self):
         class Parent:
             called_with = None
@@ -73,45 +107,3 @@ class TestImmutable:
         with pytest.raises(ImmutableInstanceError) as excinfo:
             ins.a = 1
         assert excinfo.value.args[0] == "cannot assign to field 'a'"
-
-
-class TestStruct:
-    def test_type(self):
-        ins = Struct()
-        assert hasattr(ins, '__slots__')
-        assert not hasattr(ins, '__dict__')
-
-    def test__init__(self):
-        class Klass(Struct):
-            __slots__ = ('a', 'b', 'c')
-            def __init__(self):
-                super().__init__(**dict(zip(['a', 'b', 'c'], range(3))))
-
-        ins = Klass()
-        for i, key in enumerate(Klass.__slots__):
-            assert getattr(ins, key) == i
-
-    @pytest.mark.parametrize(('val1', 'val2', 'eq'), [
-        pytest.param(1, 1, True, id='eq'),
-        pytest.param(1, 2, False, id='ne'),
-    ])
-    def test__eq__(self, val1, val2, eq):
-        class Klass(Struct):
-            __slots__ = ('a',)
-            def __init__(self, a):
-                super().__init__(a=a)
-
-        assert (Klass(val1) == Klass(val2)) == eq
-
-    def test__eq__type(self):
-        class Klass1(Struct):
-            __slots__ = ('a',)
-            def __init__(self, a):
-                super().__init__(a=a)
-
-        class Klass2:
-            __slots__ = ('a',)
-            def __init__(self, a):
-                self.a = a
-
-        assert Klass1(1) != Klass2(2)

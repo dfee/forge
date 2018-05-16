@@ -95,7 +95,7 @@ class TestGetReturnType:
     def test_incorrect_usage_raises(self):
         with pytest.raises(TypeError) as excinfo:
             get_return_type(1)
-        assert excinfo.value.args[0] == '1 is not callable'
+        assert excinfo.value.args[0] == '1 is not a callable object'
 
 
 class TestSetRetrunType:

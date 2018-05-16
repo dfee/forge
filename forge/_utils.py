@@ -54,11 +54,7 @@ def getparam(
 
 def get_return_type(callable: TGenericCallable) -> typing.Any:
     # pylint: disable=W0622, redefined-builtin
-    if not builtins.callable(callable):
-        raise TypeError('{} is not callable'.format(callable))
-    if hasattr(callable, '__signature__'):
-        return callable.__signature__.return_annotation  # type: ignore
-    return callable.__annotations__.get('return', inspect.Signature.empty)
+    return inspect.signature(callable).return_annotation
 
 
 def set_return_type(

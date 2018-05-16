@@ -15,9 +15,9 @@ from ._parameter import (
 )
 from ._signature import (
     FSignature,
-    SignatureMapper,
+    Mapper,
+    resign,
     returns,
+    sign,
 )
 from ._marker import void
-
-ry = sign = FSignature # pylint: disable=C0103, invalid-name

@@ -28,17 +28,6 @@ def replace(obj, **changes):
 class Immutable:
     __slots__ = ()
 
-    def __getattr__(self, key: str) -> typing.Any:
-        '''Solely for placating mypy'''
-        return super().__getattribute__(key)
-
-    def __setattr__(self, key, value):
-        raise ImmutableInstanceError("cannot assign to field '{}'".format(key))
-
-
-class Struct(Immutable):
-    __slots__ = ()
-
     def __init__(self, **kwargs):
         for k, v in kwargs.items():
             object.__setattr__(self, k, v)
@@ -47,3 +36,10 @@ class Struct(Immutable):
         if not isinstance(other, type(self)):
             return False
         return asdict(other) == asdict(self)
+
+    def __getattr__(self, key: str) -> typing.Any:
+        '''Solely for placating mypy'''
+        return super().__getattribute__(key)
+
+    def __setattr__(self, key, value):
+        raise ImmutableInstanceError("cannot assign to field '{}'".format(key))

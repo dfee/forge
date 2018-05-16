@@ -27,8 +27,7 @@ _validator_type = typing.Optional[
 ]
 
 
-class Factory(immutable.Struct):
-    # TODO: test
+class Factory(immutable.Immutable):
     __slots__ = ('factory',)
 
     def __init__(self, factory):
@@ -42,7 +41,7 @@ class Factory(immutable.Struct):
         return self.factory()
 
 
-class FParameter(immutable.Struct):
+class FParameter(immutable.Immutable):
     __slots__ = (
         'kind',
         'name',
@@ -73,7 +72,6 @@ class FParameter(immutable.Struct):
             interface_name=interface_name or name,
             default=void_to_empty(default),
             type=void_to_empty(type),
-            # TODO: pytest
             converter=converter,
             validator=validator,
             is_contextual=is_contextual,
@@ -118,7 +116,6 @@ class FParameter(immutable.Struct):
         return '<{} "{}">'.format(type(self).__name__, str(self))
 
     def apply_default(self, value):
-        # TODO: test
         if value is not void:
             return value
         elif isinstance(self.default, Factory):
@@ -126,7 +123,7 @@ class FParameter(immutable.Struct):
         return self.default
 
     def apply_conversion(self, ctx, name, value):
-        # TODO: test
+        # pylint: disable=W0621, redefined-outer-name
         if self.converter is None:
             return value
         elif isinstance(self.converter, typing.Iterable):
@@ -137,7 +134,7 @@ class FParameter(immutable.Struct):
         return self.converter(ctx, name, value)
 
     def apply_validation(self, ctx, name, value):
-        # TODO: test
+        # pylint: disable=W0621, redefined-outer-name
         if self.validator is not None:
             self.validator(ctx, name, value)
         return value
@@ -148,11 +145,10 @@ class FParameter(immutable.Struct):
             name: str,
             value: typing.Any = void
         ) -> typing.Any:
-        return self.apply_validation(
-            ctx,
-            name,
-            self.apply_conversion(ctx, name, self.apply_default(value))
-        )
+        # pylint: disable=W0621, redefined-outer-name
+        defaulted = self.apply_default(value)
+        converted = self.apply_conversion(ctx, name, defaulted)
+        return self.apply_validation(ctx, name, converted)
 
     @property
     def parameter(self) -> inspect.Parameter:
