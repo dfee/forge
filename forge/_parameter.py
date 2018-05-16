@@ -10,7 +10,8 @@ from forge._marker import (
     void_to_empty,
 )
 
-empty = inspect.Parameter.empty
+empty = inspect.Parameter.empty  # pylint: disable=C0103, invalid-name
+
 POSITIONAL_ONLY = inspect.Parameter.POSITIONAL_ONLY  # type: ignore
 POSITIONAL_OR_KEYWORD = inspect.Parameter.POSITIONAL_OR_KEYWORD  # type: ignore
 VAR_POSITIONAL = inspect.Parameter.VAR_POSITIONAL
