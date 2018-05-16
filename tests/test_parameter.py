@@ -11,7 +11,6 @@ from forge._parameter import (
     FParameter,
     VarPositional,
     VarKeyword,
-    _default_or_factory,
     cls_,
     self_,
 )
@@ -22,61 +21,56 @@ from forge._signature import CallArguments
 # pylint: disable=W0212, protected-access
 
 empty = inspect.Parameter.empty
+POSITIONAL_ONLY = inspect.Parameter.POSITIONAL_ONLY
+POSITIONAL_OR_KEYWORD = inspect.Parameter.POSITIONAL_OR_KEYWORD
+VAR_POSITIONAL = inspect.Parameter.VAR_POSITIONAL
+KEYWORD_ONLY = inspect.Parameter.KEYWORD_ONLY
+VAR_KEYWORD = inspect.Parameter.VAR_KEYWORD
 
+dummy_func = lambda: None
 dummy_converter = lambda ctx, name, value: (ctx, name, value)
 dummy_validator = lambda ctx, name, value: None
 
 FPARAM_DEFAULTS = dict(
     name=None,
     interface_name=None,
-    default=inspect.Parameter.empty,
-    type=inspect.Parameter.empty,
+    default=empty,
+    type=empty,
     converter=None,
     validator=None,
-    is_contextual=False
+    bound=False,
+    contextual=False,
 )
 
 FPARAM_POS_DEFAULTS = dict(
     FPARAM_DEFAULTS,
-    kind=inspect.Parameter.POSITIONAL_ONLY,
-    is_contextual=False,
+    kind=POSITIONAL_ONLY,
 )
 
 FPARAM_POK_DEFAULTS = dict(
     FPARAM_DEFAULTS,
-    kind=inspect.Parameter.POSITIONAL_OR_KEYWORD,
-    is_contextual=False,
+    kind=POSITIONAL_OR_KEYWORD,
 )
 
 FPARAM_CTX_DEFAULTS = dict(
     FPARAM_DEFAULTS,
-    kind=inspect.Parameter.POSITIONAL_OR_KEYWORD,
-    is_contextual=True,
-    default=empty,
-    converter=None,
-    validator=None,
+    kind=POSITIONAL_OR_KEYWORD,
+    contextual=True,
 )
 
 FPARAM_VPO_DEFAULTS = dict(
     FPARAM_DEFAULTS,
-    kind=inspect.Parameter.VAR_POSITIONAL,
-    is_contextual=False,
-    default=empty,
-    type=empty,
+    kind=VAR_POSITIONAL,
 )
 
 FPARAM_KWO_DEFAULTS = dict(
     FPARAM_DEFAULTS,
-    kind=inspect.Parameter.KEYWORD_ONLY,
-    is_contextual=False,
+    kind=KEYWORD_ONLY,
 )
 
 FPARAM_VKW_DEFAULTS = dict(
     FPARAM_DEFAULTS,
-    kind=inspect.Parameter.VAR_KEYWORD,
-    is_contextual=False,
-    default=empty,
-    type=empty,
+    kind=VAR_KEYWORD,
 )
 
 
@@ -96,39 +90,47 @@ class TestFactory:
         mock.assert_called_once_with()
 
 
-dummy_func = lambda: None
-
-@pytest.mark.parametrize(('default', 'factory', 'result'), [
-    pytest.param(1, void, 1, id='default'),
-    pytest.param(void, dummy_func, Factory(dummy_func), id='factory'),
-    pytest.param(void, void, inspect.Parameter.empty, id='neither'),
-    pytest.param(1, dummy_func, None, id='both'),
-])
-def test_default_or_factory(default, factory, result):
-    if result is not None:
-        assert _default_or_factory(default, factory) == result
-        return
-
-    with pytest.raises(TypeError) as excinfo:
-        _default_or_factory(default, factory)
-    assert excinfo.value.args[0] == \
-        'expected either "default" or "factory", received both'
-
-
 class TestFParameter:
-    # pylint: disable=E1101, no-member
-    def test__init__default_or_factory(self):
-        fparam = FParameter(
-            inspect.Parameter.POSITIONAL_ONLY,
-            factory=dummy_func,
+    # pylint: disable=R0904, too-many-public-methods
+    @pytest.mark.parametrize(('default', 'factory', 'result'), [
+        pytest.param(1, void, 1, id='default'),
+        pytest.param(void, dummy_func, Factory(dummy_func), id='factory'),
+        pytest.param(void, void, empty, id='neither'),
+        pytest.param(1, dummy_func, None, id='both'),
+    ])
+    def test__init__default_or_factory(self, default, factory, result):
+        kwargs = dict(kind=POSITIONAL_ONLY, default=default, factory=factory)
+
+        if result is not None:
+            assert FParameter(**kwargs).default == result
+            return
+
+        with pytest.raises(TypeError) as excinfo:
+            FParameter(**kwargs)
+        assert excinfo.value.args[0] == \
+            'expected either "default" or "factory", received both'
+
+    @pytest.mark.parametrize(('has_default',), [(True,), (False,)])
+    def test__init__bound_and_default(self, has_default):
+        kwargs = dict(
+            kind=POSITIONAL_ONLY,
+            bound=True,
+            default=1 if has_default else void,
         )
-        assert isinstance(fparam.default, Factory)
-        assert fparam.default.factory == dummy_func
+
+        if has_default:
+            assert FParameter(**kwargs).bound
+            return
+
+        with pytest.raises(TypeError) as excinfo:
+            FParameter(**kwargs)
+        assert excinfo.value.args[0] == \
+            'bound arguments must have a default value'
 
     @pytest.mark.parametrize(('kwargs', 'expected'), [
         pytest.param(
             {
-                'kind': inspect.Parameter.POSITIONAL_ONLY,
+                'kind': POSITIONAL_ONLY,
                 'name': None,
                 'interface_name': None,
             },
@@ -137,7 +139,7 @@ class TestFParameter:
         ),
         pytest.param(
             {
-                'kind': inspect.Parameter.POSITIONAL_ONLY,
+                'kind': POSITIONAL_ONLY,
                 'name': 'a',
                 'interface_name': 'a',
             },
@@ -146,7 +148,7 @@ class TestFParameter:
         ),
         pytest.param(
             {
-                'kind': inspect.Parameter.POSITIONAL_ONLY,
+                'kind': POSITIONAL_ONLY,
                 'name': 'a',
                 'interface_name': 'a',
                 'default': None,
@@ -156,7 +158,7 @@ class TestFParameter:
         ),
         pytest.param(
             {
-                'kind': inspect.Parameter.POSITIONAL_ONLY,
+                'kind': POSITIONAL_ONLY,
                 'name': 'a',
                 'interface_name': 'a',
                 'type': int,
@@ -166,7 +168,7 @@ class TestFParameter:
         ),
         pytest.param(
             {
-                'kind': inspect.Parameter.POSITIONAL_ONLY,
+                'kind': POSITIONAL_ONLY,
                 'name': 'a',
                 'interface_name': 'b',
             },
@@ -175,7 +177,7 @@ class TestFParameter:
         ),
         pytest.param(
             {
-                'kind': inspect.Parameter.POSITIONAL_ONLY,
+                'kind': POSITIONAL_ONLY,
                 'name': 'a',
                 'interface_name': 'b',
                 'default': None,
@@ -186,7 +188,7 @@ class TestFParameter:
         ),
         pytest.param(
             {
-                'kind': inspect.Parameter.VAR_POSITIONAL,
+                'kind': VAR_POSITIONAL,
                 'name': 'a',
                 'interface_name': 'a',
             },
@@ -195,7 +197,7 @@ class TestFParameter:
         ),
         pytest.param(
             {
-                'kind': inspect.Parameter.VAR_KEYWORD,
+                'kind': VAR_KEYWORD,
                 'name': 'a',
                 'interface_name': 'a',
             },
@@ -213,13 +215,13 @@ class TestFParameter:
         pytest.param(0, 0, id='value'),
     ])
     def test_apply_default(self, in_, out_):
-        fparam = FParameter(inspect.Parameter.POSITIONAL_ONLY, default=1)
+        fparam = FParameter(POSITIONAL_ONLY, default=1)
         assert fparam.apply_default(in_) == out_
 
     def test_apply_default_factory(self):
         mock = Mock()
         fparam = FParameter(
-            inspect.Parameter.POSITIONAL_ONLY,
+            POSITIONAL_ONLY,
             default=Factory(mock),
         )
         assert fparam.apply_default(void) == mock.return_value
@@ -246,7 +248,7 @@ class TestFParameter:
     ])
     def test_apply_conversion(self, converter, in_, to_out_):
         fparam = FParameter(
-            inspect.Parameter.POSITIONAL_ONLY,
+            POSITIONAL_ONLY,
             converter=converter,
         )
         assert fparam.apply_conversion(*in_) == to_out_(in_)
@@ -259,7 +261,7 @@ class TestFParameter:
             called_with = CallArguments(*args, **kwargs)
 
         fparam = FParameter(
-            inspect.Parameter.POSITIONAL_ONLY,
+            POSITIONAL_ONLY,
             validator=validator if has_validation else None,
         )
         args = ('context', 'name', 'value')
@@ -275,7 +277,7 @@ class TestFParameter:
         converter = Mock()
         validator = Mock()
         fparam = FParameter(
-            inspect.Parameter.POSITIONAL_ONLY,
+            POSITIONAL_ONLY,
             default=default,
             converter=converter,
             validator=validator,
@@ -287,7 +289,7 @@ class TestFParameter:
         mock_default.assert_called_once_with()
 
     @pytest.mark.parametrize(('rkey', 'rval'), [
-        pytest.param('kind', inspect.Parameter.KEYWORD_ONLY, id='kind'),
+        pytest.param('kind', KEYWORD_ONLY, id='kind'),
         pytest.param('default', 1, id='default'),
         pytest.param('factory', dummy_func, id='factory'),
         pytest.param('type', int, id='type'),
@@ -298,7 +300,7 @@ class TestFParameter:
     ])
     def test_replace(self, rkey, rval):
         fparam = FParameter(
-            kind=inspect.Parameter.POSITIONAL_ONLY,
+            kind=POSITIONAL_ONLY,
             name=None,
             interface_name=None,
             default=None,
@@ -315,7 +317,7 @@ class TestFParameter:
 
     def test_parameter(self):
         kwargs = dict(
-            kind=inspect.Parameter.POSITIONAL_ONLY,
+            kind=POSITIONAL_ONLY,
             name='a',
             interface_name='b',
             default=None,
@@ -329,7 +331,7 @@ class TestFParameter:
 
     def test_parameter_wo_names_raises(self):
         fparam = FParameter(
-            kind=inspect.Parameter.POSITIONAL_ONLY,
+            kind=POSITIONAL_ONLY,
             name=None,
             interface_name=None,
         )
@@ -340,7 +342,7 @@ class TestFParameter:
 
     def test_interface_parameter(self):
         kwargs = dict(
-            kind=inspect.Parameter.POSITIONAL_ONLY,
+            kind=POSITIONAL_ONLY,
             name='a',
             interface_name='b',
             default=None,
@@ -354,7 +356,7 @@ class TestFParameter:
 
     def test_interface_parameter_wo_names_raises(self):
         fparam = FParameter(
-            kind=inspect.Parameter.POSITIONAL_ONLY,
+            kind=POSITIONAL_ONLY,
             name=None,
             interface_name=None,
         )
@@ -364,15 +366,15 @@ class TestFParameter:
         assert excinfo.value.args[0] == 'Cannot generate an unnamed parameter'
 
     def test_defaults(self):
-        fparam = FParameter(inspect.Parameter.POSITIONAL_ONLY)
-        assert fparam.kind == inspect.Parameter.POSITIONAL_ONLY
+        fparam = FParameter(POSITIONAL_ONLY)
+        assert fparam.kind == POSITIONAL_ONLY
         for k, v in FPARAM_DEFAULTS.items():
             assert getattr(fparam, k) == v
 
     def test_from_parameter(self):
         kwargs = dict(
             name='a',
-            kind=inspect.Parameter.POSITIONAL_ONLY,
+            kind=POSITIONAL_ONLY,
             annotation=int,
             default=3,
         )

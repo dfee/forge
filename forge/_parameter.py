@@ -10,11 +10,19 @@ from forge._marker import (
     void_to_empty,
 )
 
+empty = inspect.Parameter.empty
+POSITIONAL_ONLY = inspect.Parameter.POSITIONAL_ONLY  # type: ignore
+POSITIONAL_OR_KEYWORD = inspect.Parameter.POSITIONAL_OR_KEYWORD  # type: ignore
+VAR_POSITIONAL = inspect.Parameter.VAR_POSITIONAL
+KEYWORD_ONLY = inspect.Parameter.KEYWORD_ONLY
+VAR_KEYWORD = inspect.Parameter.VAR_KEYWORD
+
 _ctx_callable_type = typing.Callable[[typing.Any, str, typing.Any], typing.Any]
 
 # pylint: disable=W0212, protected-access, W0212, invalid-name
 _kind_type = inspect._ParameterKind
-_is_contextual_type = bool
+_bound_type = bool
+_contextual_type = bool
 # pylint: enable=W0212, protected-access, W0212, invalid-name
 _name_type = typing.Optional[str]
 _default_type = typing.Any
@@ -22,7 +30,10 @@ _factory_type = typing.Callable[[], typing.Any]
 _type_type = typing.Any
 _converter_type = typing.Optional[_ctx_callable_type]
 _validator_type = typing.Optional[
-    typing.Union[_ctx_callable_type, typing.Iterable[_ctx_callable_type]]
+    typing.Union[
+        _ctx_callable_type,
+        typing.Iterable[_ctx_callable_type]
+    ]
 ]
 
 
@@ -40,18 +51,6 @@ class Factory(immutable.Immutable):
         return self.factory()
 
 
-def _default_or_factory(default, factory):
-    if factory is not void:
-        if default is not void:
-            raise TypeError(
-                'expected either "default" or "factory", received both'
-            )
-        return Factory(factory)
-    elif default is void:
-        return inspect.Parameter.empty
-    return default
-
-
 class FParameter(immutable.Immutable):
     __slots__ = (
         'kind',
@@ -61,7 +60,8 @@ class FParameter(immutable.Immutable):
         'type',
         'converter',
         'validator',
-        'is_contextual',
+        'bound',
+        'contextual',
     )
 
     def __init__(
@@ -74,25 +74,37 @@ class FParameter(immutable.Immutable):
             type: _type_type = void,
             converter: _converter_type = None,
             validator: _validator_type = None,
-            is_contextual: _is_contextual_type = False,
+            bound: _bound_type = False,
+            contextual: _contextual_type = False,
         ) -> None:
         # pylint: disable=W0622, redefined-builtin
         # pylint: disable=R0913, too-many-arguments
+        if factory is not void:
+            if default not in (empty, void):
+                raise TypeError(
+                    'expected either "default" or "factory", received both'
+                )
+            default = Factory(factory)
+
+        if bound and default is void:
+            raise TypeError('bound arguments must have a default value')
+
         super().__init__(
             kind=kind,
             name=name or interface_name,
             interface_name=interface_name or name,
-            default=_default_or_factory(default, factory),
+            default=void_to_empty(default),
             type=void_to_empty(type),
             converter=converter,
             validator=validator,
-            is_contextual=is_contextual,
+            contextual=contextual,
+            bound=bound,
         )
 
     def __str__(self) -> str:
-        if self.kind == inspect.Parameter.VAR_POSITIONAL:
+        if self.kind == VAR_POSITIONAL:
             prefix = '*'
-        elif self.kind == inspect.Parameter.VAR_KEYWORD:
+        elif self.kind == VAR_KEYWORD:
             prefix = '**'
         else:
             prefix = ''
@@ -109,7 +121,7 @@ class FParameter(immutable.Immutable):
             )
 
         annotated = mapped \
-            if self.type is inspect.Parameter.empty \
+            if self.type is empty \
             else '{mapped}:{annotation}'.format(
                 mapped=mapped,
                 annotation=self.type.__name__ \
@@ -118,7 +130,7 @@ class FParameter(immutable.Immutable):
             )
 
         return annotated \
-            if self.default is inspect.Parameter.empty \
+            if self.default is empty \
             else '{annotated}={default}'.format(
                 annotated=annotated,
                 default=self.default,
@@ -195,23 +207,27 @@ class FParameter(immutable.Immutable):
             type=void,
             converter=void,
             validator=void,
-            is_contextual=void
+            bound=void,
+            contextual=void
         ):
         # pylint: disable=E1120, no-value-for-parameter
         # pylint: disable=W0622, redefined-builtin
         # pylint: disable=R0913, too-many-arguments
-        if default is not void or factory is not void:
-            default = _default_or_factory(default, factory)
+        if factory is not void and default is void:
+            default = empty
+
         return immutable.replace(self, **{
             k: v for k, v in {
                 'kind': kind,
                 'name': name,
                 'interface_name': interface_name,
                 'default': default,
+                'factory': factory,
                 'type': type,
                 'converter': converter,
                 'validator': validator,
-                'is_contextual': is_contextual,
+                'contextual': contextual,
+                'bound': bound,
             }.items() if v is not void
         })
 
@@ -235,18 +251,20 @@ class FParameter(immutable.Immutable):
             factory=void,
             type=void,
             converter=None,
-            validator=None
+            validator=None,
+            bound=False
         ) -> 'FParameter':
         # pylint: disable=W0622, redefined-builtin
         return cls(  # type: ignore
-            kind=inspect.Parameter.POSITIONAL_ONLY,
+            kind=POSITIONAL_ONLY,
             name=name,
             interface_name=interface_name,
             default=default,
             factory=factory,
             type=void_to_empty(type),
             converter=converter,
-            validator=validator
+            validator=validator,
+            bound=bound,
         )
 
     @classmethod
@@ -259,11 +277,12 @@ class FParameter(immutable.Immutable):
             factory=void,
             type=void,
             converter=None,
-            validator=None
+            validator=None,
+            bound=False
         ) -> 'FParameter':
         # pylint: disable=W0622, redefined-builtin
         return cls(  # type: ignore
-            kind=inspect.Parameter.POSITIONAL_OR_KEYWORD,
+            kind=POSITIONAL_OR_KEYWORD,
             name=name,
             interface_name=interface_name,
             default=default,
@@ -271,6 +290,7 @@ class FParameter(immutable.Immutable):
             type=void_to_empty(type),
             converter=converter,
             validator=validator,
+            bound=bound,
         )
 
     @classmethod
@@ -283,12 +303,12 @@ class FParameter(immutable.Immutable):
         ) -> 'FParameter':
         # pylint: disable=W0622, redefined-builtin
         return cls(  # type: ignore
-            kind=inspect.Parameter.POSITIONAL_OR_KEYWORD,
+            kind=POSITIONAL_OR_KEYWORD,
             name=name,
             interface_name=interface_name,
-            default=inspect.Parameter.empty,
+            default=empty,
             type=void_to_empty(type),
-            is_contextual=True,
+            contextual=True,
         )
 
     @classmethod
@@ -301,11 +321,12 @@ class FParameter(immutable.Immutable):
             factory=void,
             type=void,
             converter=None,
-            validator=None
+            validator=None,
+            bound=False
         ) -> 'FParameter':
         # pylint: disable=W0622, redefined-builtin
         return cls(  # type: ignore
-            kind=inspect.Parameter.KEYWORD_ONLY,
+            kind=KEYWORD_ONLY,
             name=name,
             interface_name=interface_name,
             default=default,
@@ -313,6 +334,7 @@ class FParameter(immutable.Immutable):
             type=void_to_empty(type),
             converter=converter,
             validator=validator,
+            bound=bound,
         )
 
     @classmethod
@@ -325,10 +347,10 @@ class FParameter(immutable.Immutable):
         ) -> 'FParameter':
         # pylint: disable=W0622, redefined-builtin
         return cls(  # type: ignore
-            kind=inspect.Parameter.VAR_POSITIONAL,
+            kind=VAR_POSITIONAL,
             name=name,
-            default=inspect.Parameter.empty,
-            type=inspect.Parameter.empty,
+            default=empty,
+            type=empty,
             converter=converter,
             validator=validator
         )
@@ -343,10 +365,10 @@ class FParameter(immutable.Immutable):
         ) -> 'FParameter':
         # pylint: disable=W0622, redefined-builtin
         return cls(  # type: ignore
-            kind=inspect.Parameter.VAR_KEYWORD,
+            kind=VAR_KEYWORD,
             name=name,
-            default=inspect.Parameter.empty,
-            type=inspect.Parameter.empty,
+            default=empty,
+            type=empty,
             converter=converter,
             validator=validator,
         )

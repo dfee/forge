@@ -97,7 +97,7 @@ class FSignature(collections.abc.Mapping, immutable.Immutable):
                     "Received unnamed FParameter: '{}'".\
                     format(current)
                 )
-            elif current.is_contextual and i > 0:
+            elif current.contextual and i > 0:
                 raise TypeError(
                     'Only the first FParameter can be contextual'
                 )
@@ -161,7 +161,7 @@ class FSignature(collections.abc.Mapping, immutable.Immutable):
         super().__init__(
             _data=OrderedDict([(fp.name, fp) for fp in fparams]),
             context=fparams[0] \
-                if fparams and fparams[0].is_contextual \
+                if fparams and fparams[0].contextual \
                 else None,
             var_positional=get_var_positional_parameter(*fparams),
             var_keyword=get_var_keyword_parameter(*fparams),
@@ -220,15 +220,21 @@ class Mapper(immutable.Immutable):
         ) -> None:
         # pylint: disable=W0622, redefined-builtin
         private_signature = inspect.signature(callable)
+        public_signature = inspect.Signature(
+            parameters=[
+                fp.parameter for fp in fsignature.values()
+                if fp.bound is False
+            ],
+            return_annotation=get_return_type(callable),
+        )
+        parameter_map = self.map_parameters(fsignature, private_signature)
+
         super().__init__(
             callable=callable,
             fsignature=fsignature,
             private_signature=private_signature,
-            public_signature=inspect.Signature(
-                parameters=[fp.parameter for fp in fsignature.values()],
-                return_annotation=get_return_type(callable),
-            ),
-            parameter_map=self.map_parameters(fsignature, private_signature),
+            public_signature=public_signature,
+            parameter_map=parameter_map,
         )
 
     def __call__(
@@ -249,10 +255,10 @@ class Mapper(immutable.Immutable):
 
         private_ba = self.private_signature.bind_partial()
         private_ba.apply_defaults()
-        ctx = self.get_context(**public_ba.arguments)
+        ctx = self.get_context(public_ba.arguments)
 
-        for from_name, from_val in public_ba.arguments.items():
-            from_param = self.fsignature[from_name]
+        for from_name, from_param in self.fsignature.items():
+            from_val = public_ba.arguments.get(from_name, void)
             to_name = self.parameter_map[from_name]
             to_param = self.private_signature.parameters[to_name]
             to_val = self.fsignature[from_name](ctx, from_name, from_val)
@@ -283,7 +289,7 @@ class Mapper(immutable.Immutable):
         )
         return '<{} ({}) -> ({})>'.format(type(self).__name__, pubstr, privstr)
 
-    def get_context(self, **arguments: typing.Any) -> typing.Any:
+    def get_context(self, arguments: typing.Mapping) -> typing.Any:
         return arguments[self.fsignature.context.name] \
             if self.fsignature.context \
             else None

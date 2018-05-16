@@ -64,7 +64,7 @@ You can re-map a parameter to a different ParameterKind (e.g. positional-only to
   import forge
 
   @forge.sign(
-      forge.kwarg('colour', 'color', default='blue'),
+      forge.kwarg('color', 'colour', default='blue'),
   )
   def myfunc(colour):
     return colour
@@ -140,7 +140,7 @@ You can optionally provide a context parameter, such as ``self``, ``cls``, or cr
 
       @forge.sign(
           forge.self,
-          forge.arg('color', validate_color)
+          forge.arg('color', validator=validate_color)
       )
       def select_color(self, color):
           self.selected = color
@@ -148,11 +148,11 @@ You can optionally provide a context parameter, such as ``self``, ``cls``, or cr
 .. code-block:: python
 
   >>> cs = ColorSelector('red', 'green', 'blue')
-  >>> cs.select('orange')
+  >>> cs.select_color('orange')
   TypeError('expected one of ('red', 'green', 'blue'), received 'orange')
-  >>> cs.select('red')
+  >>> cs.select_color('red')
   >>> print(cs.selected)
-  red
+  'red'
 
 
 Converting a parameter
@@ -201,7 +201,7 @@ You can optionally provide a context parameter, such as ``self``, ``cls``, or cr
 .. code-block:: python
 
   >>> doctor_ra = RoleAnnouncer('Doctor')
-  >>> patient_ra = RoleAnnouncer('Doctor')
+  >>> captain_ra = RoleAnnouncer('Captain')
   >>> doctor_ra.announce('Strangelove')
   Now announcing Doctor Strangelove!
   >>> captain_ra.announce('Lionel Mandrake')
@@ -398,87 +398,95 @@ So go on, ``forge`` some (function) signatures for fun and profit.
 
 Advanced Usage
 ==============
-You can use the ``forge.FSignature`` class directly, which is very useful when you're decorating functions and want to side-load certain parameters.
+You can use the ``forge.FSignature`` class directly, which implements ``collections.abc.Mapping``, so it functions as a read-only dictionary. This is useful when you want to re-arrange, add, or hide parameters.
 
 Typically, the code we use today, looks like this:
 
 .. code-block:: python
 
   import functools
-  from types import SimpleNamespace
+  from uuid import uuid4
 
-  class Context(SimpleNamespace):
-      pass
+  class Token:
+      def __init__(self):
+          self.value = uuid4()
 
-  def get_context_from_somewhere():
-      return Context()
+      def __repr__(self):
+          return '<{} {}>'.format(type(self).__name__, self.value)
 
-  def add_context(func):
+  def generate_token():
+      return Token()
+
+  def add_token(func):
       @functools.wraps(func)
       def inner(*args, **kwargs):
-          ctx = get_context_from_somewhere()
-          return func(ctx, *args, **kwargs)
+          token = generate_token()
+          return func(token, *args, **kwargs)
       return inner
 
-  @add_context
-  def myfunc(ctx, myparam, *, log=False):
-      if log:
-          print(ctx, '... with myparam: ', myparam)
+  @add_token
+  def protected(token, userid):
+      print("'protected' called with token={}, userid={}".format(token, userid))
 
 .. code-block:: python
 
-  >>> myfunc(9000, log=True)
-  Context() ... with myparam 9000
-  >>> help(myfunc)
-  mfunc(ctx, id, *, log=False)
+  >>> help(protected)
+  protected(token, userid)
+  >>> protected('jack)
+  'protected' called with token=<Token 7496e5a3-3609-4959-ac57-79c272b0dff3>, userid=jack
 
-You'll see that the function signature has preserved the ``ctx`` parameter, which is an implementation detail, and oughta be private to the function. If the user provides ``ctx``...
-
-.. code-block:: python
-
-  >>> myfunc(ctx=Context(), myparam=1000)
-  myfunc() got multiple values for argument 'ctx'
-
-Users of the function aren't supposed to provide this functionality. Forge paves the way here (again).
+You'll see that the function signature has preserved the ``token`` parameter, which is an implementation detail, and oughta be private to the function. If the user provides ``token``...
 
 .. code-block:: python
 
-  import functools
-  from types import SimpleNamespace
+  >>> protected(generate_token(), 'jack')
+  TypeError: protected() takes 2 positional arguments but 3 were given
+  >>> # ... token is required, are we not actually supposed to pass it?
+
+Users of the function aren't supposed to provide this functionality. Forge allows parameters to be bound, effectively hiding them from a signature.
+
+.. code-block:: python
+  from collections import OrderedDict
+  from uuid import uuid4
 
   import forge
 
-  class Context(SimpleNamespace):
-      pass
+  class Token:
+      def __init__(self):
+          self.value = uuid4()
 
-  def get_context_from_somewhere():
-      return Context()
+      def __repr__(self):
+          return '<{} {}>'.format(type(self).__name__, self.value)
 
-  def add_context(func):
-      fsig = forge.FSignature.from_callable(func)
-      fsig.pop(0)
+  def generate_token():
+      return Token()
 
-      @fsig
-      def inner(*args, **kwargs):
-          ctx = get_context_from_somewhere()
-          return func(ctx, *args, **kwargs)
-      inner.__name__ = func.__name__
-      inner.__doc__ = func.__doc__
-      return inner
+  def add_token(func):
+      fparams = OrderedDict([
+          (fparam.name, fparam)
+          for fparam in forge.FSignature.from_callable(func).values()
+      ])
+      fparams['token'] = fparams['token'].replace(
+          kind=forge.POSITIONAL_ONLY,
+          bound=True,
+          factory=generate_token,
+      )
 
-  @add_context
-  def myfunc(ctx, myparam, *, log=False):
-      if log:
-          print(ctx, '... with myparam: ', myparam)
+      signer = forge.sign(*fparams.values())
+      return signer(func)
+
+  @add_token
+  def protected(token, userid):
+      print("'protected' called with token={}, userid={}".format(token, userid))
 
 .. code-block:: python
 
-  >>> myfunc(9000, log=True)
-  Context() ... with myparam:  9000
-  >>> help(myfunc)
-  myfunc(myparam, *, log=False)
+  >>> help(protected)
+  protected(userid)
+  >>> protected('jack')
+  'protected' called with token=<Token 4fe69fd9-90a1-4577-b397-552817a33e77>, userid=jack
 
-Now, a casual user wouldn't even think to pass ``ctx``.
+Now, a casual user wouldn't even think to pass ``token``.
 
 
 Requirements

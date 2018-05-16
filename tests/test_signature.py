@@ -272,10 +272,16 @@ class TestMapper:
             if kind is not None \
             else None
 
+    def test__init__signature_with_bound_params(self):
+        fsig = FSignature(forge.arg('bound', default=1, bound=True))
+        func = lambda bound: None
+        mapper = Mapper(fsig, func)
+        assert not mapper.public_signature.parameters
+
     def test__repr__(self):
-        fsignature = FSignature(forge.pos('a', 'b'))
+        fsig = FSignature(forge.pos('a', 'b'))
         callable_ = lambda *, b: None
-        mapper = Mapper(fsignature, callable_)
+        mapper = Mapper(fsig, callable_)
         assert repr(mapper) == '<Mapper (a, /) -> (*, b)>'
 
     @pytest.mark.parametrize(('has_context',), [(True,), (False,)])
@@ -287,7 +293,7 @@ class TestMapper:
         mapper = Mapper(fsig, lambda param: None)
 
         kwargs = {'param': object()}
-        ctx = mapper.get_context(**kwargs)
+        ctx = mapper.get_context(kwargs)
         assert ctx == (kwargs['param'] if has_context else None)
 
     @pytest.mark.parametrize(('from_kind',), [
@@ -321,6 +327,12 @@ class TestMapper:
             else CallArguments(1)
         result = mapper(*call_args.args, **call_args.kwargs)
         assert result == expected
+
+    def test__call__bound_injected(self):
+        fsig = FSignature(forge.arg('bound', default=1, bound=True))
+        func = lambda bound: bound
+        mapper = Mapper(fsig, func)
+        assert mapper() == CallArguments(1)
 
     @pytest.mark.parametrize(('vary_name',), [
         pytest.param(True, id='varied_name'),
