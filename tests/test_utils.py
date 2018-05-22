@@ -2,7 +2,7 @@ import inspect
 
 import pytest
 
-from forge._exceptions import ParameterError
+from forge._exceptions import NoParameterError
 import forge._parameter as fparam
 from forge._utils import (
     hasparam,
@@ -67,7 +67,7 @@ class TestGetParam:
         elif has_default:
             assert getparam(func, 'myparam', 'DEFAULT') == 'DEFAULT'
         else:
-            with pytest.raises(ParameterError) as excinfo:
+            with pytest.raises(NoParameterError) as excinfo:
                 getparam(func, 'myparam')
             assert excinfo.value.args[0] == \
                 "'{}' has no parameter 'myparam'".format(func.__name__)

@@ -7,10 +7,19 @@ import typing
 
 import forge._immutable as immutable
 from forge._marker import (
+    coerce_if,
     void,
     void_to_empty,
 )
-from forge._parameter import FParameter
+from forge._parameter import (
+    POSITIONAL_ONLY,
+    POSITIONAL_OR_KEYWORD,
+    VAR_KEYWORD,
+    VAR_POSITIONAL,
+    FParameter,
+    empty,
+    pk_strings,
+)
 from forge._utils import (
     get_return_type,
     get_var_positional_parameter,
@@ -20,33 +29,14 @@ from forge._utils import (
 )
 
 
-empty = inspect.Parameter.empty  # pylint: disable=C0103, invalid-name
-POSITIONAL_ONLY = inspect.Parameter.POSITIONAL_ONLY
-POSITIONAL_OR_KEYWORD = inspect.Parameter.POSITIONAL_OR_KEYWORD
-VAR_POSITIONAL = inspect.Parameter.VAR_POSITIONAL
-KEYWORD_ONLY = inspect.Parameter.KEYWORD_ONLY
-VAR_KEYWORD = inspect.Parameter.VAR_KEYWORD
-
-pk_strings = {
-    POSITIONAL_ONLY: 'positional-only',
-    POSITIONAL_OR_KEYWORD: 'positional-or-keyword',
-    VAR_POSITIONAL: 'variable-positional',
-    KEYWORD_ONLY: 'keyword-only',
-    VAR_KEYWORD: 'variable-keyword',
-}
-
-
-def returns(
-        annotation: typing.Any = void
-    ) -> typing.Callable[[typing.Callable[..., typing.Any]], typing.Any]:
-    def inner(callable):
-        # pylint: disable=W0622, redefined-builtin
-        set_return_type(callable, void_to_empty(annotation))
-        return callable
-    return inner
-
-
 class CallArguments(immutable.Immutable):
+    """
+    An immutable container for call arguments, i.e. term:`var-positional`
+    (e.g. `*args``) and :term:`var-keyword` (e.g. **kwargs``).
+
+    :param args: positional arguments used in a call
+    :param kwargs: keyword arguments used in a call
+    """
     __slots__ = ('args', 'kwargs')
 
     def __init__(
@@ -56,7 +46,7 @@ class CallArguments(immutable.Immutable):
         ) -> None:
         super().__init__(args=args, kwargs=types.MappingProxyType(kwargs))
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         arguments = ', '.join([
             *[repr(arg) for arg in self.args],
             *['{}={}'.format(k, v) for k, v in self.kwargs.items()],
@@ -68,6 +58,14 @@ class CallArguments(immutable.Immutable):
             cls,
             bound: inspect.BoundArguments,
         ) -> 'CallArguments':
+        """
+        A factory method that creates an instance of :class:`.CallArguments`
+        from an instance of :class:`instance.BoundArguments` generated from
+        :meth:`inspect.Signature.bind` or :meth:`inspect.Signature.bind_partial`
+
+        :param bound: an instance of :class:`inspect.BoundArguments`
+        :return: an unpacked version of :class:`inspect.BoundArguments`
+        """
         return cls(*bound.args, **bound.kwargs)  # type: ignore
 
     def to_bound_arguments(
@@ -75,18 +73,99 @@ class CallArguments(immutable.Immutable):
             signature: inspect.Signature,
             partial: bool = False,
         ) -> inspect.BoundArguments:
+        """
+        Generates an instance of :class:inspect.BoundArguments` for a given
+        :class:`inspect.Signature`.
+        Does not raise if invalid or incomplete arguments are provided, as the
+        underlying implementation uses :meth:`inspect.Signature.bind_partial`.
+
+        :param signature: an instance of :class:`inspect.Signature` to which
+            :paramref:`.CallArguments.args` and
+            :paramref:`.CallArguments.kwargs` will be bound.
+        :param partial: does not raise if invalid or incomplete arguments are
+            provided, as the underlying implementation uses
+            :meth:`inspect.Signature.bind_partial`
+        :return: an instance of :class:`inspect.BoundArguments` to which
+            :paramref:`.CallArguments.args` and
+            :paramref:`.CallArguments.kwargs` are bound.
+        """
         return signature.bind_partial(*self.args, **self.kwargs) \
             if partial \
             else signature.bind(*self.args, **self.kwargs)
 
 
 class FSignature(collections.abc.Mapping, immutable.Immutable):
+    """
+    An immutable representation of a callable signature composed of
+    :class:`forge.FParameter` instances.`
+
+    Unliked :class:`inspect.Signature`, :class:`FSignature` does not provide or
+    manage ``return type`` annotations. That is the work of :func:`.returns`
+    and / or :class:`.Mapper`.
+
+    .. note::
+
+        This class doesn't usually need to be invoked directly. Use one of the
+        constructor methods instead:
+
+        - :func:`~forge.sign` to wrap a callable with a :class:`.FSignature`.
+        - :func:`~forge.resign` to revise a wrapped callable's \
+        :class:`.FSignature`.
+        - :func:`~forge.FSignature.from_callable` to generate a \
+        :class:`.FSignature` from any Python callable.
+        - :func:`~forge.FSignature.from_signature` to generate a \
+        :class:`.FSignature` from a :class:`inspect.Signature`.
+
+    Implements :class:`collections.abc.Mapping`, with provided: ``__getitem__``,
+    ``__iter__`` and ``__len__``. Inherits methods: ``__contains__``, ``keys``,
+    ``items``, ``values``, ``get``, ``__eq__`` and ``__ne__``.
+
+    :param fparameters: :class:`forge.FParameter` instances passed as arguments
+    :param named_fparameters: :class:`forge.FParameter` instances passed as
+        as keyword arguments.
+    """
+
     # pylint: disable=R0901, too-many-ancestors
     @staticmethod
-    def validate(*fparams):
-        pname_set = set()
-        iname_set = set()
-        for i, current in enumerate(fparams):
+    def validate(*fparameters: FParameter) -> None:
+        """
+        Validate an ordered sequence of :class:`forge.FParameter` instances for
+        use with a :class:`forge.FSignature`.
+
+        Validation ensures:
+
+        - the appropriate order of parameters by kind:
+
+          #. (optional) :term:`positional-only`, followed by
+          #. (optional) :term:`positional-or-keyword`, followed by
+          #. (optional) :term:`var-positional`, followed by
+          #. (optional) :term:`keyword-only`, followed by
+          #. (optional) :term:`var-keyword`
+
+        - that non-default :term:`positional-only` or
+        :term:`positional-or-keyword` parameters don't follow their respective
+        similarly-kinded parameters with defaults,
+
+          .. note::
+
+            Python signatures allow non-default :term:`keyword-only` parameters
+            to follow default :term:`keyword-only` parameters.
+
+        - that at most there is one :term:`var-positional` parameter,
+
+        - that at most there is one :term:`var-keyword` parameter,
+
+        - that at most there is one :term:`contextual` parameter, and that it
+        is the first parameter (if it is provided.)
+
+        - that no two :class:`FParameter`s share the same
+        :paramref:`.FParameter.name` or :paramref:`.FParameter.interface_name`.
+
+        :param fparameters: a sequence of :class:`forge.FParameter` instances
+        """
+        pname_set: typing.Set[str] = set()
+        iname_set: typing.Set[str] = set()
+        for i, current in enumerate(fparameters):
             if not isinstance(current, FParameter):
                 raise TypeError(
                     "Received non-FParameter '{}'".\
@@ -116,7 +195,7 @@ class FSignature(collections.abc.Mapping, immutable.Immutable):
                 )
             iname_set.add(current.interface_name)
 
-            last = fparams[i-1] if i > 0 else None
+            last = fparameters[i-1] if i > 0 else None
             if not last:
                 continue
 
@@ -168,6 +247,7 @@ class FSignature(collections.abc.Mapping, immutable.Immutable):
         )
 
     def __eq__(self, other):
+        # TODO: remove
         # pylint: disable=W0212, protected-access
         if type(self) is not type(other):
             return False
@@ -181,17 +261,53 @@ class FSignature(collections.abc.Mapping, immutable.Immutable):
 
     # Begin Mapping methods
     def __getitem__(self, key: str) -> typing.Any:
+        """
+        Concrete method for :class:`collections.abc.Mapping`
+
+        :param key: a key that corresponds to a :paramref:`.FParameter.name`
+        :raises KeyError: if an instance of :class:`FParameter` with
+            :paramref:`.FParameter.name` doesn't exist on this
+            :class:`FSignature`.
+        :return: the instance of :class:`FParameter.name` for which
+            :paramref:`.FSignature.__getitem__.key` corresponds.
+        """
         return self._data[key]
 
     def __iter__(self) -> typing.Iterator:
+        """
+        Concrete method for :class:`collections.abc.Mapping`
+
+        :return: an iterator over this instance which maps
+            :paramref:`.FParameter.name` to a :class:`FParameter`.
+        """
         return iter(self._data)
 
     def __len__(self) -> int:
+        """
+        Concrete method for :class:`collections.abc.Mapping`
+
+        :return: the number of parameters in this :class:`FSignature` instance.
+        """
         return len(self._data)
     # End Mapping methods
 
     @classmethod
     def from_signature(cls, signature: inspect.Signature) -> 'FSignature':
+        """
+        A factory method that creates an instance of :class:`FSignature` from
+        an instance of :class:`inspect.Signature`. Calls down to
+        :class:`FParameter` to map the :attr:`inspect.Signature.parameters`
+        to :class:`inspect.Parameter` instances.
+
+        The ``return type`` annotation from the provided signature is not
+        retained, as :meth:`FSignature.from_signature` doesn't provide this
+        functionality.
+
+        :param signature: an instance of :class:`inspect.Signature` from which
+            to derive the :class:`FSignature`
+        :return: an instance of :class:`FSignature` derived from the
+            :paramref:`.FSignature.from_signature.signature` argument.
+        """
         # pylint: disable=E1101, no-member
         return cls(*[
             FParameter.from_parameter(param)
@@ -200,11 +316,39 @@ class FSignature(collections.abc.Mapping, immutable.Immutable):
 
     @classmethod
     def from_callable(cls, callable: typing.Callable) -> 'FSignature':
+        """
+        A factory method that creates an instance of :class:`FSignature` from
+        a callable. Calls down to :meth:`.FSignature.from_signature` to do the
+        heavy loading.
+
+        :param callable: a callable from which to derive the :class:`FSignature`
+        :return: an instance of :class:`FSignature` derived from the
+            :paramref:`.FSignature.from_callable.callable` argument.
+        """
         # pylint: disable=W0622, redefined-builtin
         return cls.from_signature(inspect.signature(callable))
 
 
 class Mapper(immutable.Immutable):
+    """
+    An immutable data structure that provides the recipe for mapping
+    an :class:`FSignature` to an underlying callable.
+
+    :param fsignature: an instance of :class:`FSignature` that provides the
+        public and private interface.
+    :param callable: a callable that ultimately receives the arguments provided
+        to public :class:`FSignature` interface.
+
+    :ivar callable: see :paramref:`.Mapper.callable`
+    :ivar fsignature: see :paramref:`.Mapper.fsignature`
+    :ivar parameter_map: a :class:`types.MappingProxy` that exposes the strategy
+        of how to map from the :paramref:`.Mapper.fsignature` to the
+        :paramref:`.Mapper.callable`
+    :ivar private_signature: a cached copy of :paramref:`.Mapper.callable`'s
+        :class:`inspect.Signature`
+    :ivar public_signature: a cached copy of :paramref:`.Mapper.fsignature`'s
+        manifest as a :class:`inspect.Signature`
+    """
     __slots__ = (
         'callable',
         'fsignature',
@@ -241,7 +385,33 @@ class Mapper(immutable.Immutable):
             self,
             *args: typing.Any,
             **kwargs: typing.Any
-        ) -> typing.Any:
+        ) -> CallArguments:
+        """
+        Maps the arguments from the :attr:`.Mapper.public_signature` to the
+        :attr:`.Mapper.private_signature`.
+
+        Follows the strategy:
+
+        #. bind the arguments to the :attr:`.Mapper.public_signature`
+        #. partialy bind the :attr:`.Mapper.private_signature`
+        #. identify the context argument (if one exists) from
+        :class:`FParameter`s on the :class:`.FSignature`
+        #. iterate over the intersection of bound arguments and ``bound``
+        parameters on the :paramref:`.Mapper.fsignature` to the
+        :attr:`.Mapper.private_signature` of the :parmaref:`.Mapper.callable`,
+        getting their transformed value by calling
+        :meth:`~forge.FParameter.__call__`
+        #. map the resulting value into the private_signature bound arguments
+        #. generate and return a :class:`CallArguments` from the
+        private_signature bound arguments.
+
+        :param args: the positional arguments to map
+        :param kwargs: the keyword arguments to map
+        :return: transformd :paramref:`.Mapper.__call__.args` and
+            :paramref:`.Mapper.__call__.kwargs` mapped from
+            :attr:`.Mapper.public_signature` to
+            :attr:`.Mapper.private_signature`
+        """
         try:
             public_ba = self.public_signature.bind(*args, **kwargs)
         except TypeError as exc:
@@ -252,6 +422,8 @@ class Mapper(immutable.Immutable):
                     message=exc.args[0],
                 ),
             )
+        # TODO: test defaults applied, *args, **kwargs, etc.
+        public_ba.apply_defaults()
 
         private_ba = self.private_signature.bind_partial()
         private_ba.apply_defaults()
@@ -269,7 +441,9 @@ class Mapper(immutable.Immutable):
             elif to_param.kind is VAR_KEYWORD:
                 if from_param.kind is VAR_KEYWORD:
                     # e.g. f(**kwargs) -> g(**kwargs)
-                    private_ba.arguments[to_name].update(to_val)
+                    private_ba.arguments[to_name].update(
+                        coerce_if(lambda i: i == {}, to_val, empty)
+                    )
                 else:
                     # e.g. f(a) -> g(**kwargs)
                     private_ba.arguments[to_name]\
@@ -298,14 +472,24 @@ class Mapper(immutable.Immutable):
     def map_parameters(
             fsignature: 'FSignature',
             signature: inspect.Signature,
-        ):
+        ) -> types.MappingProxyType:
         '''
-        Transform rules:
-        1) every *to_ POSITIONAL_ONLY* must be mapped to
-        2) every *to_ POSITIONAL_OR_KEYWORD w/o default* must be mapped to
-        3) every *to_ KEYWORD_ONLY w/o default* must be mapped to
-        4) *from_ VAR_POSITIONAL* requires *to_ VAR_POSITIONAL*
-        5) *from_ VAR_KEYWORD* requires *to_ VAR_KEYWORD*
+        Build a mapping of parameters from the
+        :paramref:`.Mapper.map_parameters.fsignature` to the
+        :paramref:`.Mapper.map_parameters.signature`.
+
+        Strategy rules:
+        #. every *to_* :term:`positional-only` must be mapped to
+        #. every *to_* :term:`positional-or-keyword` w/o default must be
+        mapped to
+        #. every *to_* :term:`keyword-only` w/o default must be mapped to
+        #. *from_* :term:`var-positional` requires *to_* :term:`var-positional`
+        #. *from_* :term:`var-keyword` requires *to_* :term:`var-keyword`
+
+        :param fsignature: the :class:`FSignature` to map from
+        :param signature: the :class:`inspect.Signature` to map to
+        :return: a :class:`types.MappingProxyType` that shows how arguments
+            are mapped.
         '''
         # pylint: disable=W0622, redefined-builtin
         fparam_vpo = fsignature.var_positional
@@ -390,6 +574,17 @@ def sign(
         *fparameters: FParameter,
         **named_fparameters: FParameter
     ) -> typing.Callable[..., typing.Any]:
+    """
+    Takes instances of :class:`~forge.FParameter` and returns a wrapping factory
+    to generate forged signatures.
+
+    :param fparameters: see :paramref:`.FSignature.fparameters`
+    :param named_fparameters: see :paramref:`.FSignature.named_fparameters`
+    :return: a revision factory that takes a callable and updates it so that
+        it has a signature as defined by the
+        :paramref:`.resign.fparameters` and
+        :paramref:`.resign.named_fparameters`
+    """
     fsignature = FSignature(*fparameters, **named_fparameters)
     def wrapper(callable):
         # pylint: disable=W0622, redefined-builtin
@@ -409,6 +604,17 @@ def resign(
         *fparameters: FParameter,
         **named_fparameters: FParameter
     ) -> typing.Callable[..., typing.Any]:
+    """
+    Takes instances of :class:`~forge.FParameter` and returns a revision factory
+    that alters already-forged signatures.
+
+    :param fparameters: see :paramref:`.FSignature.fparameters`
+    :param named_fparameters: see :paramref:`.FSignature.named_fparameters`
+    :return: a revision factory that takes a callable and updates it so that
+        it has a signature as defined by the
+        :paramref:`.resign.fparameters` and
+        :paramref:`.resign.named_fparameters`
+    """
     fsignature = FSignature(*fparameters, **named_fparameters)
     def reviser(callable):
         # pylint: disable=W0622, redefined-builtin
@@ -416,3 +622,22 @@ def resign(
         callable.__signature__ = callable.__mapper__.public_signature
         return callable
     return reviser
+
+
+def returns(
+        type: typing.Any = void
+    ) -> typing.Callable[[typing.Callable[..., typing.Any]], typing.Any]:
+    """
+    Produces a factory that updates callables' signatures to reflect a  new
+    ``return-type`` annotation
+
+    :param type: the ``return-type`` for the factory
+    :return: a factory that takes a callable and updates it to reflect
+        the ``return-type`` as provided to :paramref:`.returns.type`
+    """
+    # pylint: disable=W0622, redefined-builtin
+    def inner(callable):
+        # pylint: disable=W0622, redefined-builtin
+        set_return_type(callable, void_to_empty(type))
+        return callable
+    return inner

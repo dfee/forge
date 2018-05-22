@@ -9,14 +9,8 @@ from ._parameter import (
     VAR_KEYWORD,
     VAR_POSITIONAL,
     FParameter,
-    arg,
-    args,
-    cls_ as cls,
-    ctx,
-    kwarg,
-    kwargs,
-    pos,
-    self_ as self,
+    VarKeyword,
+    VarPositional,
 )
 from ._signature import (
     FSignature,
@@ -25,4 +19,24 @@ from ._signature import (
     returns,
     sign,
 )
+from ._utils import (
+    getparam,
+    hasparam,
+    get_return_type,
+    set_return_type,
+)
 from ._marker import void
+
+# pylint: disable=C0103, invalid-name
+# TODO: migrate tests
+pos = FParameter.create_positional_only
+arg = pok = FParameter.create_positional_or_keyword
+kwarg = kwo = FParameter.create_keyword_only
+ctx = FParameter.create_contextual
+vpo = FParameter.create_var_positional
+vkw = FParameter.create_var_keyword
+
+args = VarPositional()
+kwargs = VarKeyword()
+self = ctx('self')
+cls = ctx('cls')

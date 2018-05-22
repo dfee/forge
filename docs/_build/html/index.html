@@ -1,0 +1,197 @@
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="X-UA-Compatible" content="IE=Edge" />
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <title>forge (python) signatures for fun and profit &#8212; forge 18.5.0 documentation</title>
+    <link rel="stylesheet" href="_static/alabaster.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    <link rel="stylesheet" href="_static/sphinx_paramlinks.css" type="text/css" />
+    <script type="text/javascript" src="_static/documentation_options.js"></script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Philosophy" href="philosophy.html" />
+   
+  <link rel="stylesheet" href="_static/custom.css" type="text/css" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <div class="section" id="forge-python-signatures-for-fun-and-profit">
+<h1><code class="docutils literal notranslate"><span class="pre">forge</span></code> <em>(python) signatures for fun and profit</em><a class="headerlink" href="#forge-python-signatures-for-fun-and-profit" title="Permalink to this headline">¶</a></h1>
+<p>Release v18.5.0 (<a class="reference internal" href="changelog.html"><span class="doc">What’s new?</span></a>).</p>
+<p><code class="docutils literal notranslate"><span class="pre">forge</span></code> is an <em>elegant</em> Python package that allows for <strong>meta-programming of function signatures</strong>. Now, you can finally <strong>add</strong>, <strong>remove</strong>, or <strong>enhance parameters</strong> at your will.</p>
+<p>Use it to write <strong>legible</strong> signatures for consumption by team members, the public, or other code.</p>
+<div class="section" id="getting-started">
+<h2>Getting Started<a class="headerlink" href="#getting-started" title="Permalink to this headline">¶</a></h2>
+<p>TODO: <code class="docutils literal notranslate"><span class="pre">forge</span></code> is a Python-only package <a class="reference external" href="https://pypi.org/project/&lt;TO-BE-DETERMINED&gt;">hosted on PyPI</a>.
+The recommended installation method is <a class="reference external" href="https://pip.pypa.io/en/stable/">pip</a>-installing into a <a class="reference external" href="https://docs.python.org/3/library/venv.html">virtualenv</a>:</p>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="gp">$</span> pip install git+git://github.com/dfee/forge.git#egg<span class="o">=</span>forge
+</pre></div>
+</div>
+</div>
+<div class="section" id="overview">
+<h2>Overview<a class="headerlink" href="#overview" title="Permalink to this headline">¶</a></h2>
+<ul class="simple">
+<li><a class="reference internal" href="philosophy.html"><span class="doc">Philosophy</span></a> walks you through an example of <code class="docutils literal notranslate"><span class="pre">forge</span></code> wrapping the <code class="docutils literal notranslate"><span class="pre">stdlib</span></code>’s <code class="xref py py-mod docutils literal notranslate"><span class="pre">logging</span></code> module.
+Read this to understand the value proposition, philosphy, and design strategy behind <code class="docutils literal notranslate"><span class="pre">forge</span></code>.</li>
+<li><a class="reference internal" href="basic.html"><span class="doc">Basic Usage</span></a> gives a comprehensive tour of <code class="docutils literal notranslate"><span class="pre">forge</span></code>’s features.
+Read this to learn how to use <code class="docutils literal notranslate"><span class="pre">forge</span></code> - from beginner to advanced features.</li>
+<li><a class="reference internal" href="advanced.html"><span class="doc">Advanced Usage</span></a> shares some common use-cases and approaches for using <code class="docutils literal notranslate"><span class="pre">forge</span></code>.
+For example, build a function whose signature changes every call.</li>
+<li><a class="reference internal" href="extending.html"><span class="doc">Extending</span></a> demonstrates how to alter <code class="docutils literal notranslate"><span class="pre">return-type</span></code> annotations and add custom metadata to your parameters.</li>
+<li><a class="reference internal" href="api.html"><span class="doc">API Reference</span></a> has documentation for all public functionality.</li>
+<li><a class="reference internal" href="glossary.html"><span class="doc">Glossary</span></a> helps out iron out semantics and terms that are useful when (re-) designing function signatures.</li>
+</ul>
+</div>
+<div class="section" id="full-table-of-contents">
+<h2>Full Table of Contents<a class="headerlink" href="#full-table-of-contents" title="Permalink to this headline">¶</a></h2>
+<div class="toctree-wrapper compound">
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="philosophy.html">Philosophy</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="philosophy.html#the-why-intuitive-design"><strong>The why</strong>: intuitive design</a></li>
+<li class="toctree-l2"><a class="reference internal" href="philosophy.html#the-how-magic-free-manipulation"><strong>The how</strong>: magic-free manipulation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="philosophy.html#the-what-applying-the-knowledge"><strong>The what</strong>: applying the knowledge</a></li>
+<li class="toctree-l2"><a class="reference internal" href="philosophy.html#design-principals">Design principals</a></li>
+<li class="toctree-l2"><a class="reference internal" href="philosophy.html#what-forge-is-not">What <code class="docutils literal notranslate"><span class="pre">forge</span></code> is not</a></li>
+<li class="toctree-l2"><a class="reference internal" href="philosophy.html#common-names-forge-arg-and-forge-kwarg">Common names: <code class="docutils literal notranslate"><span class="pre">forge.arg</span></code> and <code class="docutils literal notranslate"><span class="pre">forge.kwarg</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="basic.html">Basic Usage</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="basic.html#forging-signatures">Forging signatures</a></li>
+<li class="toctree-l2"><a class="reference internal" href="basic.html#adding-a-parameter">Adding a parameter</a></li>
+<li class="toctree-l2"><a class="reference internal" href="basic.html#removing-a-parameter">Removing a parameter</a></li>
+<li class="toctree-l2"><a class="reference internal" href="basic.html#renaming-a-parameter">Renaming a parameter</a></li>
+<li class="toctree-l2"><a class="reference internal" href="basic.html#setting-a-default-value">Setting a default value</a></li>
+<li class="toctree-l2"><a class="reference internal" href="basic.html#setting-a-type-annotation">Setting a type annotation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="basic.html#argument-conversion">Argument conversion</a></li>
+<li class="toctree-l2"><a class="reference internal" href="basic.html#argument-validation">Argument validation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="basic.html#parameter-metadata">Parameter metadata</a></li>
+<li class="toctree-l2"><a class="reference internal" href="basic.html#signature-context">Signature context</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="advanced.html">Advanced Usage</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="advanced.html#void-arguments">Void arguments</a></li>
+<li class="toctree-l2"><a class="reference internal" href="advanced.html#supplied-arguments">Supplied arguments</a></li>
+<li class="toctree-l2"><a class="reference internal" href="advanced.html#var-keyword-precision">Var-keyword precision</a></li>
+<li class="toctree-l2"><a class="reference internal" href="advanced.html#transforming-parameters">Transforming parameters</a></li>
+<li class="toctree-l2"><a class="reference internal" href="advanced.html#chameleon-function">Chameleon function</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="api.html">API Reference</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="api.html#parameter">Parameter</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api.html#signature">Signature</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api.html#config">Config</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api.html#marker">Marker</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api.html#utils">Utils</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="extending.html">Extending</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="extending.html#types">Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="extending.html#metadata">Metadata</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="glossary.html">Glossary</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="glossary.html#parameter-kinds">Parameter kinds</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="license.html">License and Credits</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="license.html#license">License</a></li>
+<li class="toctree-l2"><a class="reference internal" href="license.html#credits">Credits</a></li>
+<li class="toctree-l2"><a class="reference internal" href="license.html#image-meta">Image / Meta</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="changelog.html">Version history</a></li>
+</ul>
+</div>
+</div>
+<div class="section" id="indices-and-tables">
+<h2>Indices and tables<a class="headerlink" href="#indices-and-tables" title="Permalink to this headline">¶</a></h2>
+<ul class="simple">
+<li><a class="reference internal" href="genindex.html"><span class="std std-ref">Index</span></a></li>
+<li><a class="reference internal" href="search.html"><span class="std std-ref">Search Page</span></a></li>
+</ul>
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+            <p class="logo"><a href="#">
+              <img class="logo" src="_static/forge-vertical.png" alt="Logo"/>
+            </a></p>
+  <h3><a href="#">Table Of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#"><code class="docutils literal notranslate"><span class="pre">forge</span></code> <em>(python) signatures for fun and profit</em></a><ul>
+<li><a class="reference internal" href="#getting-started">Getting Started</a></li>
+<li><a class="reference internal" href="#overview">Overview</a></li>
+<li><a class="reference internal" href="#full-table-of-contents">Full Table of Contents</a></li>
+<li><a class="reference internal" href="#indices-and-tables">Indices and tables</a></li>
+</ul>
+</li>
+</ul>
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="#">Documentation overview</a><ul>
+      <li>Next: <a href="philosophy.html" title="next chapter">Philosophy</a></li>
+  </ul></li>
+</ul>
+</div>
+  <div role="note" aria-label="source link">
+    <h3>This Page</h3>
+    <ul class="this-page-menu">
+      <li><a href="_sources/index.rst.txt"
+            rel="nofollow">Show Source</a></li>
+    </ul>
+   </div>
+<div id="searchbox" style="display: none" role="search">
+  <h3>Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    </div>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2018, Devin Fee.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 1.7.4</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.10</a>
+      
+      |
+      <a href="_sources/index.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>

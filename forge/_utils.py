@@ -2,7 +2,7 @@ import builtins
 import inspect
 import typing
 
-from forge._exceptions import ParameterError
+from forge._exceptions import NoParameterError
 from forge._marker import void
 from forge._parameter import FParameter
 
@@ -19,21 +19,26 @@ TUnionParameter = \
     typing.TypeVar('TUnionParameter', inspect.Parameter, FParameter)
 
 
-def hasparam(
-        callable: TGenericCallable,
-        name: str,
-    ) -> bool:
-    # pylint: disable=W0622, redefined-builtin
-    if not builtins.callable(callable):
-        raise TypeError('{} is not callable'.format(callable))
-    return name in inspect.signature(callable).parameters
-
-
 def getparam(
         callable: typing.Callable[..., typing.Any],
         name: str,
         default: typing.Any = void,
     ) -> inspect.Parameter:
+    """
+    Gets a parameter object (either a :class.`inspect.Parmater` or a
+    :class:`~forge.FParameter`) by name from its respective
+    :class:`inspect.Signature` or :class:`~forge.FSignature`
+
+    :param callable: the callable whose signature will be inspected
+    :param name: the name of the parameter to retrieve from the
+        :paramref:`.getparam.callable` signature
+    :param default: a default value to return if :paramref:`.getparam.name` is
+        not found in the signature of :paramref:`.getparam.callable`.
+    :return: the :class:`inspect.Parameter` or :class:`~forge.FParameter` object
+        with :paramref:`.getparam.name` from :paramref:`.getparam.callable`, or
+        :paramref:`.getparam.default` if not found.
+    """
+    # TODO: return None
     # pylint: disable=W0622, redefined-builtin
     if not builtins.callable(callable):
         raise TypeError('{} is not callable'.format(callable))
@@ -44,7 +49,7 @@ def getparam(
     try:
         return params[name]
     except KeyError:
-        raise ParameterError(
+        raise NoParameterError(
             "'{callable_name}' has no parameter '{param_name}'".format(
                 callable_name=callable.__name__,
                 param_name=name,
@@ -52,7 +57,33 @@ def getparam(
         )
 
 
+def hasparam(
+        callable: TGenericCallable,
+        name: str,
+    ) -> bool:
+    """
+    Checks (by name) whether a parameter is taken by a callable.
+
+    :param callable: a callable whose signature will be inspected
+    :param name: the name of the paramter to identify in the
+        :paramref:`.hasparam.callable` signature
+    :return: True if :paramref:`hasparam.callable` has
+        :paramref:`.hasparam.name` in its signature.
+    """
+    # pylint: disable=W0622, redefined-builtin
+    if not builtins.callable(callable):
+        raise TypeError('{} is not callable'.format(callable))
+    return name in inspect.signature(callable).parameters
+
+
 def get_return_type(callable: TGenericCallable) -> typing.Any:
+    """
+    A convenience for retrieving the ``return-type`` annotation from a callable
+
+    :param callable: a callable whose ``return-type`` annotation is retrieved
+    :return: the ``return-type`` annotation from
+        :paramref:`.get_return_type.callable`
+    """
     # pylint: disable=W0622, redefined-builtin
     return inspect.signature(callable).return_annotation
 
@@ -61,6 +92,12 @@ def set_return_type(
         callable: TGenericCallable,
         type: typing.Any,
     ) -> None:
+    """
+    Set the ``return-type`` annotation on a callable.
+
+    :param callable: a callable whose ``return-type`` annotation will be set
+    :param type: the annotation to set for :paramref:`.set_return_type.callable`
+    """
     # pylint: disable=W0622, redefined-builtin
     if not builtins.callable(callable):
         raise TypeError('{} is not callable'.format(callable))
@@ -79,6 +116,18 @@ def set_return_type(
 def get_var_positional_parameter(
         *parameters: TUnionParameter
     ) -> typing.Optional[TUnionParameter]:
+    """
+    Get the :term:`var-positional` :term:`parameter kind`
+    :class:`inspect.Parameter` of :class:`~forge.FParameter`.
+    If multiple :term:`var-positional` parameters are provided, only the first
+    is returned.
+
+    :param parameters: parameters to search for :term:`var-positional`
+        :term:`parameter kind`.
+    :return: the first :term:`var-positional` parameter from
+        :paramref:`get_var_positional_paramters.parameters` if it exists,
+        else ``None``.
+    """
     for param in parameters:
         if param.kind == inspect.Parameter.VAR_POSITIONAL:
             return param
@@ -88,6 +137,18 @@ def get_var_positional_parameter(
 def get_var_keyword_parameter(
         *parameters: TUnionParameter
     ) -> typing.Optional[TUnionParameter]:
+    """
+    Get the :term:`var-keyword` :term:`parameter kind`
+    :class:`inspect.Parameter` of :class:`~forge.FParameter`.
+    If multiple :term:`var-keyword` parameters are provided, only the first
+    is returned.
+
+    :param parameters: parameters to search for :term:`var-keyword`
+        :term:`parameter kind`.
+    :return: the first :term:`var-keyword` parameter from
+        :paramref:`get_var_keyword_paramters.parameters` if it exists,
+        else ``None``.
+    """
     for param in parameters:
         if param.kind == inspect.Parameter.VAR_KEYWORD:
             return param
@@ -95,6 +156,15 @@ def get_var_keyword_parameter(
 
 
 def stringify_parameters(*parameters: TUnionParameter) -> str:
+    """
+    Builds a string representation of the provided parameters for use in
+    pretty-printing a signature. Includes markers ``/`` and ``*`` to distinguish
+    parameters based on :term:`parameter kind`, as well as the ``type-hint``
+    annotation and ``default`` value for a parameter (if provided).
+
+    :param parameters: parameters to render to string
+    :return: a string with parameters separated by ``,``
+    """
     if not parameters:
         return ''
 

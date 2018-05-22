@@ -1,0 +1,5 @@
+:mod:`forge._exceptions`
+========================
+
+.. automodule:: forge._exceptions
+    :members:

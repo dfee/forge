@@ -8,6 +8,8 @@ name = "pypi"
 [packages]
 
 "e1839a8" = {path = ".", extras = ["testing"], editable = true}
+sphinx-autodoc-typehints = "*"
+sphinx-paramlinks = "*"
 
 
 [dev-packages]
@@ -16,6 +18,9 @@ name = "pypi"
 ipdb = "*"
 ipython = "*"
 tox = "*"
+sphinx = "*"
+sphinx-autobuild = "*"
+sphinx-rtd-theme = "*"
 
 
 [requires]

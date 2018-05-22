@@ -1,0 +1,183 @@
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="X-UA-Compatible" content="IE=Edge" />
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <title>Extending &#8212; forge 18.5.0 documentation</title>
+    <link rel="stylesheet" href="_static/alabaster.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    <link rel="stylesheet" href="_static/sphinx_paramlinks.css" type="text/css" />
+    <script type="text/javascript" src="_static/documentation_options.js"></script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Glossary" href="glossary.html" />
+    <link rel="prev" title="API Reference" href="api.html" />
+   
+  <link rel="stylesheet" href="_static/custom.css" type="text/css" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <div class="section" id="extending">
+<h1>Extending<a class="headerlink" href="#extending" title="Permalink to this headline">¶</a></h1>
+<p>Each callable wrapped with <a class="reference internal" href="api.html#forge.sign" title="forge.sign"><code class="xref py py-func docutils literal notranslate"><span class="pre">forge.sign()</span></code></a> has a <code class="docutils literal notranslate"><span class="pre">__mapper__</span></code> attribute on the returned function.
+The <code class="docutils literal notranslate"><span class="pre">__mapper__</span></code> is an instance of <a class="reference internal" href="api.html#forge.Mapper" title="forge.Mapper"><code class="xref py py-class docutils literal notranslate"><span class="pre">forge.Mapper</span></code></a> that provides the recipe for transforming arguments from the public signature to the signature of the wrapped callable.</p>
+<p>Callables wrapped with <a class="reference internal" href="api.html#forge.sign" title="forge.sign"><code class="xref py py-func docutils literal notranslate"><span class="pre">forge.sign()</span></code></a> are easily re-wapped with custom decorators, or you can replace the <code class="docutils literal notranslate"><span class="pre">__mapper__</span></code> without re-wrapping the function.
+For convenience, <a class="reference internal" href="api.html#forge.resign" title="forge.resign"><code class="xref py py-func docutils literal notranslate"><span class="pre">forge.resign()</span></code></a> does exactly that.</p>
+<div class="section" id="types">
+<span id="extending-types"></span><h2>Types<a class="headerlink" href="#types" title="Permalink to this headline">¶</a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">forge</span></code> allows users to supply parameter and return-value annotations (type-hints).</p>
+<p>To add type information to a parameter:</p>
+<div class="highlight-pycon notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="kn">import</span> <span class="nn">forge</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nd">@forge.sign</span><span class="p">(</span><span class="n">forge</span><span class="o">.</span><span class="n">arg</span><span class="p">(</span><span class="s1">&#39;param&#39;</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="nb">int</span><span class="p">))</span>
+<span class="gp">... </span><span class="k">def</span> <span class="nf">func</span><span class="p">(</span><span class="n">param</span><span class="p">):</span>
+<span class="gp">... </span>    <span class="k">return</span> <span class="mi">1</span>
+<span class="gp">...</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">help</span><span class="p">(</span><span class="n">func</span><span class="p">)</span>
+<span class="go">func(param:int)</span>
+</pre></div>
+</div>
+<p><a class="reference internal" href="api.html#forge.sign" title="forge.sign"><code class="xref py py-func docutils literal notranslate"><span class="pre">forge.sign()</span></code></a> automatically captures the return-type for functions it wraps, but you can alter the return-type with <a class="reference internal" href="api.html#forge.returns" title="forge.returns"><code class="xref py py-func docutils literal notranslate"><span class="pre">forge.returns()</span></code></a>.</p>
+<div class="highlight-pycon notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="kn">import</span> <span class="nn">forge</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nd">@forge.returns</span><span class="p">(</span><span class="bp">False</span><span class="p">)</span>
+<span class="gp">... </span><span class="nd">@forge.sign</span><span class="p">()</span>
+<span class="gp">... </span><span class="k">def</span> <span class="nf">return_false</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+<span class="gp">... </span>    <span class="k">return</span> <span class="bp">False</span>
+<span class="gp">...</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">help</span><span class="p">(</span><span class="n">return_false</span><span class="p">)</span>
+<span class="go">return_false() -&gt; False</span>
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">forge</span></code> doesn’t do anything with these type-hints, but there are a number of third party frameworks and packages out there that perform validation.</p>
+</div>
+<div class="section" id="metadata">
+<span id="extending-metadata"></span><h2>Metadata<a class="headerlink" href="#metadata" title="Permalink to this headline">¶</a></h2>
+<p>If you’re the author of a third-party library with <code class="docutils literal notranslate"><span class="pre">forge</span></code> integration, you may want to take advantage of parameter metadata.</p>
+<p>Here are some tips for effective use of metadata:</p>
+<ul>
+<li><p class="first">Try making your metadata immutable.
+This keeps the entire <code class="docutils literal notranslate"><span class="pre">Parameter</span></code> instance immutable.
+<code class="xref py py-attr docutils literal notranslate"><span class="pre">FParameter.metdata</span></code> is exposed as a <code class="xref py py-class docutils literal notranslate"><span class="pre">MappingProxyView</span></code>, helping enforce immutability.</p>
+</li>
+<li><p class="first">To avoid metadata key collisions, provide namespaced keys:</p>
+<div class="highlight-pycon notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">MY_PREFIX</span> <span class="o">=</span> <span class="s1">&#39;__my_prefix&#39;</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nd">@forge.sign</span><span class="p">(</span>
+<span class="gp">... </span>    <span class="n">forge</span><span class="o">.</span><span class="n">arg</span><span class="p">(</span><span class="s1">&#39;param&#39;</span><span class="p">,</span> <span class="n">metadata</span><span class="o">=</span><span class="p">{</span><span class="n">f</span><span class="s1">&#39;{MY_PREFIX}_mykey&#39;</span><span class="p">:</span> <span class="s1">&#39;value&#39;</span><span class="p">}),</span>
+<span class="gp">... </span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">def</span> <span class="nf">func</span><span class="p">(</span><span class="n">param</span><span class="p">):</span>
+<span class="gp">... </span>    <span class="k">pass</span>
+</pre></div>
+</div>
+<p>Metadata should be composable, so consider supporting this approach even if you decide implementing your metadata in one of the following ways.</p>
+</li>
+<li><p class="first">Expose <code class="docutils literal notranslate"><span class="pre">FParameter</span></code> wrappers for your specific metadata.
+This can be more challenging because of the special-use value <a class="reference internal" href="api.html#forge.void" title="forge.void"><code class="xref py py-class docutils literal notranslate"><span class="pre">forge.void</span></code></a>, but a template function <code class="docutils literal notranslate"><span class="pre">with_md</span></code> is provided below:</p>
+<div class="highlight-pycon notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="kn">import</span> <span class="nn">forge</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">MY_PREFIX</span> <span class="o">=</span> <span class="s1">&#39;__my_prefix&#39;</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">def</span> <span class="nf">update_metadata</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">value</span><span class="p">):</span>
+<span class="gp">... </span>    <span class="k">return</span> <span class="nb">dict</span><span class="p">(</span><span class="n">value</span> <span class="ow">or</span> <span class="p">{},</span> <span class="o">**</span><span class="p">{</span><span class="n">f</span><span class="s1">&#39;{MY_PREFIX}_mykey&#39;</span><span class="p">:</span> <span class="s1">&#39;myvalue&#39;</span><span class="p">})</span>
+<span class="gp">...</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">def</span> <span class="nf">with_md</span><span class="p">(</span><span class="n">constructor</span><span class="p">):</span>
+<span class="gp">... </span>    <span class="n">fparams</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="n">forge</span><span class="o">.</span><span class="n">FSignature</span><span class="o">.</span><span class="n">from_callable</span><span class="p">(</span><span class="n">constructor</span><span class="p">))</span>
+<span class="gp">... </span>    <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="p">(</span><span class="s1">&#39;default&#39;</span><span class="p">,</span> <span class="s1">&#39;factory&#39;</span><span class="p">,</span> <span class="s1">&#39;type&#39;</span><span class="p">):</span>
+<span class="gp">... </span>        <span class="k">if</span> <span class="n">k</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">fparams</span><span class="p">:</span>
+<span class="gp">... </span>            <span class="k">continue</span>
+<span class="gp">... </span>        <span class="n">fparams</span><span class="p">[</span><span class="n">k</span><span class="p">]</span> <span class="o">=</span> <span class="n">fparams</span><span class="p">[</span><span class="n">k</span><span class="p">]</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span>
+<span class="gp">... </span>            <span class="n">converter</span><span class="o">=</span><span class="k">lambda</span> <span class="n">ctx</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">value</span><span class="p">:</span> <span class="n">forge</span><span class="o">.</span><span class="n">void</span><span class="p">,</span>
+<span class="gp">... </span>            <span class="n">factory</span><span class="o">=</span><span class="k">lambda</span><span class="p">:</span> <span class="n">forge</span><span class="o">.</span><span class="n">void</span><span class="p">,</span>
+<span class="gp">... </span>        <span class="p">)</span>
+<span class="gp">... </span>    <span class="n">fparams</span><span class="p">[</span><span class="s1">&#39;metadata&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">fparams</span><span class="p">[</span><span class="s1">&#39;metadata&#39;</span><span class="p">]</span><span class="o">.</span>\
+<span class="gp">... </span>        <span class="n">replace</span><span class="p">(</span><span class="n">converter</span><span class="o">=</span><span class="n">update_metadata</span><span class="p">)</span>
+<span class="gp">... </span>    <span class="k">return</span> <span class="n">forge</span><span class="o">.</span><span class="n">sign</span><span class="p">(</span><span class="o">**</span><span class="n">fparams</span><span class="p">)(</span><span class="n">constructor</span><span class="p">)</span>
+<span class="gp">...</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">md_arg</span> <span class="o">=</span> <span class="n">with_md</span><span class="p">(</span><span class="n">forge</span><span class="o">.</span><span class="n">arg</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">param</span> <span class="o">=</span> <span class="n">md_arg</span><span class="p">(</span><span class="s1">&#39;x&#39;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">assert</span> <span class="n">param</span><span class="o">.</span><span class="n">metadata</span> <span class="o">==</span> <span class="p">{</span><span class="s1">&#39;__my_prefix_mykey&#39;</span><span class="p">:</span> <span class="s1">&#39;myvalue&#39;</span><span class="p">}</span>
+</pre></div>
+</div>
+</li>
+</ul>
+<p><a class="reference internal" href="glossary.html#term-positional-only"><span class="xref std std-term">positional-only</span></a></p>
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+            <p class="logo"><a href="index.html">
+              <img class="logo" src="_static/forge-vertical.png" alt="Logo"/>
+            </a></p>
+  <h3><a href="index.html">Table Of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">Extending</a><ul>
+<li><a class="reference internal" href="#types">Types</a></li>
+<li><a class="reference internal" href="#metadata">Metadata</a></li>
+</ul>
+</li>
+</ul>
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="index.html">Documentation overview</a><ul>
+      <li>Previous: <a href="api.html" title="previous chapter">API Reference</a></li>
+      <li>Next: <a href="glossary.html" title="next chapter">Glossary</a></li>
+  </ul></li>
+</ul>
+</div>
+  <div role="note" aria-label="source link">
+    <h3>This Page</h3>
+    <ul class="this-page-menu">
+      <li><a href="_sources/extending.rst.txt"
+            rel="nofollow">Show Source</a></li>
+    </ul>
+   </div>
+<div id="searchbox" style="display: none" role="search">
+  <h3>Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    </div>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2018, Devin Fee.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 1.7.4</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.10</a>
+      
+      |
+      <a href="_sources/extending.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>

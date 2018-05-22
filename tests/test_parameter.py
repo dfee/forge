@@ -1,4 +1,5 @@
 import inspect
+import types
 from unittest.mock import Mock
 
 import pytest
@@ -40,6 +41,7 @@ FPARAM_DEFAULTS = dict(
     validator=None,
     bound=False,
     contextual=False,
+    metadata=types.MappingProxyType({}),
 )
 
 FPARAM_POS_DEFAULTS = dict(
@@ -297,6 +299,9 @@ class TestFParameter:
         pytest.param('interface_name', 'b', id='interface_name'),
         pytest.param('converter', dummy_converter, id='converter'),
         pytest.param('validator', dummy_validator, id='validator'),
+        pytest.param('bound', True, id='bound'),
+        pytest.param('contextual', True, id='contextual'),
+        pytest.param('metadata', {'new': 'meta'}, id='metadata'),
     ])
     def test_replace(self, rkey, rval):
         fparam = FParameter(
@@ -425,6 +430,7 @@ class TestFParameter:
             type=int,
             converter=dummy_converter,
             validator=dummy_validator,
+            metadata={'meta': 'data'},
         )
         fparam = FParameter.create_positional_only(**kwargs, **extra_in)
         assert isinstance(fparam, FParameter)
@@ -466,6 +472,7 @@ class TestFParameter:
             type=int,
             converter=dummy_converter,
             validator=dummy_validator,
+            metadata={'meta': 'data'},
         )
         fparam = FParameter.create_positional_or_keyword(**kwargs, **extra_in)
         assert isinstance(fparam, FParameter)
@@ -493,7 +500,10 @@ class TestFParameter:
         ),
     ])
     def test_create_contextual(self, extra_in, extra_out):
-        kwargs = dict(type=int)
+        kwargs = dict(
+            type=int,
+            metadata={'meta': 'data'},
+        )
         fparam = FParameter.create_contextual(**kwargs, **extra_in)
         assert isinstance(fparam, FParameter)
         assert immutable.asdict(fparam) == \
@@ -504,15 +514,14 @@ class TestFParameter:
             name='b',
             converter=dummy_converter,
             validator=dummy_validator,
+            metadata={'meta': 'data'},
         )
         fparam = FParameter.create_var_positional(**kwargs)
         assert isinstance(fparam, FParameter)
         assert immutable.asdict(fparam) == dict(
             FPARAM_VPO_DEFAULTS,
-            name=kwargs['name'],
+            **kwargs,
             interface_name=kwargs['name'],
-            converter=kwargs['converter'],
-            validator=kwargs['validator'],
         )
 
     @pytest.mark.parametrize(('extra_in', 'extra_out'), [
@@ -534,6 +543,7 @@ class TestFParameter:
             type=int,
             converter=dummy_converter,
             validator=dummy_validator,
+            metadata={'meta': 'data'},
         )
         fparam = FParameter.create_positional_or_keyword(**kwargs, **extra_in)
         assert isinstance(fparam, FParameter)
@@ -545,15 +555,14 @@ class TestFParameter:
             name='b',
             converter=dummy_converter,
             validator=dummy_validator,
+            metadata={'meta': 'data'},
         )
         fparam = FParameter.create_var_keyword(**kwargs)
         assert isinstance(fparam, FParameter)
         assert immutable.asdict(fparam) == dict(
             FPARAM_VKW_DEFAULTS,
-            name=kwargs['name'],
+            **kwargs,
             interface_name=kwargs['name'],
-            converter=kwargs['converter'],
-            validator=kwargs['validator'],
         )
 
 
@@ -569,16 +578,15 @@ class TestVarPositional:
             name='b',
             converter=dummy_converter,
             validator=dummy_validator,
+            metadata={'meta': 'data'},
         )
-        varp = VarPositional()(**kwargs)
+        varp = VarPositional(**kwargs)
         fparam = self.assert_iterable_and_get_fparam(varp)
         assert isinstance(fparam, FParameter)
         assert immutable.asdict(fparam) == dict(
             FPARAM_VPO_DEFAULTS,
-            name=kwargs['name'],
+            **kwargs,
             interface_name=kwargs['name'],
-            converter=kwargs['converter'],
-            validator=kwargs['validator'],
         )
 
     def test__call__(self):
@@ -586,16 +594,15 @@ class TestVarPositional:
             name='b',
             converter=dummy_converter,
             validator=dummy_validator,
+            metadata={'meta': 'data'},
         )
-        varp = VarPositional(**kwargs)
+        varp = VarPositional()(**kwargs)
         fparam = self.assert_iterable_and_get_fparam(varp)
         assert isinstance(fparam, FParameter)
         assert immutable.asdict(fparam) == dict(
             FPARAM_VPO_DEFAULTS,
-            name=kwargs['name'],
+            **kwargs,
             interface_name=kwargs['name'],
-            converter=kwargs['converter'],
-            validator=kwargs['validator'],
         )
 
 class TestVarKeyword:
@@ -610,6 +617,7 @@ class TestVarKeyword:
             name='b',
             converter=dummy_converter,
             validator=dummy_validator,
+            metadata={'meta': 'data'},
         )
         vark = VarKeyword(**kwargs)
         name, fparam = self.assert_mapping_and_get_fparam(vark)
@@ -617,10 +625,8 @@ class TestVarKeyword:
         assert name == kwargs['name']
         assert immutable.asdict(fparam) == dict(
             FPARAM_VKW_DEFAULTS,
-            name=kwargs['name'],
+            **kwargs,
             interface_name=kwargs['name'],
-            converter=kwargs['converter'],
-            validator=kwargs['validator'],
         )
 
     def test__call__(self):
@@ -628,6 +634,7 @@ class TestVarKeyword:
             name='b',
             converter=dummy_converter,
             validator=dummy_validator,
+            metadata={'meta': 'data'},
         )
         vark = VarKeyword()(**kwargs)
         name, fparam = self.assert_mapping_and_get_fparam(vark)
@@ -635,10 +642,8 @@ class TestVarKeyword:
         assert name == kwargs['name']
         assert immutable.asdict(fparam) == dict(
             FPARAM_VKW_DEFAULTS,
-            name=kwargs['name'],
+            **kwargs,
             interface_name=kwargs['name'],
-            converter=kwargs['converter'],
-            validator=kwargs['validator'],
         )
 
     def test_mapping(self):

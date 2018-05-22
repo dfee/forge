@@ -1,4 +1,4 @@
-.. image:: https://raw.githubusercontent.com/dfee/forge/master/docs/_static/logo.png
+.. image:: https://raw.githubusercontent.com/dfee/forge/master/docs/_static/forge-horizontal.png
    :alt: forge logo
 
 ============================================
@@ -12,7 +12,13 @@
     :target: https://coveralls.io/github/dfee/forge?branch=master
     :alt: master Coveralls Status
 
-``forge`` is an elegant Python package that allows for meta-programming of function signatures. Tools like parameter conversion, validation, and typing are now trivial.
+.. overview-begin
+
+``forge`` is an *elegant* Python package that allows for **meta-programming of function signatures**. Now, you can finally **add**, **remove**, or **enhance parameters** at your will.
+
+Use it to write **legible** signatures for consumption by team members, the public, or other code.
+
+.. overview-end
 
 
 Key Features
@@ -512,20 +518,3 @@ Source code
 
 The latest developer version is available in a github repository:
 https://github.com/dfee/forge
-
-
-Image / Meta
-============
-`Salvador Dali <https://en.wikipedia.org/wiki/Salvador_Dal%C3%AD>`_, a Spanish surealist artist, is infamous for allegedly forging his own work. In his latter years, it's said that he signed blank canvases and tens of thousands of sheets of lithographic paper (under duress of his guardians). In the image atop this ``README``, he's seen with his pet ocelot, Babou.
-
-Practically speaking, Salvador Dali and Babou are pretty awesome, and I intend to throw no shade at him or his legacy.
-
-This image is recomposed from the original, whose metadata is below.
-
-| **Title**: `Salvatore Dali with ocelot friend at St Regis / World Telegram & Sun photo by Roger Higgins <http://www.loc.gov/pictures/item/95513802/>`_
-| **Creator(s)**: Higgins, Roger, photographer
-| **Date Created/Published**: 1965.
-| **Medium**: 1 photographic print.
-| **Reproduction Number**: LC-USZ62-114985 (b&w film copy neg.)
-| **Rights Advisory**: No copyright restriction known. Staff photographer reproduction rights transferred to Library of Congress through Instrument of Gift.
-| **Repository**: Library of Congress Prints and Photographs Division Washington, D.C. 20540 USA
