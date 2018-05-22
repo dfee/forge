@@ -6,18 +6,9 @@ import types
 import typing
 
 import forge._immutable as immutable
-from forge._marker import (
-    coerce_if,
-    void,
-    void_to_empty,
-)
+from forge._marker import empty
 from forge._parameter import (
-    POSITIONAL_ONLY,
-    POSITIONAL_OR_KEYWORD,
-    VAR_KEYWORD,
-    VAR_POSITIONAL,
     FParameter,
-    empty,
     pk_strings,
 )
 from forge._utils import (
@@ -206,17 +197,20 @@ class FSignature(collections.abc.Mapping, immutable.Immutable):
                     format(current=current, last=last)
                 )
             elif current.kind is last.kind:
-                if current.kind is VAR_POSITIONAL:
+                if current.kind is FParameter.VAR_POSITIONAL:
                     raise TypeError(
                         'Received multiple variable-positional FParameters'
                     )
-                elif current.kind is VAR_KEYWORD:
+                elif current.kind is FParameter.VAR_KEYWORD:
                     raise TypeError(
                         'Received multiple variable-keyword FParameters'
                     )
-                elif current.kind in (POSITIONAL_ONLY, POSITIONAL_OR_KEYWORD) \
-                    and last.default is not empty \
-                    and current.default is empty:
+                elif current.kind in (
+                        FParameter.POSITIONAL_ONLY,
+                        FParameter.POSITIONAL_OR_KEYWORD
+                    ) \
+                    and last.default is not empty.native \
+                    and current.default is empty.native:
                     raise SyntaxError(
                         'non-default FParameter follows default FParameter'
                     )
@@ -245,13 +239,6 @@ class FSignature(collections.abc.Mapping, immutable.Immutable):
             var_positional=get_var_positional_parameter(*fparams),
             var_keyword=get_var_keyword_parameter(*fparams),
         )
-
-    def __eq__(self, other):
-        # TODO: remove
-        # pylint: disable=W0212, protected-access
-        if type(self) is not type(other):
-            return False
-        return self._data == other._data
 
     def __repr__(self):
         return '<{} ({})>'.format(
@@ -422,7 +409,6 @@ class Mapper(immutable.Immutable):
                     message=exc.args[0],
                 ),
             )
-        # TODO: test defaults applied, *args, **kwargs, etc.
         public_ba.apply_defaults()
 
         private_ba = self.private_signature.bind_partial()
@@ -430,19 +416,19 @@ class Mapper(immutable.Immutable):
         ctx = self.get_context(public_ba.arguments)
 
         for from_name, from_param in self.fsignature.items():
-            from_val = public_ba.arguments.get(from_name, void)
+            from_val = public_ba.arguments.get(from_name, empty)
             to_name = self.parameter_map[from_name]
             to_param = self.private_signature.parameters[to_name]
-            to_val = self.fsignature[from_name](ctx, from_name, from_val)
+            to_val = self.fsignature[from_name](ctx, from_val)
 
-            if to_param.kind is VAR_POSITIONAL:
+            if to_param.kind is FParameter.VAR_POSITIONAL:
                 # e.g. f(*args) -> g(*args)
                 private_ba.arguments[to_name] = to_val
-            elif to_param.kind is VAR_KEYWORD:
-                if from_param.kind is VAR_KEYWORD:
+            elif to_param.kind is FParameter.VAR_KEYWORD:
+                if from_param.kind is FParameter.VAR_KEYWORD:
                     # e.g. f(**kwargs) -> g(**kwargs)
                     private_ba.arguments[to_name].update(
-                        coerce_if(lambda i: i == {}, to_val, empty)
+                        to_val if to_val != {} else empty.native
                     )
                 else:
                     # e.g. f(a) -> g(**kwargs)
@@ -519,7 +505,7 @@ class Mapper(immutable.Immutable):
                 param_t = fparam_idx.pop(name)
             except KeyError:
                 # masked mapping, e.g. f() -> g(a=1)
-                if param.default is not empty:
+                if param.default is not empty.native:
                     continue
 
                 # invalid mapping, e.g. f() -> g(a)
@@ -535,7 +521,7 @@ class Mapper(immutable.Immutable):
         if fparam_vpo:
             # invalid mapping, e.g. f(*args) -> g()
             if not param_vpo:
-                kind_repr = pk_strings[VAR_POSITIONAL]
+                kind_repr = pk_strings[FParameter.VAR_POSITIONAL]
                 raise TypeError(
                     "Missing requisite mapping from {kind_repr} parameter "
                     "'{fparam_vpo.name}'".\
@@ -547,7 +533,7 @@ class Mapper(immutable.Immutable):
         if fparam_vkw:
             # invalid mapping, e.g. f(**kwargs) -> g()
             if not param_vkw:
-                kind_repr = pk_strings[VAR_KEYWORD]
+                kind_repr = pk_strings[FParameter.VAR_KEYWORD]
                 raise TypeError(
                     "Missing requisite mapping from {kind_repr} parameter "
                     "'{fparam_vkw.name}'".\
@@ -625,7 +611,7 @@ def resign(
 
 
 def returns(
-        type: typing.Any = void
+        type: typing.Any = empty
     ) -> typing.Callable[[typing.Callable[..., typing.Any]], typing.Any]:
     """
     Produces a factory that updates callables' signatures to reflect a  new
@@ -638,6 +624,6 @@ def returns(
     # pylint: disable=W0622, redefined-builtin
     def inner(callable):
         # pylint: disable=W0622, redefined-builtin
-        set_return_type(callable, void_to_empty(type))
+        set_return_type(callable, empty.ccoerce(type))
         return callable
     return inner

@@ -1,7 +1,10 @@
+import inspect
+
 import pytest
 
 from forge._marker import (
     MarkerMeta,
+    empty,
     void,
 )
 
@@ -26,12 +29,19 @@ class TestMarkerMeta:
         assert marker() is marker
 
 
+class TestEmpty:
+    def test_cls(self):
+        assert isinstance(empty, MarkerMeta)
+        assert empty.native is inspect.Parameter.empty
+
+    @pytest.mark.parametrize(('in_', 'out_'), [
+        pytest.param(1, 1, id='non_empty'),
+        pytest.param(empty, inspect.Parameter.empty, id='empty'),
+    ])
+    def test_ccoerce(self, in_, out_):
+        assert empty.ccoerce(in_) == out_
+
+
 class TestVoid:
     def test_cls(self):
         assert isinstance(void, MarkerMeta)
-
-    def test_instance(self):
-        assert void() is void
-
-    def test__repr__(self):
-        assert repr(void) == '<void>'

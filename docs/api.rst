@@ -25,6 +25,26 @@ Classes
 -------
 .. autoclass:: forge.FParameter
 
+    .. attribute:: POSITIONAL_ONLY
+
+        For more information about this :term:`parameter kind` constant, refer to :term:`positional-only`.
+
+    .. attribute:: POSITIONAL_OR_KEYWORD
+
+        For more information about this :term:`parameter kind` constant, refer to :term:`positional-or-keyword`.
+
+    .. attribute:: VAR_POSTIIONAL
+
+        For more information about this :term:`parameter kind` constant, refer to :term:`var-positional`.
+
+    .. attribute:: KEYWORD_ONLY
+
+        For more information about this :term:`parameter kind` constant, refer to :term:`keyword-only`.
+
+    .. attribute:: VAR_KEYWORD
+
+        For more information about this :term:`parameter kind` constant, refer to :term:`var-keyword`.
+
 
 .. _api_parameter-constructors:
 
@@ -66,32 +86,6 @@ Helpers
 .. data:: forge.cls
 
     a convenience for ``forge.ctx('cls')``.
-
-
-.. _api_parameter-constants:
-
-Constants
----------
-
-.. data:: POSITIONAL_ONLY
-
-    For more information about this :term:`parameter kind` constant, refer to :term:`positional-only`.
-
-.. data:: POSITIONAL_OR_KEYWORD
-
-    For more information about this :term:`parameter kind` constant, refer to :term:`positional-or-keyword`.
-
-.. data:: VAR_POSTIIONAL
-
-    For more information about this :term:`parameter kind` constant, refer to :term:`var-positional`.
-
-.. data:: KEYWORD_ONLY
-
-    For more information about this :term:`parameter kind` constant, refer to :term:`keyword-only`.
-
-.. data:: VAR_KEYWORD
-
-    For more information about this :term:`parameter kind` constant, refer to :term:`var-keyword`.
 
 
 .. _api_signature:

@@ -2,8 +2,8 @@ import inspect
 
 import pytest
 
+import forge
 from forge._exceptions import NoParameterError
-import forge._parameter as fparam
 from forge._utils import (
     hasparam,
     getparam,
@@ -150,11 +150,11 @@ natural_params = [
     natural_kwargs,
 ]
 
-pt_pos = fparam.pos('pos')
-pt_pok = fparam.arg('arg')
-pt_vpo = list(fparam.args)[0]
-pt_kwo = fparam.kwarg('kwarg')
-pt_vkw = fparam.kwargs[fparam.kwargs.name]
+pt_pos = forge.pos('pos')
+pt_pok = forge.arg('arg')
+pt_vpo = list(forge.args)[0]
+pt_kwo = forge.kwarg('kwarg')
+pt_vkw = forge.kwargs[forge.kwargs.name]
 pt_params = [
     pt_pos,
     pt_pok,
@@ -188,17 +188,17 @@ def test_get_var_keyword_parameter(params, expected):
         id='positional_only',
     ),
     pytest.param(
-        (fparam.pos('a'),),
+        (forge.pos('a'),),
         'a, /',
         id='positional_only',
     ),
     pytest.param(
-        (fparam.arg('a'),),
+        (forge.arg('a'),),
         'a',
         id='positional_or_keyword',
     ),
     pytest.param(
-        (fparam.kwarg('a'),),
+        (forge.kwarg('a'),),
         '*, a',
         id='keyword_only',
     ),

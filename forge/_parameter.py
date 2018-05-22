@@ -6,25 +6,15 @@ import types
 import typing
 
 import forge._immutable as immutable
-from forge._marker import (
-    void,
-    void_to_empty,
-)
+from forge._marker import empty
 
-empty = inspect.Parameter.empty  # pylint: disable=C0103, invalid-name
-
-POSITIONAL_ONLY = inspect.Parameter.POSITIONAL_ONLY  # type: ignore
-POSITIONAL_OR_KEYWORD = inspect.Parameter.POSITIONAL_OR_KEYWORD  # type: ignore
-VAR_POSITIONAL = inspect.Parameter.VAR_POSITIONAL
-KEYWORD_ONLY = inspect.Parameter.KEYWORD_ONLY
-VAR_KEYWORD = inspect.Parameter.VAR_KEYWORD
 
 pk_strings = {
-    POSITIONAL_ONLY: 'positional-only',
-    POSITIONAL_OR_KEYWORD: 'positional-or-keyword',
-    VAR_POSITIONAL: 'variable-positional',
-    KEYWORD_ONLY: 'keyword-only',
-    VAR_KEYWORD: 'variable-keyword',
+    inspect.Parameter.POSITIONAL_ONLY: 'positional-only',
+    inspect.Parameter.POSITIONAL_OR_KEYWORD: 'positional-or-keyword',
+    inspect.Parameter.VAR_POSITIONAL: 'variable-positional',
+    inspect.Parameter.KEYWORD_ONLY: 'keyword-only',
+    inspect.Parameter.VAR_KEYWORD: 'variable-keyword',
 }
 
 _ctx_callable_type = typing.Callable[[typing.Any, str, typing.Any], typing.Any]
@@ -38,7 +28,12 @@ _name_type = typing.Optional[str]
 _default_type = typing.Any
 _factory_type = typing.Callable[[], typing.Any]
 _type_type = typing.Any
-_converter_type = typing.Optional[_ctx_callable_type]
+_converter_type = typing.Optional[
+    typing.Union[
+        _ctx_callable_type,
+        typing.Iterable[_ctx_callable_type]
+    ]
+]
 _validator_type = typing.Optional[
     typing.Union[
         _ctx_callable_type,
@@ -124,14 +119,20 @@ class FParameter(immutable.Immutable):
         'metadata',
     )
 
+    POSITIONAL_ONLY = inspect.Parameter.POSITIONAL_ONLY
+    POSITIONAL_OR_KEYWORD = inspect.Parameter.POSITIONAL_OR_KEYWORD
+    VAR_POSITIONAL = inspect.Parameter.VAR_POSITIONAL
+    KEYWORD_ONLY = inspect.Parameter.KEYWORD_ONLY
+    VAR_KEYWORD = inspect.Parameter.VAR_KEYWORD
+
     def __init__(
             self,
             kind: _kind_type,
             name: _name_type = None,
             interface_name: _name_type = None,
-            default: _default_type = void,
-            factory: _factory_type = void,
-            type: _type_type = void,
+            default: _default_type = empty,
+            factory: _factory_type = empty,
+            type: _type_type = empty,
             converter: _converter_type = None,
             validator: _validator_type = None,
             bound: _bound_type = False,
@@ -140,23 +141,23 @@ class FParameter(immutable.Immutable):
         ) -> None:
         # pylint: disable=W0622, redefined-builtin
         # pylint: disable=R0913, too-many-arguments
-        # TODO: pytest with (empty, void)
-        if factory not in (empty, void):
-            if default not in (empty, void):
+        # TODO: pytest with (empty, empty.native)
+        if factory not in (empty, empty.native):
+            if default not in (empty, empty.native):
                 raise TypeError(
                     'expected either "default" or "factory", received both'
                 )
             default = Factory(factory)
 
-        if bound and default is void:
+        if bound and default is empty:
             raise TypeError('bound arguments must have a default value')
 
         super().__init__(
             kind=kind,
             name=name or interface_name,
             interface_name=interface_name or name,
-            default=void_to_empty(default),
-            type=void_to_empty(type),
+            default=empty.ccoerce(default),
+            type=empty.ccoerce(type),
             converter=converter,
             validator=validator,
             contextual=contextual,
@@ -168,9 +169,9 @@ class FParameter(immutable.Immutable):
         """
         Generates a string representation of the FParameter
         """
-        if self.kind == VAR_POSITIONAL:
+        if self.kind == self.VAR_POSITIONAL:
             prefix = '*'
-        elif self.kind == VAR_KEYWORD:
+        elif self.kind == self.VAR_KEYWORD:
             prefix = '**'
         else:
             prefix = ''
@@ -187,7 +188,7 @@ class FParameter(immutable.Immutable):
             )
 
         annotated = mapped \
-            if self.type is empty \
+            if self.type is empty.native \
             else '{mapped}:{annotation}'.format(
                 mapped=mapped,
                 annotation=self.type.__name__ \
@@ -196,7 +197,7 @@ class FParameter(immutable.Immutable):
             )
 
         return annotated \
-            if self.default is empty \
+            if self.default is empty.native \
             else '{annotated}={default}'.format(
                 annotated=annotated,
                 default=self.default,
@@ -207,15 +208,15 @@ class FParameter(immutable.Immutable):
 
     def apply_default(self, value: typing.Any) -> typing.Any:
         """
-        Return the argument value (if not empty), or the value from
-        :attr:`default` (if not an instance of :class:`Factory`), or the value
-        obtained by calling :attr:`default` (if an instance of
+        Return the argument value (if not :class:`~forge.empty`), or the value
+        from :attr:`default` (if not an instance of :class:`Factory`), or the
+        value obtained by calling :attr:`default` (if an instance of
         :class:`Factory`).
 
         :param value: the argument value for this parameter
         :return: the input value or a default value
         """
-        if value is not void:
+        if value is not empty:
             return value
         elif isinstance(self.default, Factory):
             return self.default()
@@ -224,7 +225,6 @@ class FParameter(immutable.Immutable):
     def apply_conversion(
             self,
             ctx: typing.Any,
-            name: str,
             value: typing.Any,
         ) -> typing.Any:
         """
@@ -233,48 +233,45 @@ class FParameter(immutable.Immutable):
 
         :param ctx: the context of this parameter as provided by the
             :class:`FSignature` (typically self or ctx).
-        :param name: the name of this parameter
         :param value: the argument value for this parameter
         :return: the converted value
         """
         # pylint: disable=W0621, redefined-outer-name
-        # TODO: drop `name`. we already have it.
         if self.converter is None:
             return value
         elif isinstance(self.converter, typing.Iterable):
             return functools.reduce(
-                lambda val, func: func(ctx, name, val),
+                lambda val, func: func(ctx, self.name, val),
                 [value, *self.converter],
             )
-        return self.converter(ctx, name, value)
+        return self.converter(ctx, self.name, value)
 
     def apply_validation(
             self,
             ctx: typing.Any,
-            name: str,
             value: typing.Any,
         ) -> typing.Any:
         """
-        Apply validation against the argument value with the callable from
-        :attr:`validator`.
+        Apply a validation or series of validations against the argument value
+        with the callables from :attr:`validator`.
 
         :param ctx: the context of this parameter as provided by the
             :class:`FSignature` (typically self or ctx).
-        :param name: the name of the parameter being converted.
         :param value: the value the user has supplied or a default value
         :return: the (unchanged) validated value
         """
         # pylint: disable=W0621, redefined-outer-name
-        # TODO: drop `name`, we already have it
-        if self.validator is not None:
-            self.validator(ctx, name, value)
+        if isinstance(self.validator, typing.Iterable):
+            for validate in self.validator:
+                validate(ctx, self.name, value)
+        elif self.validator is not None:
+            self.validator(ctx, self.name, value)
         return value
 
     def __call__(
             self,
             ctx: typing.Any,
-            name: str,
-            value: typing.Any = void
+            value: typing.Any = empty
         ) -> typing.Any:
         """
         Process the argument value by applying a default (if necessary),
@@ -283,14 +280,12 @@ class FParameter(immutable.Immutable):
 
         :param ctx: the context of this parameter as provided by the
             :class:`FSignature` (typically self or ctx).
-        :param name: the name of the parameter being converted.
         :param value: the value the user has supplied or a default value
         """
         # pylint: disable=W0621, redefined-outer-name
-        # TODO: drop `name`, we already have it
         defaulted = self.apply_default(value)
-        converted = self.apply_conversion(ctx, name, defaulted)
-        return self.apply_validation(ctx, name, converted)
+        converted = self.apply_conversion(ctx, defaulted)
+        return self.apply_validation(ctx, converted)
 
     @property
     def parameter(self) -> inspect.Parameter:
@@ -307,36 +302,20 @@ class FParameter(immutable.Immutable):
             annotation=self.type,
         )
 
-    @property
-    def interface_parameter(self) -> inspect.Parameter:
-        """
-        An interface representation of this :class:`FParameter` as an
-        :class:`inspect.Parameter`, fit for an :class:`inspect.Signature`
-        """
-        # TODO: can remove!
-        if not self.interface_name:
-            raise TypeError('Cannot generate an unnamed parameter')
-        return inspect.Parameter(
-            name=self.interface_name,
-            kind=self.kind,
-            default=self.default,
-            annotation=self.type,
-        )
-
     def replace(
             self,
             *,
-            kind=void,
-            name=void,
-            interface_name=void,
-            default=void,
-            factory=void,
-            type=void,
-            converter=void,
-            validator=void,
-            bound=void,
-            contextual=void,
-            metadata=void
+            kind=empty,
+            name=empty,
+            interface_name=empty,
+            default=empty,
+            factory=empty,
+            type=empty,
+            converter=empty,
+            validator=empty,
+            bound=empty,
+            contextual=empty,
+            metadata=empty
         ):
         """
         An evolution method that generates a new :class:`FParameter` derived
@@ -358,8 +337,8 @@ class FParameter(immutable.Immutable):
         # pylint: disable=E1120, no-value-for-parameter
         # pylint: disable=W0622, redefined-builtin
         # pylint: disable=R0913, too-many-arguments
-        if factory is not void and default is void:
-            default = empty
+        if factory is not empty and default is empty:
+            default = empty.native
 
         return immutable.replace(self, **{
             k: v for k, v in {
@@ -374,7 +353,7 @@ class FParameter(immutable.Immutable):
                 'bound': bound,
                 'contextual': contextual,
                 'metadata': metadata,
-            }.items() if v is not void
+            }.items() if v is not empty
         })
 
     @classmethod
@@ -400,9 +379,9 @@ class FParameter(immutable.Immutable):
             name=None,
             interface_name=None,
             *,
-            default=void,
-            factory=void,
-            type=void,
+            default=empty,
+            factory=empty,
+            type=empty,
             converter=None,
             validator=None,
             bound=False,
@@ -424,12 +403,12 @@ class FParameter(immutable.Immutable):
         """
         # pylint: disable=W0622, redefined-builtin
         return cls(  # type: ignore
-            kind=POSITIONAL_ONLY,
+            kind=cls.POSITIONAL_ONLY,
             name=name,
             interface_name=interface_name,
             default=default,
             factory=factory,
-            type=void_to_empty(type),
+            type=empty.ccoerce(type),
             converter=converter,
             validator=validator,
             bound=bound,
@@ -442,9 +421,9 @@ class FParameter(immutable.Immutable):
             name=None,
             interface_name=None,
             *,
-            default=void,
-            factory=void,
-            type=void,
+            default=empty,
+            factory=empty,
+            type=empty,
             converter=None,
             validator=None,
             bound=False,
@@ -466,12 +445,12 @@ class FParameter(immutable.Immutable):
         """
         # pylint: disable=W0622, redefined-builtin
         return cls(  # type: ignore
-            kind=POSITIONAL_OR_KEYWORD,
+            kind=cls.POSITIONAL_OR_KEYWORD,
             name=name,
             interface_name=interface_name,
             default=default,
             factory=factory,
-            type=void_to_empty(type),
+            type=empty.ccoerce(type),
             converter=converter,
             validator=validator,
             bound=bound,
@@ -484,7 +463,7 @@ class FParameter(immutable.Immutable):
             name=None,
             interface_name=None,
             *,
-            type=void,
+            type=empty,
             metadata=None
         ) -> 'FParameter':
         """
@@ -500,11 +479,11 @@ class FParameter(immutable.Immutable):
         """
         # pylint: disable=W0622, redefined-builtin
         return cls(  # type: ignore
-            kind=POSITIONAL_OR_KEYWORD,
+            kind=cls.POSITIONAL_OR_KEYWORD,
             name=name,
             interface_name=interface_name,
-            default=empty,
-            type=void_to_empty(type),
+            default=empty.native,
+            type=empty.ccoerce(type),
             contextual=True,
             metadata=metadata,
         )
@@ -529,10 +508,10 @@ class FParameter(immutable.Immutable):
         """
         # pylint: disable=W0622, redefined-builtin
         return cls(  # type: ignore
-            kind=VAR_POSITIONAL,
+            kind=cls.VAR_POSITIONAL,
             name=name,
-            default=empty,
-            type=empty,
+            default=empty.native,
+            type=empty.native,
             converter=converter,
             validator=validator,
             metadata=metadata,
@@ -544,9 +523,9 @@ class FParameter(immutable.Immutable):
             name=None,
             interface_name=None,
             *,
-            default=void,
-            factory=void,
-            type=void,
+            default=empty,
+            factory=empty,
+            type=empty,
             converter=None,
             validator=None,
             bound=False,
@@ -568,12 +547,12 @@ class FParameter(immutable.Immutable):
         """
         # pylint: disable=W0622, redefined-builtin
         return cls(  # type: ignore
-            kind=KEYWORD_ONLY,
+            kind=cls.KEYWORD_ONLY,
             name=name,
             interface_name=interface_name,
             default=default,
             factory=factory,
-            type=void_to_empty(type),
+            type=empty.ccoerce(type),
             converter=converter,
             validator=validator,
             bound=bound,
@@ -600,10 +579,10 @@ class FParameter(immutable.Immutable):
         """
         # pylint: disable=W0622, redefined-builtin
         return cls(  # type: ignore
-            kind=VAR_KEYWORD,
+            kind=cls.VAR_KEYWORD,
             name=name,
-            default=empty,
-            type=empty,
+            default=empty.native,
+            type=empty.native,
             converter=converter,
             validator=validator,
             metadata=metadata,
@@ -653,7 +632,6 @@ class VarPositional(collections.abc.Iterable):
             validator: _validator_type = None,
             metadata: typing.Optional[_metadata_type] = None
         ) -> None:
-        # TODO: test default name
         self.name = name or self._default_name
         self.converter = converter
         self.validator = validator
@@ -758,7 +736,6 @@ class VarKeyword(collections.abc.Mapping):
             validator: _validator_type = None,
             metadata: typing.Optional[_metadata_type] = None
         ) -> None:
-        # TODO: test default name
         self.name = name or self._default_name
         self.converter = converter
         self.validator = validator
@@ -849,16 +826,3 @@ class VarKeyword(collections.abc.Mapping):
             validator=validator,
             metadata=metadata,
         )
-
-
-# pylint: disable=C0103, invalid-name
-# pylint: disable=E1101, no-member
-# TODO: remove (duplicated)
-pos = FParameter.create_positional_only
-arg = FParameter.create_positional_or_keyword
-args = VarPositional()
-kwarg = FParameter.create_keyword_only
-kwargs = VarKeyword()
-ctx = FParameter.create_contextual
-self_ = ctx('self')
-cls_ = ctx('cls')

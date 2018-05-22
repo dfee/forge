@@ -5,10 +5,7 @@ import pytest
 
 import forge
 import forge._signature
-from forge._marker import (
-    void,
-    void_to_empty,
-)
+from forge._marker import empty
 from forge._parameter import FParameter
 from forge._signature import (
     CallArguments,
@@ -25,14 +22,11 @@ from forge._signature import (
 # pylint: disable=W0621, redefined-outer-name
 # pylint: disable=R0904, too-many-public-methods
 
-
-empty = inspect.Parameter.empty
-
-POSITIONAL_ONLY = inspect.Parameter.POSITIONAL_ONLY  # type: ignore
-POSITIONAL_OR_KEYWORD = inspect.Parameter.POSITIONAL_OR_KEYWORD  # type: ignore
-VAR_POSITIONAL = inspect.Parameter.VAR_POSITIONAL
-KEYWORD_ONLY = inspect.Parameter.KEYWORD_ONLY
-VAR_KEYWORD = inspect.Parameter.VAR_KEYWORD
+POSITIONAL_ONLY = FParameter.POSITIONAL_ONLY  # type: ignore
+POSITIONAL_OR_KEYWORD = FParameter.POSITIONAL_OR_KEYWORD  # type: ignore
+VAR_POSITIONAL = FParameter.VAR_POSITIONAL
+KEYWORD_ONLY = FParameter.KEYWORD_ONLY
+VAR_KEYWORD = FParameter.VAR_KEYWORD
 
 
 def assert_signatures_match(func1, func2):
@@ -131,8 +125,8 @@ class TestFSignature:
                 kind=inspect.Parameter.VAR_POSITIONAL,
                 name='args{}'.format(i),
                 interface_name='args{}'.format(i),
-                default=empty,
-                type=empty,
+                default=empty.native,
+                type=empty.native,
             ) for i in range(2)
         ]
         with pytest.raises(TypeError) as excinfo:
@@ -146,8 +140,8 @@ class TestFSignature:
                 kind=inspect.Parameter.VAR_KEYWORD,
                 name='kwargs{}'.format(i),
                 interface_name='kwargs{}'.format(i),
-                default=empty,
-                type=empty,
+                default=empty.native,
+                type=empty.native,
             ) for i in range(2)
         ]
         with pytest.raises(TypeError) as excinfo:
@@ -194,13 +188,6 @@ class TestFSignature:
             forge.kwarg('c'),
             list(dict(forge.kwargs).values())[0],
         )
-
-    def test__eq__(self):
-        fsigs = [FSignature(forge.arg('a')) for i in range(2)]
-        assert fsigs[0] == fsigs[1]
-
-    def test__eq__type_check(self):
-        assert FSignature() != object()
 
     def test__repr__(self):
         assert repr(FSignature(forge.self)) == '<FSignature (self)>'
@@ -267,8 +254,8 @@ class TestFSignature:
 
 class TestMapper:
     @staticmethod
-    def make_param(name, kind, default=void):
-        return inspect.Parameter(name, kind, default=void_to_empty(default)) \
+    def make_param(name, kind, default=empty):
+        return inspect.Parameter(name, kind, default=empty.ccoerce(default)) \
             if kind is not None \
             else None
 
@@ -364,6 +351,22 @@ class TestMapper:
         call_args = CallArguments(a=1, b=2, c=3)
         assert mapper(**call_args.kwargs) == call_args
 
+    @pytest.mark.parametrize(('from_kind',), [
+        pytest.param(POSITIONAL_ONLY, id='positional_only'),
+        pytest.param(POSITIONAL_OR_KEYWORD, id='positional_or_keyword'),
+        pytest.param(KEYWORD_ONLY, id='keyword_only'),
+    ])
+    def test__call__defaults_applied(self, from_kind):
+        from_param = self.make_param('a', from_kind, default=1)
+        from_sig = inspect.Signature([from_param])
+        fsig = FSignature.from_signature(from_sig)
+        func = lambda: None
+        func.__signature__ = \
+            inspect.Signature([inspect.Parameter('kwargs', VAR_KEYWORD)])
+        mapper = Mapper(fsig, func)
+
+        assert mapper() == CallArguments(a=1)
+
     def test__call__binding_error_raises_named(self):
         fsig = FSignature(forge.arg('a'))
         def func(a):
@@ -391,8 +394,8 @@ class TestMapper:
         pytest.param(KEYWORD_ONLY, id='keyword_only'),
     ])
     @pytest.mark.parametrize(('from_default', 'to_default'), [
-        pytest.param('from_def', void, id='from_default'),
-        pytest.param(void, 'to_def', id='to_default'),
+        pytest.param('from_def', empty, id='from_default'),
+        pytest.param(empty, 'to_def', id='to_default'),
         pytest.param('from_def', 'to_def', id='default_from_and_default_to'),
     ])
     def test_map_parameters_to_non_var_parameter(
@@ -405,6 +408,7 @@ class TestMapper:
             to_default,
         ):
         # pylint: disable=R0913, too-many-arguments
+        # pylint: disable=R0914, too-many-locals
         from_param = self.make_param(from_name, from_kind, from_default)
         from_sig = inspect.Signature([from_param] if from_param else None)
         fsig = FSignature.from_signature(from_sig)
@@ -414,7 +418,7 @@ class TestMapper:
         # Idenitfy map_parameters errors
         expected_exc = None
         if not from_param:
-            if to_param.default is inspect.Parameter.empty:
+            if to_param.default is empty.native:
                 expected_exc = TypeError(
                     "Missing requisite mapping to non-default "
                     "{to_kind} parameter '{to_name}'".format(
@@ -423,7 +427,7 @@ class TestMapper:
                     )
                 )
         elif from_param.name != to_param.name:
-            if to_param.default is inspect.Parameter.empty:
+            if to_param.default is empty.native:
                 expected_exc = TypeError(
                     "Missing requisite mapping to non-default "
                     "{to_kind} parameter '{to_name}'".format(

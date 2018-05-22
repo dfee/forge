@@ -316,8 +316,8 @@ Callables wrapped with :func:`forge.sign` or :func:`forge.resign` preserve the u
 Argument conversion
 ===================
 
-``forge`` supports argument values conversion by providing a keyword-argument ``converter`` to a :class:`~forge.FParameter` constructor.
-``converter`` must be a callable which accepts three positional arguments: ``ctx``, ``name`` and ``value``:
+``forge`` supports argument value conversion by providing a keyword-argument :paramref:`~forge.FParameter.converter` to a :class:`~forge.FParameter` constructor.
+:paramref:`~forge.FParameter.converter` must be a callable, or an iterable of callables, which accept three positional arguments: ``ctx``, ``name`` and ``value``:
 
 .. code-block:: python
 
@@ -357,8 +357,8 @@ Supported by:
 Argument validation
 ===================
 
-``forge`` supports argument values validation by providing a keyword-argument ``validator`` to a :class:`~forge.FParameter` constructor.
-``validator`` must be a callable, or an iterable of callables which accept three positional arguments: ``ctx``, ``name`` and ``value``:
+``forge`` supports argument value validation by providing a keyword-argument :paramref:`~forge.FParameter.validator` to a :class:`~forge.FParameter` constructor.
+:paramref:`~forge.FParameter.validator` must be a callable, or an iterable of callables, which accept three positional arguments: ``ctx``, ``name`` and ``value``:
 
 .. code-block:: python
 

@@ -3,7 +3,7 @@ import inspect
 import typing
 
 from forge._exceptions import NoParameterError
-from forge._marker import void
+from forge._marker import empty
 from forge._parameter import FParameter
 
 
@@ -22,7 +22,7 @@ TUnionParameter = \
 def getparam(
         callable: typing.Callable[..., typing.Any],
         name: str,
-        default: typing.Any = void,
+        default: typing.Any = empty,
     ) -> inspect.Parameter:
     """
     Gets a parameter object (either a :class.`inspect.Parmater` or a
@@ -34,17 +34,17 @@ def getparam(
         :paramref:`.getparam.callable` signature
     :param default: a default value to return if :paramref:`.getparam.name` is
         not found in the signature of :paramref:`.getparam.callable`.
+    :raises TypeError: if :paramref:`.getparam.name` not found
     :return: the :class:`inspect.Parameter` or :class:`~forge.FParameter` object
         with :paramref:`.getparam.name` from :paramref:`.getparam.callable`, or
         :paramref:`.getparam.default` if not found.
     """
-    # TODO: return None
     # pylint: disable=W0622, redefined-builtin
     if not builtins.callable(callable):
         raise TypeError('{} is not callable'.format(callable))
 
     params = inspect.signature(callable).parameters
-    if default is not void:
+    if default is not empty:
         return params.get(name, default)
     try:
         return params[name]

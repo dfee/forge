@@ -45,44 +45,30 @@ class void(metaclass=MarkerMeta):
     pass
 
 
-def coerce_if(
-        check: typing.Callable[[typing.Any], bool],
-        from_: typing.Any,
-        # is_: typing.Any,
-        to_: typing.Any,
-    ) -> typing.Any:
+class empty(metaclass=MarkerMeta):
     """
-    Coerce's a value to another value if it meets a check condition.
+    A simple :class:`~forge.marker.MarkerMeta` class useful for denoting that
+    no input was suplied. Used in place of :class:`inspect.Parameter.empty`
+    as that is not repr'd (providing confusing usage).
 
     Usage::
 
-        >>> inputs = [1, 2, 3]
-        >>> outputs = [coerce_if(lambda i: i % 2, val, None) for val in inputs]
-        >>> assert outputs == [None, 2, None]
+        def proxy(a, b, extra=empty):
+            if extra is not empty:
+                return proxied(a, b)
+            return proxied(a, b, c=inspect.Parameter.empty)
 
-    :param check: the constraint checker; if the result is ``True``, then
-        :paramref:`.coerce_if.from_` is replaced with :paramref:`.coerce_if.to_`
-    :param from_: the value to pass to the constraint checker
-    :param to_: the replacement value if :paramref:`.coerce_if.check` returns
-        a value that is truthy.
-    :return: a conditionally coerced value.
+    :ivar native: local storage of :class:`inspect.Parameter.empty`
     """
-    # TODO: test
-    return to_ if check(from_) else from_
-    # return to_ if from_ is is_ else from_
+    # pylint: disable=C0103, invalid-name
+    native = inspect.Parameter.empty
 
+    @classmethod
+    def ccoerce(cls, value):
+        """
+        Conditionally coerce the value to a non-:class:`.empty` value.
 
-def void_to_empty(value):
-    """
-    A convenience function whose implementation reflects::
-
-        >>> result = value if value is not void else inspect.Parameter.empty
-
-    :class:`inspect.Parameter.empty` if the value is :class:`.void`.
-    :param value: a value to compare to void
-    :return: a not :class:`.void` value, either because
-        :paramref:`.void_to_empty.value` was not :class:`.void` or because
-        it was :class:`.void` and was converted to
-        :class:`.inspect.Parameter.empty`
-    """
-    return coerce_if(lambda i: i is void, value, inspect.Parameter.empty)
+        :return: the value, if the value is not an instance of :class:`.empty`,
+            otherwise return :class:`inspect.Paramter.empty`
+        """
+        return value if value is not cls else cls.native

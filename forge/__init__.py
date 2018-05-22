@@ -3,11 +3,6 @@ from ._config import (
     set_run_validators,
 )
 from ._parameter import (
-    KEYWORD_ONLY,
-    POSITIONAL_ONLY,
-    POSITIONAL_OR_KEYWORD,
-    VAR_KEYWORD,
-    VAR_POSITIONAL,
     FParameter,
     VarKeyword,
     VarPositional,
@@ -25,10 +20,12 @@ from ._utils import (
     get_return_type,
     set_return_type,
 )
-from ._marker import void
+from ._marker import (
+    empty,
+    void,
+)
 
 # pylint: disable=C0103, invalid-name
-# TODO: migrate tests
 pos = FParameter.create_positional_only
 arg = pok = FParameter.create_positional_or_keyword
 kwarg = kwo = FParameter.create_keyword_only
