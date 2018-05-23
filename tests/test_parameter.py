@@ -18,11 +18,11 @@ from forge._signature import CallArguments
 # pylint: disable=R0201, no-self-use
 # pylint: disable=W0212, protected-access
 
-POSITIONAL_ONLY = inspect.Parameter.POSITIONAL_ONLY
-POSITIONAL_OR_KEYWORD = inspect.Parameter.POSITIONAL_OR_KEYWORD
-VAR_POSITIONAL = inspect.Parameter.VAR_POSITIONAL
-KEYWORD_ONLY = inspect.Parameter.KEYWORD_ONLY
-VAR_KEYWORD = inspect.Parameter.VAR_KEYWORD
+POSITIONAL_ONLY = FParameter.POSITIONAL_ONLY
+POSITIONAL_OR_KEYWORD = FParameter.POSITIONAL_OR_KEYWORD
+VAR_POSITIONAL = FParameter.VAR_POSITIONAL
+KEYWORD_ONLY = FParameter.KEYWORD_ONLY
+VAR_KEYWORD = FParameter.VAR_KEYWORD
 
 dummy_func = lambda: None
 dummy_converter = lambda ctx, name, value: (ctx, name, value)
@@ -31,8 +31,8 @@ dummy_validator = lambda ctx, name, value: None
 FPARAM_DEFAULTS = dict(
     name=None,
     interface_name=None,
-    default=empty.native,
-    type=empty.native,
+    default=empty,
+    type=empty,
     converter=None,
     validator=None,
     bound=False,
@@ -40,33 +40,33 @@ FPARAM_DEFAULTS = dict(
     metadata=types.MappingProxyType({}),
 )
 
-FPARAM_POS_DEFAULTS = dict(
+FPARAM_POS_DEFAULTS = dict(  # type: ignore
     FPARAM_DEFAULTS,
     kind=POSITIONAL_ONLY,
 )
 
-FPARAM_POK_DEFAULTS = dict(
+FPARAM_POK_DEFAULTS = dict(  # type: ignore
     FPARAM_DEFAULTS,
     kind=POSITIONAL_OR_KEYWORD,
 )
 
-FPARAM_CTX_DEFAULTS = dict(
+FPARAM_CTX_DEFAULTS = dict(  # type: ignore
     FPARAM_DEFAULTS,
     kind=POSITIONAL_OR_KEYWORD,
     contextual=True,
 )
 
-FPARAM_VPO_DEFAULTS = dict(
+FPARAM_VPO_DEFAULTS = dict(  # type: ignore
     FPARAM_DEFAULTS,
     kind=VAR_POSITIONAL,
 )
 
-FPARAM_KWO_DEFAULTS = dict(
+FPARAM_KWO_DEFAULTS = dict(  # type: ignore
     FPARAM_DEFAULTS,
     kind=KEYWORD_ONLY,
 )
 
-FPARAM_VKW_DEFAULTS = dict(
+FPARAM_VKW_DEFAULTS = dict(  # type: ignore
     FPARAM_DEFAULTS,
     kind=VAR_KEYWORD,
 )
@@ -93,7 +93,7 @@ class TestFParameter:
     @pytest.mark.parametrize(('default', 'factory', 'result'), [
         pytest.param(1, empty, 1, id='default'),
         pytest.param(empty, dummy_func, Factory(dummy_func), id='factory'),
-        pytest.param(empty, empty, empty.native, id='neither'),
+        pytest.param(empty, empty, empty, id='neither'),
         pytest.param(1, dummy_func, None, id='both'),
     ])
     def test__init__default_or_factory(self, default, factory, result):
@@ -208,21 +208,17 @@ class TestFParameter:
         assert str(fparam) == expected
         assert repr(fparam) == '<FParameter "{}">'.format(expected)
 
-    @pytest.mark.parametrize(('in_', 'out_'), [
-        pytest.param(empty, 1, id='empty'),
-        pytest.param(0, 0, id='value'),
+    @pytest.mark.parametrize(('in_val', 'out_val'), [
+        pytest.param(empty, 'default', id='empty'),
+        pytest.param(*[object()] * 2, id='non_factory'), # (obj, obj)
+        pytest.param(Factory(lambda: 'value'), 'value', id='factory'),
     ])
-    def test_apply_default(self, in_, out_):
-        fparam = FParameter(POSITIONAL_ONLY, default=1)
-        assert fparam.apply_default(in_) == out_
-
-    def test_apply_default_factory(self):
-        mock = Mock()
+    def test_apply_default(self, in_val, out_val):
         fparam = FParameter(
             POSITIONAL_ONLY,
-            default=Factory(mock),
+            default='default',
         )
-        assert fparam.apply_default(empty) == mock.return_value
+        assert fparam.apply_default(in_val) == out_val
 
     @pytest.mark.parametrize(('converter', 'ctx', 'name', 'value', 'to_out'), [
         pytest.param(
@@ -298,23 +294,32 @@ class TestFParameter:
         assert called_with[0] == called_with[1] == \
             CallArguments(ctx, name, value)
 
-
-    def test__call__(self):
-        mock_default = Mock()
-        default = Factory(mock_default)
-        ctx, name, value = object(), 'myparam', empty
+    @pytest.mark.parametrize(('is_factory',), [
+        pytest.param(False, id='non_factory'),
+        pytest.param(True, id='factory'),
+    ])
+    def test__call__(self, is_factory):
+        mock = Mock()
+        ctx, name = object(), 'myparam'
+        value = Factory(mock) if is_factory else mock
         converter, validator = Mock(), Mock()
         fparam = FParameter(
             POSITIONAL_ONLY,
             name=name,
-            default=default,
             converter=converter,
             validator=validator,
         )
-        assert fparam(ctx, empty) == converter.return_value
+
+        assert fparam(ctx, value) == converter.return_value
         validator.assert_called_once_with(ctx, name, converter.return_value)
-        converter.assert_called_once_with(ctx, name, mock_default.return_value)
-        mock_default.assert_called_once_with()
+
+        if is_factory:
+            converter.assert_called_once_with(ctx, name, mock.return_value)
+            mock.assert_called_once_with()
+        else:
+            converter.assert_called_once_with(ctx, name, mock)
+            mock.assert_not_called()
+
 
     @pytest.mark.parametrize(('rkey', 'rval'), [
         pytest.param('kind', KEYWORD_ONLY, id='kind'),

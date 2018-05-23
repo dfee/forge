@@ -51,19 +51,11 @@ def test_namespace():
         'hasparam',
         'get_return_type',
         'set_return_type',
+        'stringify_callable',
     ])
 
 
 class TestConvenience:
-    def test_constructors(self):
-        FP = forge.FParameter
-        assert forge.pos == FP.create_positional_only
-        assert forge.pok == forge.arg == FP.create_positional_or_keyword
-        assert forge.ctx == FP.create_contextual
-        assert forge.vpo == FP.create_var_positional
-        assert forge.kwo == forge.kwarg == FP.create_keyword_only
-        assert forge.vkw == FP.create_var_keyword
-
     @pytest.mark.parametrize(('name', 'method'), [
         ('pos', forge.FParameter.create_positional_only),
         ('pok', forge.FParameter.create_positional_or_keyword),
@@ -94,6 +86,7 @@ class TestConvenience:
         )
 
     def test_args(self):
+        # pylint: disable=W0212, protected-access
         args = forge.args
         assert isinstance(args, forge._parameter.VarPositional)
         assert args.name == 'args'
@@ -101,6 +94,7 @@ class TestConvenience:
         assert args.validator is None
 
     def test_kwargs(self):
+        # pylint: disable=W0212, protected-access
         kwargs = forge.kwargs
         assert isinstance(kwargs, forge._parameter.VarKeyword)
         assert kwargs.name == 'kwargs'

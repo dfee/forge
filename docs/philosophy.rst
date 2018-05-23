@@ -10,86 +10,79 @@ Let's dig into why meta-programming function signatures is a good idea, and then
 **The why**: intuitive design
 =============================
 
-Without restoring to :func:`exec`, Python lacks the ability to dynamically implement function signatures.
-And, with :func:`exec`, no one wants to play with you (for good reason).
+Python lacks tooling to dynamically create callable signatures (without resorting to :func:`exec`).
+While this sounds esoteric, it's actually a big source of error and frustration for authors and users.
+Have you ever encountered a function that looks like this: ``execute(*args, **kwargs)``?
 
-Consider the following scenario, where :func:`do_aliens_exist` is wrapped and simplified.
-
-  .. code-block:: python
-
-    >>> def do_aliens_exist(ts, lat, lon, p1, p2, p3, p4, p5):
-    ...     '''
-    ...     takes the time, our location, and 5 parameters
-    ...     returns: whether aliens exist
-    ...     '''
-    ...     compute(...)
-    ...
-    >>> def do_aliens_exist_easy(**kwargs):
-    ...     '''an easier way to determine if aliens exist'''
-    ...     defaults = dict(
-    ...         p1='a', p2='b', p3='c', p4='d', p5='e',
-    ...         ts=datetime.now(), lat='-0.8292', lon='-91.1353',
-    ...     )
-    ...     cleaned = {k: kwargs.get(k, v) for k, v in defaults.items()}
-    ...     return do_aliens_exist(**cleaned)
-    ...
-    >>> do_aliens_exist_easy(p1='x')
-    True
-
-Writing, testing and maintaining signature parity is a lot of work, and even when it's important – like when determining whether aliens exist – authors are remiss to put in the effort.
-
-Instead, we ask for the :term:`var-keyword` parameter ``**kwargs``, white-listing certain variables and ignoring others.
-There is method to the madness, but the consumers of our code are left in the dark, asking "what parameters are accepted; what should I pass?".
-
-Too fanciful?
 How about a real world example: the stdlib :mod:`logging` module.
-When inspecting one of the seven logging methods (i.e. :func:`debug`, :func:`info`, :func:`warning`, :func:`error`, :func:`critical`, :func:`log`, and :func:`exception`) we get a meaningless signature:
+Inspecting one of the six logging methods (i.e. :func:`logging.debug`, :func:`logging.info`, :func:`logging.warning`, :func:`logging.error`, :func:`logging.critical`, and :func:`logging.exception`) we get a meaningless signature:
+
+Inspecting any of the six logging methods we get a very limited understanding of how to use the function:
+
+- :data:`logging.debug(msg, *args, **kwargs)`,
+- :data:`logging.info(msg, *args, **kwargs)`,
+- :data:`logging.warning(msg, *args, **kwargs)`,
+- :data:`logging.error(msg, *args, **kwargs)`,
+- :data:`logging.critical(msg, *args, **kwargs)`, and
+- :data:`logging.exception(msg, *args, **kwargs)`.
+
+Furthermore, the ``docstring`` messages available via the builtin :func:`help` provide minimally more insight:
 
 .. code-block:: python
 
-  >>> import logging
-  >>> help(logging.debug)
-  Help on function debug in module logging:
+    >>> import logging
+    >>> help(logging.warning)
+    Help on function warning in module logging:
 
-  debug(msg, *args, **kwargs)
-      Log a message with severity 'DEBUG' on the root logger. If the logger has no handlers, call basicConfig() to add a console handler with a pre-defined format.
+    warning(msg, *args, **kwargs)
+        Log a message with severity 'WARNING' on the root logger.
+        If the logger has no handlers, call basicConfig() to add a console handler with a pre-defined format.
 
-  >>> exc = ValueError('divided by zero')
-  >>> logging.error('Got a {err_type} exception', err_type=type(exc).__name__)
-  TypeError: _log() got an unexpected keyword argument 'err_type'
-  >>> # Huh, figured those kwargs were for string formatting
 
-The current signature is worse than useless for consumers of the function – at best additional functionality is left unused, hidden behind the :term:`var-positional` parameter `*args`` and the :term:`var-keyword` parameter ``**kwargs``.
-At worst, consumers infer functionality that might be wrong.
+Of course the basic function of :func:`logging.warning` is to output a string, so it'd be excusable if you guessed that ``*args`` and ``**kwargs`` serve the same function as :func:`str.format`.
+Let's try it:
 
-Let's look up the ``stdlib``'s `logging module documentation`_ for :func:`logging.debug` (where :func:`logging.error` redirects us):
+.. code-block:: python
 
-  ``logging.debug(msg, *args, **kwargs)``
+    >>> logging.warning('{user} changed a password', user='dave')
+    TypeError: _log() got an unexpected keyword argument 'user'
 
-  Logs a message with level DEBUG on the root logger.
-  The **msg** is the message format string, and the **args** are the arguments which are merged into msg using the string formatting operator.
-  (Note that this means that you can use keywords in the format string, together with a single dictionary argument.)
+It's arguable that this signature is *worse* than useless for code consumers - it's led to an incorrect inference of behavior.
+If we look at the extended, online documentation for :func:`logging.warning`, we're redirected further to the online documentation for :func:`logging.debug` which clarifies the role of the :term:`var-positional` argument ``*args`` and :term:`var-keyword` argument ``**kwargs`` [#f1]_.
 
-  There are three keyword arguments in kwargs which are inspected: **exc_info** which, if it does not evaluate as false, causes exception information to be added to the logging message.
-  If an exception tuple (in the format returned by sys.exc_info()) is provided, it is used; otherwise, sys.exc_info() is called to get the exception information.
+    ``logging.debug(msg, *args, **kwargs)``
 
-  The second optional keyword argument is **stack_info**, which defaults to False.
-  If true, stack information is added to the logging message, including the actual logging call.
-  Note that this is not the same stack information as that displayed through specifying exc_info: The former is stack frames from the bottom of the stack up to the logging call in the current thread, whereas the latter is information about stack frames which have been unwound, following an exception, while searching for exception handlers.
+    Logs a message with level DEBUG on the root logger.
+    The **msg** is the message format string, and the **args** are the arguments which are merged into msg using the string formatting operator.
+    (Note that this means that you can use keywords in the format string, together with a single dictionary argument.)
 
-  You can specify stack_info independently of exc_info, e.g. to just show how you got to a certain point in your code, even when no exceptions were raised.
-  The stack frames are printed following a header line which says:
+    There are three keyword arguments in kwargs which are inspected: **exc_info** which, if it does not evaluate as false, causes exception information to be added to the logging message.
+    If an exception tuple (in the format returned by sys.exc_info()) is provided, it is used; otherwise, sys.exc_info() is called to get the exception information.
 
-  ...
+    The second optional keyword argument is **stack_info**, which defaults to False.
+    If true, stack information is added to the logging message, including the actual logging call.
+    Note that this is not the same stack information as that displayed through specifying exc_info: The former is stack frames from the bottom of the stack up to the logging call in the current thread, whereas the latter is information about stack frames which have been unwound, following an exception, while searching for exception handlers.
 
-  The third optional keyword argument is **extra** which can be used to pass a dictionary which is used to populate the __dict__ of the LogRecord created for the logging event with user-defined attributes.
-  These custom attributes can then be used as you like.
-  For example, they could be incorporated into logged messages. For example:
+    You can specify stack_info independently of exc_info, e.g. to just show how you got to a certain point in your code, even when no exceptions were raised.
+    The stack frames are printed following a header line which says:
 
-  ...
+    ...
 
-That's a lot of documentation, but it uncovers why our attempt at supplying keyword arguments raises an :class:`Exception`. We wrongly inferred functionality like that provided by :func:`str.format` provides.
-But, let's have some empathy; the Python core developers don't want to repeat themselves seven times, right?
+    The third optional keyword argument is **extra** which can be used to pass a dictionary which is used to populate the __dict__ of the LogRecord created for the logging event with user-defined attributes.
+    These custom attributes can then be used as you like.
+    For example, they could be incorporated into logged messages. For example:
+
+    ...
+
+
+That's a bit of documentation, but it uncovers why our attempt at supplying keyword arguments raises a :class:`TypeError`. The string formatting that the logging methods provide has no relation to the string formatting provided by :meth:`str.format` from `PEP 3101`_ (introduced in Python 2.6 and Python 3.0).
+
+In fact, there is significant amounts of documentation clarifying `formatting style compatibility <https://docs.python.org/3/howto/logging-cookbook.html#use-of-alternative-formatting-styles>`_ with the ``logging`` methods.
+But, let's have some empathy; the Python core developers certainly don't want to repeat themselves six times – once for each ``logging`` level – right?
+
+This example illuminates the problem that ``forge`` sets out to solve: writing, testing and maintaining signatures requires too much effort.
+Left to their own devices, authors instead resort to hacks like signing a function with a :term:`var-keyword` parameter (e.g. ``**kwargs``).
+But is there method madness? Code consumers (collaborators and users) are left in the dark, asking "what parameters are *really* accepted; what should I pass?".
 
 
 .. _philosophy_how:
@@ -125,45 +118,35 @@ When you call a function wrapped with ``forge``, the following occurs:
 
 Looking back on the code for :func:`logging.debug`, let's try and improve upon this implementation by wrapping the standard logging methods with enough information to provide basic direction for end-users.
 
-.. code-block:: python
+.. testcode::
 
-  >>> make_explicit = forge.sign(
-  ...     forge.arg('msg'),
-  ...     *forge.args('substitutions'),
-  ...     exc_info=forge.kwarg(default=False),
-  ...     stack_info=forge.kwarg(default=False),
-  ...     extras=forge.kwarg(factory=dict),
-  ... )
-  >>> debug = make_explicit(logging.debug)
-  >>> info = make_explicit(logging.info)
-  >>> warning = make_explicit(logging.warning)
-  >>> error = make_explicit(logging.error)
-  >>> critical = make_explicit(logging.critical)
-  >>> log = make_explicit(logging.log)
-  >>> exception = make_explicit(logging.exception)
+    import logging
+    import forge
 
-The seven logging methods of :mod:`logging` have been wrapped.
-Let's see what it actually looks like:
+    make_explicit = forge.sign(
+        forge.arg('msg'),
+        *forge.args('substitutions'),
+        exc_info=forge.kwarg(default=False),
+        stack_info=forge.kwarg(default=False),
+        extras=forge.kwarg(factory=dict),
+    )
+    debug = make_explicit(logging.debug)
+    info = make_explicit(logging.info)
+    warning = make_explicit(logging.warning)
+    error = make_explicit(logging.error)
+    critical = make_explicit(logging.critical)
+    exception = make_explicit(logging.exception)
 
-.. code-block:: python
+    assert forge.stringify_callable(debug) == \
+        'debug(msg, *substitutions, exc_info=False, stack_info=False, extras=<Factory dict>)'
 
-  >>> help(debug)
-  Help on function debug in module logging:
-
-  debug(msg, *substitutions, exc_info=False, stack_info=False, extras=<Factory dict>)
-     Log a message with severity 'DEBUG' on the root logger. If the logger has
-     no handlers, call basicConfig() to add a console handler with a pre-defined
-     format.
-  >>> exc = ValueError('divided by zero')
-  >>> logging.error('Got a %s exception', type(exc).__name__)
-  ERROR:root:Got a ValueError exception
-
-We now have an aided intuition about how to use the function.
+We've aided our intuition about how to use these functions.
 
 Forge provides a sane middle-ground for *well-intentioned, albeit lazy* package authors and *pragmatic, albeit lazy* package consumers to communicate functionality and intent.
 
-**The bottom-line**: everyone deserves better
----------------------------------------------
+
+**The bottom-line**: signatures shouldn't be this hard
+------------------------------------------------------
 After a case-study with :mod:`logging` where we enhanced the code with context, let's consider the modern state of Python signatures beyond the ``stdlib``.
 
 Codebases you the broadly adopted :mod:`sqlalchemy` or :mod:`graphene` could benefit, as could third party corporate APIs which expect you to identify subtleties.
@@ -177,37 +160,37 @@ Design principals
 =================
 
 **The API emulates usage.**
-  ``forge`` provides an API for making function signatures more literate.
-  Therefore, the library is designed in a literate way.
-  Users are encouraged to supply :term:`positional-only` and :term:`positional-or-keyword` parameters as positional arguments, the :term:`var-positional` parameter for positional-expansion (e.g. ``*forge.args``), :term:`keyword-only` parameters as keyword arguments, and the :term:`var-keyword` parameter for keyword expansion (e.g. ``**forge.kwargs``).
+    ``forge`` provides an API for making function signatures more literate.
+    Therefore, the library is designed in a literate way.
+    Users are encouraged to supply :term:`positional-only` and :term:`positional-or-keyword` parameters as positional arguments, the :term:`var-positional` parameter for positional-expansion (e.g. ``*forge.args``), :term:`keyword-only` parameters as keyword arguments, and the :term:`var-keyword` parameter for keyword expansion (e.g. ``**forge.kwargs``).
 
 **Minimal API impact.**
-  Your callable, and it's underlying code is 100% unmodified, organic.
-  You can even get the original function by accessing the function's :attr:`__wrapped__` attribute.
+    Your callable, and it's underlying code is 100% unmodified, organic.
+    You can even get the original function by accessing the function's :attr:`__wrapped__` attribute.
 
-  Function in, function out: no hybrid instance-callables produced.
-  :func:`classmethod``, :func:`staticmethod``, and :func:`property`` are all supported.
+    Function in, function out: no hybrid instance-callables produced.
+    :func:`classmethod``, :func:`staticmethod``, and :func:`property`` are all supported.
 
 **Performance matters.**
-  ``forge`` was written from the ground up with an eye on performance, so it does the heavy lifting once, upfront rather than every time it's called.
+    ``forge`` was written from the ground up with an eye on performance, so it does the heavy lifting once, upfront rather than every time it's called.
 
-  All classes use :attr:`__slots__` for speeder attribute access.
-  PyPy 6.0.0+ has first class support.
+    All classes use :attr:`__slots__` for speeder attribute access.
+    PyPy 6.0.0+ has first class support.
 
 **Immutable and flexible.**
-  ``forge`` classes are immutable, but also flexible enough to support dynamic usage.
-  You can share an :class:`FParameter` or :class:`FSignature` without fearing for your previously signed classes.
+    ``forge`` classes are immutable, but also flexible enough to support dynamic usage.
+    You can share an :class:`FParameter` or :class:`FSignature` without fearing for your previously signed classes.
 
 **Type-Hints available.**
-  ``forge`` supports the use of `type-hints`_ by providing an API for supplying types on parameters.
-  In addition, ``forge`` itself is written with `type-hints`_.
+    ``forge`` supports the use of `type-hints`_ by providing an API for supplying types on parameters.
+    In addition, ``forge`` itself is written with `type-hints`_.
 
 **100% Coverage and Linted**
-  ``forge`` maintains 100% code-coverage through unit testing.
-  Code is also linted with ``mypy`` and ``pylint`` during automated testing upon every ``git push``.
+    ``forge`` maintains 100% code-coverage through unit testing.
+    Code is also linted with ``mypy`` and ``pylint`` during automated testing upon every ``git push``.
 
 
-.. _philosophy_what-forge-is-not
+.. _philosophy_what-forge-is-not:
 
 What ``forge`` is not
 =====================
@@ -225,17 +208,17 @@ It's available for inspection, but immutable (at :attr:`__mapper__``).
 The callable remains unmodified and intact (at :attr:``__wrapped__``).
 
 
-.. _philosophy_common-names
+.. _philosophy_common-names:
 
 Common names: ``forge.arg`` and ``forge.kwarg``
 ===============================================
 
 Based on a quick, informal poll of ``#python``, many developers don't know the formal parameter names. Given a function that looks like:
 
-.. doctest::
+.. code-block:: python
 
-  >>> def func(a, b=3, *args, c=3, **kwargs):
-  ...     pass
+    def func(a, b=3, *args, c=3, **kwargs):
+        pass
 
 - ``a`` is often referred to as an *argument* (an ``arg``), and
 - ``c`` is often referred to as a *keyword argument* (a ``kwarg``),
@@ -260,3 +243,8 @@ Use whichever variant you please.
 
 .. _`logging module documentation`: https://docs.python.org/3.6/library/logging.html#logging.debug
 .. _`type-hints`: https://docs.python.org/3/library/typing.html
+.. _`PEP 3101`: https://www.python.org/dev/peps/pep-3101/
+
+.. rubric:: Footnotes
+
+.. [#f1] `Logging module documentation <https://docs.python.org/3.6/library/logging.html#logging.debug>`_

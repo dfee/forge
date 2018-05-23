@@ -29,7 +29,6 @@ Overview
   Read this to learn how to use ``forge`` - from beginner to advanced features.
 - :doc:`advanced` shares some common use-cases and approaches for using ``forge``.
   For example, build a function whose signature changes every call.
-- :doc:`extending` demonstrates how to alter ``return-type`` annotations and add custom metadata to your parameters.
 - :doc:`api` has documentation for all public functionality.
 - :doc:`glossary` helps out iron out semantics and terms that are useful when (re-) designing function signatures.
 
@@ -44,7 +43,6 @@ Full Table of Contents
    basic
    advanced
    api
-   extending
    glossary
    license
    changelog

@@ -209,8 +209,8 @@ class FSignature(collections.abc.Mapping, immutable.Immutable):
                         FParameter.POSITIONAL_ONLY,
                         FParameter.POSITIONAL_OR_KEYWORD
                     ) \
-                    and last.default is not empty.native \
-                    and current.default is empty.native:
+                    and last.default is not empty \
+                    and current.default is empty:
                     raise SyntaxError(
                         'non-default FParameter follows default FParameter'
                     )
@@ -427,9 +427,7 @@ class Mapper(immutable.Immutable):
             elif to_param.kind is FParameter.VAR_KEYWORD:
                 if from_param.kind is FParameter.VAR_KEYWORD:
                     # e.g. f(**kwargs) -> g(**kwargs)
-                    private_ba.arguments[to_name].update(
-                        to_val if to_val != {} else empty.native
-                    )
+                    private_ba.arguments[to_name].update(to_val)
                 else:
                     # e.g. f(a) -> g(**kwargs)
                     private_ba.arguments[to_name]\

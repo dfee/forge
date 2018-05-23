@@ -6,7 +6,10 @@ import types
 import typing
 
 import forge._immutable as immutable
-from forge._marker import empty
+from forge._marker import (
+    empty,
+    void,
+)
 
 
 pk_strings = {
@@ -141,9 +144,8 @@ class FParameter(immutable.Immutable):
         ) -> None:
         # pylint: disable=W0622, redefined-builtin
         # pylint: disable=R0913, too-many-arguments
-        # TODO: pytest with (empty, empty.native)
-        if factory not in (empty, empty.native):
-            if default not in (empty, empty.native):
+        if factory is not empty:
+            if default is not empty:
                 raise TypeError(
                     'expected either "default" or "factory", received both'
                 )
@@ -156,8 +158,8 @@ class FParameter(immutable.Immutable):
             kind=kind,
             name=name or interface_name,
             interface_name=interface_name or name,
-            default=empty.ccoerce(default),
-            type=empty.ccoerce(type),
+            default=default,
+            type=type,
             converter=converter,
             validator=validator,
             contextual=contextual,
@@ -188,7 +190,7 @@ class FParameter(immutable.Immutable):
             )
 
         annotated = mapped \
-            if self.type is empty.native \
+            if self.type is empty \
             else '{mapped}:{annotation}'.format(
                 mapped=mapped,
                 annotation=self.type.__name__ \
@@ -197,7 +199,7 @@ class FParameter(immutable.Immutable):
             )
 
         return annotated \
-            if self.default is empty.native \
+            if self.default is empty \
             else '{annotated}={default}'.format(
                 annotated=annotated,
                 default=self.default,
@@ -217,9 +219,7 @@ class FParameter(immutable.Immutable):
         :return: the input value or a default value
         """
         if value is not empty:
-            return value
-        elif isinstance(self.default, Factory):
-            return self.default()
+            return value() if isinstance(value, Factory) else value
         return self.default
 
     def apply_conversion(
@@ -271,16 +271,23 @@ class FParameter(immutable.Immutable):
     def __call__(
             self,
             ctx: typing.Any,
-            value: typing.Any = empty
+            value: typing.Any
         ) -> typing.Any:
         """
-        Process the argument value by applying a default (if necessary),
-        converting the resulting value with the :attr:`converter`, and then
-        validating the resulting value with the :attr:`validator`.
+        Can be called after defaults have been applied (if not a ``bound``
+        :class:`.FParameter`) or without a value (i.e.
+        :class:`inspect.Parameter.emtpy`) in the case of a ``bound``
+        :class:`.FParameter`.
+
+        Process:
+
+        - conditionally apply the :class:`.Factory`,
+        - convert the resulting value with the :attr:`converter`, and then
+        - validate the resulting value with the :attr:`validator`.
 
         :param ctx: the context of this parameter as provided by the
             :class:`FSignature` (typically self or ctx).
-        :param value: the value the user has supplied or a default value
+        :param value: the user-supplied (or default) value
         """
         # pylint: disable=W0621, redefined-outer-name
         defaulted = self.apply_default(value)
@@ -298,24 +305,24 @@ class FParameter(immutable.Immutable):
         return inspect.Parameter(
             name=self.name,
             kind=self.kind,
-            default=self.default,
-            annotation=self.type,
+            default=empty.ccoerce(self.default),
+            annotation=empty.ccoerce(self.type),
         )
 
     def replace(
             self,
             *,
-            kind=empty,
-            name=empty,
-            interface_name=empty,
-            default=empty,
-            factory=empty,
-            type=empty,
-            converter=empty,
-            validator=empty,
-            bound=empty,
-            contextual=empty,
-            metadata=empty
+            kind=void,
+            name=void,
+            interface_name=void,
+            default=void,
+            factory=void,
+            type=void,
+            converter=void,
+            validator=void,
+            bound=void,
+            contextual=void,
+            metadata=void
         ):
         """
         An evolution method that generates a new :class:`FParameter` derived
@@ -337,8 +344,8 @@ class FParameter(immutable.Immutable):
         # pylint: disable=E1120, no-value-for-parameter
         # pylint: disable=W0622, redefined-builtin
         # pylint: disable=R0913, too-many-arguments
-        if factory is not empty and default is empty:
-            default = empty.native
+        if factory is not void and default is void:
+            default = empty
 
         return immutable.replace(self, **{
             k: v for k, v in {
@@ -353,7 +360,7 @@ class FParameter(immutable.Immutable):
                 'bound': bound,
                 'contextual': contextual,
                 'metadata': metadata,
-            }.items() if v is not empty
+            }.items() if v is not void
         })
 
     @classmethod
@@ -408,7 +415,7 @@ class FParameter(immutable.Immutable):
             interface_name=interface_name,
             default=default,
             factory=factory,
-            type=empty.ccoerce(type),
+            type=type,
             converter=converter,
             validator=validator,
             bound=bound,
@@ -450,7 +457,7 @@ class FParameter(immutable.Immutable):
             interface_name=interface_name,
             default=default,
             factory=factory,
-            type=empty.ccoerce(type),
+            type=type,
             converter=converter,
             validator=validator,
             bound=bound,
@@ -482,8 +489,7 @@ class FParameter(immutable.Immutable):
             kind=cls.POSITIONAL_OR_KEYWORD,
             name=name,
             interface_name=interface_name,
-            default=empty.native,
-            type=empty.ccoerce(type),
+            type=type,
             contextual=True,
             metadata=metadata,
         )
@@ -510,8 +516,6 @@ class FParameter(immutable.Immutable):
         return cls(  # type: ignore
             kind=cls.VAR_POSITIONAL,
             name=name,
-            default=empty.native,
-            type=empty.native,
             converter=converter,
             validator=validator,
             metadata=metadata,
@@ -552,7 +556,7 @@ class FParameter(immutable.Immutable):
             interface_name=interface_name,
             default=default,
             factory=factory,
-            type=empty.ccoerce(type),
+            type=type,
             converter=converter,
             validator=validator,
             bound=bound,
@@ -581,8 +585,6 @@ class FParameter(immutable.Immutable):
         return cls(  # type: ignore
             kind=cls.VAR_KEYWORD,
             name=name,
-            default=empty.native,
-            type=empty.native,
             converter=converter,
             validator=validator,
             metadata=metadata,

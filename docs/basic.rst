@@ -12,7 +12,7 @@ This functionality is achieved on builtins, functions, and class instances with 
 
 The minimal example is to wrap a function that takes no arguments (has no parameters) with a function that also takes no arguments (and has no parameters).
 
-.. code-block:: python
+.. testcode::
 
     import forge
 
@@ -20,10 +20,12 @@ The minimal example is to wrap a function that takes no arguments (has no parame
     def func():
         pass
 
+    assert forge.stringify_callable(func) == 'func()'
+
 Forging a signature works as expected with ``staticmethod``, ``classmethod``, the instance ``method``, as well as ``property`` and ``__call__``.
 The following example is a bit tedious, but its relevance is that it demonstrates that :func:`forge.sign` is transparent to underlying code.
 
-.. code-block:: python
+.. testcode::
 
     import random
     import forge
@@ -62,10 +64,17 @@ The following example is a bit tedious, but its relevance is that it demonstrate
         def __call__(self):
             return (self.imin, self.imax)
 
+    klass = Klass()
+
+    # Check signatures
+    assert forge.stringify_callable(Klass.srandom) == 'srandom()'
+    assert forge.stringify_callable(Klass.crandom) == 'crandom()'
+    assert forge.stringify_callable(klass.irandom) == 'irandom()'
+    assert forge.stringify_callable(klass) == '{}()'.format(klass)
+
     assert smin <= Klass.srandom() <= smax
     assert Klass.cmin <= Klass.crandom() <= Klass.cmax
 
-    klass = Klass()
     assert klass.imin <= klass.irandom() <= klass.imax
     assert klass.irange == range(klass.imin, klass.imax)
     assert klass() == (klass.imin, klass.imax)
@@ -93,17 +102,18 @@ Adding a parameter
 The additional parameter is mapped into the :term:`var-keyword` parameter, and will be available there within the function.
 Users may add `postiional-only`, `positional-or-keyword` or `keyword-only` arguments with this method.
 
-.. code-block:: python
+.. testcode::
 
     import forge
 
     @forge.sign(forge.arg('myparam', default=0))
     def func(**kwargs):
-        # will have signature: func(myparam=0)
         return kwargs['myparam']
 
+    assert forge.stringify_callable(func) == 'func(myparam=0)'
+
     assert func() == 0
-    assert func(myparm=1) == 1
+    assert func(myparam=1) == 1
 
 .. warning::
 
@@ -117,7 +127,7 @@ Supported by:
 - :term:`keyword-only`: via :func:`forge.kwarg` and :func:`forge.kwo`
 
 
-.. basic-usage_removing-a-parameter:
+.. _basic-usage_removing-a-parameter:
 
 Removing a parameter
 ====================
@@ -126,20 +136,20 @@ Removing a parameter
 
 For example, if a function has a parameter with a default:
 
-.. code-block:: python
+.. testcode::
 
     import forge
 
     @forge.sign()
     def func(myparam=0):
-        # will have signature: func()
         return myparam
 
+    assert forge.stringify_callable(func) == 'func()'
     assert func() == 0
 
 And removing a variadic parameter:
 
-.. code-block:: python
+.. testcode::
 
     import forge
 
@@ -147,19 +157,20 @@ And removing a variadic parameter:
     def func(*args):
         return args
 
+    assert forge.stringify_callable(func) == 'func()'
     assert func() == ()
 
 If a callable's parameter doesn't have a default value, you can still remove it, but you must set the parameter's default and ``bind`` the argument value:
 
-.. code-block:: python
+.. testcode::
 
     import forge
 
     @forge.sign(forge.arg('myparam', default=0, bound=True))
     def func(myparam):
-        # will have signature: func()
         return myparam
 
+    assert forge.stringify_callable(func) == 'func()'
     assert func() == 0
 
 
@@ -172,7 +183,7 @@ Supported by:
 - :term:`var-keyword`: via :data:`forge.kwargs` and :func:`forge.vkw`
 
 
-.. basic-usage_renaming-a-parameter:
+.. _basic-usage_renaming-a-parameter:
 
 Renaming a parameter
 ====================
@@ -182,7 +193,7 @@ This is useful when a callable's parameter names are generic, uninformative, or 
 
 To rename a ``non-variadic`` parameter, :class:`~forge.FParameter` takes a second positional argument, :paramref:`~forge.FParameter.interface_name` which is the name of the underlying parameter to map an argument value to:
 
-.. code-block:: python
+.. testcode::
 
     import forge
 
@@ -191,22 +202,22 @@ To rename a ``non-variadic`` parameter, :class:`~forge.FParameter` takes a secon
         forge.arg('increment_by', 'other_value'),
     )
     def func(value, other_value):
-        # will have signature: func(increment_by)
         return value + other_value
 
+    assert forge.stringify_callable(func) == 'func(value, increment_by)'
     assert func(3, increment_by=5) == 8
 
 ``Variadic`` parameter helpers :data:`forge.args` and :data:`forge.kwargs` (and their constructor counterparts :func:`forge.vpo` and :func:`forge.vkw` don't take an ``interface_name`` parameter, as functions can only have one :term:`var-positional` and one :term:`var-keyword` parameter.
 
-.. code-block:: python
+.. testcode::
 
     import forge
 
     @forge.sign(*forge.args, **forge.kwargs)
     def func(*myargs, **mykwargs):
-        # will have signature: func(*args, **kwargs)
         return myargs, mykwargs
 
+    assert forge.stringify_callable(func) == 'func(*args, **kwargs)'
     assert func(0, a=1, b=2, c=3) == ((0,), {'a': 1, 'b': 2, 'c': 3})
 
 Supported by:
@@ -218,36 +229,89 @@ Supported by:
 - :term:`var-keyword`: via :data:`forge.kwargs` and :func:`forge.vkw`
 
 
-.. basic-usage_setting-a-default-value:
+.. _basic-usage_type-annotation:
 
-Setting a default value
-=======================
+Type annotation
+===============
+
+``forge`` allows type annotations (i.e. ``type-hints``) to be added to parameters by providing a ``type`` keyword-argument to a :class:`~forge.FParameter` constructor:
+
+.. testcode::
+
+    import forge
+
+    @forge.sign(forge.arg('myparam', type=int))
+    def func(myparam):
+        return myparam
+
+    assert forge.stringify_callable(func) == 'func(myparam:int)'
+
+``forge`` doesn't do anything with these type-hints, but there are a number of third party frameworks and packages out there that perform validation.
+
+Supported by:
+
+- :term:`positional-only`: via :func:`forge.pos`
+- :term:`positional-or-keyword`: via :func:`forge.arg` and :func:`forge.pok`
+- :term:`var-positional`: via :data:`forge.args` and :func:`forge.vpo`
+- :term:`keyword-only`: via :func:`forge.kwarg` and :func:`forge.kwo`
+- :term:`var-keyword`: via :data:`forge.kwargs` and :func:`forge.vkw`
+
+To provide a return-type annotation for a callable, use :func:`~forge.returns`:
+
+.. testcode::
+
+    import forge
+
+    @forge.returns(int)
+    def func():
+        return 42
+
+    assert forge.stringify_callable(func) == 'func() -> int'
+
+Callables wrapped with :func:`forge.sign` or :func:`forge.resign` preserve the underlying return-type annotation if it's provided:
+
+.. testcode::
+
+    import forge
+
+    @forge.sign()
+    def func() -> int:
+        # signature remains the same: func() -> int
+        return 42
+
+    assert forge.stringify_callable(func) == 'func() -> int'
+
+
+.. _basic-usage_argument-defaults:
+
+Argument defaults
+=================
 
 ``forge`` allows default values to be provided for parameters by providing a ``default`` keyword-argument to :class:`~forge.FParameter` constructor:
 
-.. code-block:: python
+.. testcode::
 
     import forge
 
     @forge.sign(forge.arg('myparam', default=5))
     def func(myparam):
-        # will have signature: func(myparam=5)
         return myparam
 
+    assert forge.stringify_callable(func) == 'func(myparam=5)'
     assert func() == 5
 
 To **generate** default values using a function, rather than providing a constant value, provide a ``factory`` keyword-argument to :class:`~forge.FParameter`:
 
-.. code-block:: python
+.. testcode::
 
     from datetime import datetime
     import forge
 
     @forge.sign(forge.arg('when', factory=datetime.now))
     def func(when):
-        # will have signature: func(myparam=<Factory datetime.now>)
         return when
 
+    assert forge.stringify_callable(func) == 'func(when=<Factory datetime.now>)'
     func_ts = func()
     assert (datetime.now() - func_ts).seconds < 1
 
@@ -264,54 +328,7 @@ Supported by:
 - :term:`var-keyword`: via :data:`forge.kwargs` and :func:`forge.vkw`
 
 
-.. basic-usage_setting-a-type-annotation:
-
-Setting a type annotation
-=========================
-
-``forge`` allows type annotations to be added to parameters by providing a ``type`` keyword-argument to a :class:`~forge.FParameter` constructor:
-
-.. code-block:: python
-
-    import forge
-
-    @forge.sign(forge.arg('myparam', type=int))
-    def func(myparam):
-        # will have signature: func(myparam:int)
-        return myparam
-
-Supported by:
-
-- :term:`positional-only`: via :func:`forge.pos`
-- :term:`positional-or-keyword`: via :func:`forge.arg` and :func:`forge.pok`
-- :term:`var-positional`: via :data:`forge.args` and :func:`forge.vpo`
-- :term:`keyword-only`: via :func:`forge.kwarg` and :func:`forge.kwo`
-- :term:`var-keyword`: via :data:`forge.kwargs` and :func:`forge.vkw`
-
-To provide a return-type annotation for a callable, use :func:`~forge.returns`:
-
-.. code-block:: python
-
-    import forge
-
-    @forge.returns(int)
-    def func():
-        # will have signature: func() -> int
-        return 42
-
-Callables wrapped with :func:`forge.sign` or :func:`forge.resign` preserve the underlying return-type annotation if it's provided:
-
-.. code-block:: python
-
-    import forge
-
-    @forge.sign()
-    def func() -> int:
-        # signature remains the same: func() -> int
-        return 42
-
-
-.. basic-usage_argument-conversion:
+.. _basic-usage_argument-conversion:
 
 Argument conversion
 ===================
@@ -319,7 +336,7 @@ Argument conversion
 ``forge`` supports argument value conversion by providing a keyword-argument :paramref:`~forge.FParameter.converter` to a :class:`~forge.FParameter` constructor.
 :paramref:`~forge.FParameter.converter` must be a callable, or an iterable of callables, which accept three positional arguments: ``ctx``, ``name`` and ``value``:
 
-.. code-block:: python
+.. testcode::
 
     def limit_to_max(ctx, name, value):
         if value > ctx.maximum:
@@ -352,7 +369,7 @@ Supported by:
 - :term:`var-keyword`: via :data:`forge.kwargs` and :func:`forge.vkw`
 
 
-.. basic-usage_argument-validation:
+.. _basic-usage_argument-validation:
 
 Argument validation
 ===================
@@ -360,7 +377,7 @@ Argument validation
 ``forge`` supports argument value validation by providing a keyword-argument :paramref:`~forge.FParameter.validator` to a :class:`~forge.FParameter` constructor.
 :paramref:`~forge.FParameter.validator` must be a callable, or an iterable of callables, which accept three positional arguments: ``ctx``, ``name`` and ``value``:
 
-.. code-block:: python
+.. testcode::
 
     def validate_lte_max(ctx, name, value):
         if value > ctx.maximum:
@@ -390,17 +407,15 @@ Argument validation
 
 To use multiple validators, specify them in a ``list`` or ``tuple``:
 
-.. code-block:: python
+.. testcode::
 
     import forge
 
     def validate_startswith_id(ctx, name, value):
-        import ipdb; ipdb.set_trace()
         if not value.startswith('id'):
             raise ValueError("expected value beggining with 'id'")
 
     def validate_endswith_0(ctx, name, value):
-        import ipdb; ipdb.set_trace()
         if not value.endswith('0'):
             raise ValueError("expected value ending with '0'")
 
@@ -420,7 +435,7 @@ To use multiple validators, specify them in a ``list`` or ``tuple``:
         stringify_id('id101')
     except ValueError as exc:
         raised = exc
-    assert exc.args[0] == "expected value ending with '0'"
+    assert raised.args[0] == "expected value ending with '0'"
 
 Supported by:
 
@@ -431,42 +446,80 @@ Supported by:
 - :term:`var-keyword`: via :data:`forge.kwargs` and :func:`forge.vkw`
 
 
-.. basic-usage_parameter-metadata:
+.. _basic-usage_parameter-metadata:
 
 Parameter metadata
 ==================
 
-``forge`` allows extra parameter metadata by providing a ``dict`` to a :class:`~forge.FParameter` constructor.
-This metadata can be used in any way, but is exposed on the :class:`~forge.FParameter` as a :class:`types.MappingProxyView` (effectively a read-only ``dict``).
+If you're the author of a third-party library with ``forge`` integration, you may want to take advantage of parameter metadata.
 
-:class:`~forge.FParameter`s are available on an :class:`~forge.FSignature` instance as the ``fparameters`` attribute:
+Here are some tips for effective use of metadata:
 
-.. code-block:: python
+- Try making your metadata immutable.
+    This keeps the entire ``Parameter`` instance immutable.
+    :attr:`FParameter.metdata` is exposed as a :class:`MappingProxyView`, helping enforce immutability.
 
-    import forge
+- To avoid metadata key collisions, provide namespaced keys:
 
-    @forge.sign(forge.arg('myparam', metadata={'__myproject_version': 3}))
-    def func(myparam):
-        # signature and functionality remains the same: func(myparam)
-        return myparam
+    .. testcode::
 
-    fsig = func.__mapper__.fsignature
-    myparam_md = fsig['myparam'].metadata
-    assert myparam_md.get('__myproject_version') == 3
+        import forge
+
+        MY_PREFIX = '__my_prefix'
+        MY_KEY = '{}_mykey'.format(MY_PREFIX)
+
+        @forge.sign(forge.arg('param', metadata={MY_KEY: 'value'}))
+        def func(param):
+            pass
+
+        param = func.__mapper__.fsignature['param']
+        assert param.metadata == {MY_KEY: 'value'}
+
+    Metadata should be composable, so consider supporting this approach even if you decide implementing your metadata in one of the following ways.
+
+- Expose ``FParameter`` wrappers for your specific metadata.
+    This can be more challenging because of the special-use value :class:`forge.void`, but a template function ``with_md`` is provided below:
+
+    .. testcode::
+
+        import forge
+
+        MY_PREFIX = '__my_prefix'
+        MY_KEY = '{}_mykey'.format(MY_PREFIX)
+
+        def update_metadata(ctx, name, value):
+            return dict(value or {}, **{MY_KEY: 'myvalue'})
+
+        def with_md(constructor):
+            fparams = dict(forge.FSignature.from_callable(constructor))
+            for k in ('default', 'factory', 'type'):
+                if k not in fparams:
+                    continue
+                fparams[k] = fparams[k].replace(
+                    converter=lambda ctx, name, value: forge.empty,
+                    factory=lambda: forge.empty,
+                )
+            fparams['metadata'] = fparams['metadata'].\
+                replace(converter=update_metadata)
+            return forge.sign(**fparams)(constructor)
+
+        md_arg = with_md(forge.arg)
+        param = md_arg('x')
+        assert param.metadata == {'__my_prefix_mykey': 'myvalue'}
 
 
-.. basic-usage_signature-context:
+.. _basic-usage_signature-context:
 
 Signature context
 =================
 
-As mentioned in :ref:`argument-conversion` and :ref:`argument-validation`, a :class:`~forge.FSignature` can have a special first parameter known as a ``context`` parameter (a special :term:`positional-or-keyword` :class:`~forge.FParameter`).
+As mentioned in :ref:`basic-usage_argument-conversion` and :ref:`basic-usage_argument-validation`, a :class:`~forge.FSignature` can have a special first parameter known as a ``context`` parameter (a special :term:`positional-or-keyword` :class:`~forge.FParameter`).
 
 Typically, ``context`` variables are useful for ``method``s and ``forge`` ships with two convenience ``context`` variables for convenience: :data:`forge.self` (for use with instance methods) and :data:`forge.cls` (available for ``classmethods``).
 
 The value proposition for the ``context`` variable is that other :class:`~forge.FParameter` instances on the :class:`~forge.FSignature` that have a :paramref:`~forge.FParameter.converter` or :paramref:`~forge.FParameter.validator`, receive the ``context`` argument value as the first positional argument.
 
-.. code-block:: python
+.. testcode::
 
     import forge
 

@@ -194,3 +194,33 @@ def stringify_parameters(*parameters: TUnionParameter) -> str:
             components.append('/')
 
     return ', '.join(components)
+
+
+def stringify_callable(callable: typing.Callable) -> str:
+    """
+    Build a string representation of a callable, including the callable's
+    :attr:``__name__``, its :class:`inspect.Parameter`s and its ``return type``
+
+    usage::
+
+        >>> stringify_callable(stringify_callable)
+        'stringify_callable(callable: Callable) -> str'
+
+    :param callable: a Python callable to build a string representation of
+    :return: the string representation of the function
+    """
+    # pylint: disable=W0622, redefined-builtin
+    sig = inspect.signature(callable)
+    rtype = ''
+    if sig.return_annotation is not empty.native:
+        rtype = ' -> {}'.format(
+            sig.return_annotation.__name__ \
+            if inspect.isclass(sig.return_annotation) \
+            else str(sig.return_annotation)
+        )
+
+    return '{name}({params}){rtype}'.format(
+        name=getattr(callable, '__name__', str(callable)),
+        params=stringify_parameters(*sig.parameters.values()),
+        rtype=rtype,
+    )

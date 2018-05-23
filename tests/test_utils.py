@@ -12,6 +12,7 @@ from forge._utils import (
     get_var_positional_parameter,
     set_return_type,
     stringify_parameters,
+    stringify_callable,
 )
 
 # pylint: disable=C0103, invalid-name
@@ -205,3 +206,40 @@ def test_get_var_keyword_parameter(params, expected):
 ])
 def test_stringify_parameters(params, expected):
     assert stringify_parameters(*params) == expected
+
+
+def dummy_func() -> True:
+    return True
+
+class Dummy:
+    def __call__(self):
+        pass
+
+dummy = Dummy()
+
+
+@pytest.mark.parametrize(('callable', 'expected'), [
+    pytest.param(
+        stringify_callable,
+        'stringify_callable(callable:Callable) -> str',
+        id='function_cls_return_type',
+    ),
+    pytest.param(
+        dummy_func,
+        'dummy_func() -> True',
+        id='function_ins_return_type',
+    ),
+    pytest.param(
+        dummy,
+        '{}()'.format(dummy),
+        id='ins_callable',
+    ),
+    pytest.param(
+        lambda x: None,
+        '<lambda>(x)',
+        id='lambda',
+    ),
+])
+def test_stringify_callable(callable, expected):
+    # pylint: disable=W0622, redefined-builtin
+    assert stringify_callable(callable) == expected

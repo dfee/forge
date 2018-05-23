@@ -2,6 +2,10 @@ from ._config import (
     get_run_validators,
     set_run_validators,
 )
+from ._marker import (
+    empty,
+    void,
+)
 from ._parameter import (
     FParameter,
     VarKeyword,
@@ -19,10 +23,7 @@ from ._utils import (
     hasparam,
     get_return_type,
     set_return_type,
-)
-from ._marker import (
-    empty,
-    void,
+    stringify_callable,
 )
 
 # pylint: disable=C0103, invalid-name

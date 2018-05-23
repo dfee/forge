@@ -10,7 +10,7 @@ API Reference
 
    When this documentation speaks about "``forge`` parameters" it means those parameters that are defined using :func:`forge.arg` and friends in the :func:`forge.sign` decorator.
 
-What follows is the API explanation, if you'd like a more hands-on introduction, have a look at :doc:`examples`.
+What follows is the API explanation, if you'd like a more hands-on introduction, have a look at :doc:`basic`.
 
 
 .. _api_parameter:
@@ -144,3 +144,5 @@ Utils
 .. autofunction:: forge.get_return_type
 
 .. autofunction:: forge.set_return_type
+
+.. autofunction:: forge.stringify_callable
