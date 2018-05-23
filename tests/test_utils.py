@@ -4,6 +4,7 @@ import pytest
 
 import forge
 from forge._exceptions import NoParameterError
+from forge._marker import empty
 from forge._utils import (
     hasparam,
     getparam,
@@ -19,33 +20,24 @@ from forge._utils import (
 # pylint: disable=R0201, no-self-use
 # pylint: disable=W0621, redefined-outer-name
 
-empty = inspect.Parameter.empty
-
-@pytest.fixture
-def func_with_param():
-    # pylint: disable=W0613, unused-argument
-    def func(myparam):
-        pass
-    return func
-
-
-@pytest.fixture
-def func_without_param():
-    def func():
-        pass
-    return func
-
 
 class TestHasParam:
     @pytest.mark.parametrize(('has_param',), [(True,), (False,)])
-    def test_correct_usage(self, has_param):
+    def test_callable(self, has_param):
+        """
+        Ensure ``hasparam`` returns an appropriately truthy value when used
+        properly
+        """
         funcs = {
             True: lambda myparam: None,
             False: lambda: None,
         }
         assert hasparam(funcs[has_param], 'myparam') == has_param
 
-    def test_incorrect_usage_raises(self):
+    def test_noncallable_raises(self):
+        """
+        Ensure ``hasparam`` raises a TypeError when a non-callable is passed
+        """
         with pytest.raises(TypeError) as excinfo:
             hasparam(1, 'param')
         assert excinfo.value.args[0] == '1 is not callable'
@@ -57,7 +49,10 @@ class TestGetParam:
         (False, True),
         (False, False),
     ])
-    def test_correct_usage(self, has_param, has_default):
+    def test_callable(self, has_param, has_default):
+        """
+        Ensure ``getparam`` returns the param or the default value
+        """
         func = (lambda myparam: None) \
             if has_param \
             else (lambda: None)
@@ -73,16 +68,22 @@ class TestGetParam:
             assert excinfo.value.args[0] == \
                 "'{}' has no parameter 'myparam'".format(func.__name__)
 
-    def test_incorrect_usage_raises(self):
+    def test_noncallable_raises(self):
+        """
+        Ensure ``getparam`` raises a TypeError when a non-callable is passed
+        """
         with pytest.raises(TypeError) as excinfo:
             getparam(1, 'param')
         assert excinfo.value.args[0] == '1 is not callable'
 
 
 class TestGetReturnType:
-    @pytest.mark.parametrize(('returns',), [(empty,), (None,)])
+    @pytest.mark.parametrize(('returns',), [(empty.native,), (None,)])
     @pytest.mark.parametrize(('has_signature',), [(False,), (True,)])
     def test_callable(self, returns, has_signature):
+        """
+        Ensure ``get_return_type`` returns the correct return type annotation
+        """
         # pylint: disable=W0613, unused-argument
         # pylint: disable=C0321, multiple-statements
         if has_signature:
@@ -93,7 +94,11 @@ class TestGetReturnType:
             def func() -> returns: pass
         assert get_return_type(func) == returns
 
-    def test_incorrect_usage_raises(self):
+    def test_noncallable_raises(self):
+        """
+        Ensure ``get_return_type`` raises a TypeError when a non-callable is
+        passed
+        """
         with pytest.raises(TypeError) as excinfo:
             get_return_type(1)
         assert excinfo.value.args[0] == '1 is not a callable object'
@@ -101,8 +106,13 @@ class TestGetReturnType:
 
 class TestSetRetrunType:
     @pytest.mark.parametrize(('has_signature',), [(True,), (False,)])
-    @pytest.mark.parametrize(('returns',), [(int,), (empty,)])
-    def test_set_return_type(self, has_signature, returns):
+    @pytest.mark.parametrize(('returns',), [(int,), (empty.native,)])
+    def test_callable(self, has_signature, returns):
+        """
+        Ensure that ``set_return_type`` works across signatures:
+        - with ``__annotations__`` attribute
+        - without ``__annotations__`` attribute
+        """
         # pylint: disable=W0613, unused-argument
         # pylint: disable=C0321, multiple-statements
         def func(self) -> float: pass
@@ -113,12 +123,16 @@ class TestSetRetrunType:
             assert func.__signature__.return_annotation == returns
         else:
             assert not hasattr(func, '__signature__')
-            if returns is not empty:
+            if returns is not empty.native:
                 assert func.__annotations__['return'] == returns
             else:
                 assert 'return' not in func.__annotations__
 
-    def test_incorrect_usage_raises(self):
+    def test_noncallable_raises(self):
+        """
+        Ensure ``set_return_type`` raises a TypeError when a non-callable is
+        passed
+        """
         with pytest.raises(TypeError) as excinfo:
             set_return_type(1, None)
         assert excinfo.value.args[0] == '1 is not callable'
@@ -170,6 +184,11 @@ pt_params = [
     ((), None),
 ])
 def test_get_var_positional_parameter(params, expected):
+    """
+    Ensure the ``var-positional`` param (or None) is returned for:
+    - ``inspect.Signature``
+    - ``forge.FSignature``
+    """
     assert get_var_positional_parameter(*params) is expected
 
 
@@ -179,6 +198,11 @@ def test_get_var_positional_parameter(params, expected):
     ((), None),
 ])
 def test_get_var_keyword_parameter(params, expected):
+    """
+    Ensure the ``var-keyword`` param (or None) is returned for:
+    - ``inspect.Signature``
+    - ``forge.FSignature``
+    """
     assert get_var_keyword_parameter(*params) is expected
 
 
@@ -205,33 +229,55 @@ def test_get_var_keyword_parameter(params, expected):
     ),
 ])
 def test_stringify_parameters(params, expected):
+    """
+    Ensure that collections of parameters are appropriately stringified:
+    - positional-only are followed by ``/``
+    - keyword-only are preceeded by ``*``
+    """
     assert stringify_parameters(*params) == expected
 
 
-def dummy_func() -> True:
+def dummy_func_cls_rt(a) -> bool:
+    """
+    dummy func with a cls return type annotation
+    """
+    # pylint: disable=W0613, unused-argument
     return True
 
-class Dummy:
+
+def dummy_func_ins_rt(a) -> True:
+    """
+    dummy func with an instance return type annotation
+    """
+    # pylint: disable=W0613, unused-argument
+    return True
+
+
+class DummyCallable:
+    """
+    Class for testing with a ``__call__`` method
+    """
+    # pylint: disable=R0903, too-few-public-methods
     def __call__(self):
         pass
 
-dummy = Dummy()
+dummy_callable = DummyCallable()
 
 
 @pytest.mark.parametrize(('callable', 'expected'), [
     pytest.param(
-        stringify_callable,
-        'stringify_callable(callable:Callable) -> str',
+        dummy_func_cls_rt,
+        'dummy_func_cls_rt(a) -> bool',
         id='function_cls_return_type',
     ),
     pytest.param(
-        dummy_func,
-        'dummy_func() -> True',
+        dummy_func_ins_rt,
+        'dummy_func_ins_rt(a) -> True',
         id='function_ins_return_type',
     ),
     pytest.param(
-        dummy,
-        '{}()'.format(dummy),
+        dummy_callable,
+        '{}()'.format(dummy_callable),
         id='ins_callable',
     ),
     pytest.param(
@@ -241,5 +287,11 @@ dummy = Dummy()
     ),
 ])
 def test_stringify_callable(callable, expected):
+    """
+    Ensure that callables are stringified with:
+    - func.__name__
+    - parameters
+    - return type annotation
+    """
     # pylint: disable=W0622, redefined-builtin
     assert stringify_callable(callable) == expected

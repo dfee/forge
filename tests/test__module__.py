@@ -5,12 +5,14 @@ import pytest
 import forge
 import forge._parameter
 
-# Keep the namespace clean
-
 # pylint: disable=C0103, invalid-name
 # pylint: disable=R0201, no-self-use
 
+
 def test_namespace():
+    """
+    Keep the namespace clean
+    """
     private_ptn = re.compile(r'^\_[a-zA-Z]')
     assert set(filter(private_ptn.match, forge.__dict__.keys())) == set([
         '_config',
@@ -67,9 +69,15 @@ class TestConvenience:
         ('vkw', forge.FParameter.create_var_keyword),
     ])
     def test_constructors(self, name, method):
+        """
+        Assert constructor nicknames are what we exect them to be.
+        """
         assert getattr(forge, name) == method
 
     def test_self(self):
+        """
+        Assert ``forge.self`` is what we expect it to be.
+        """
         assert forge.self == forge.FParameter(
             forge.FParameter.POSITIONAL_OR_KEYWORD,
             name='self',
@@ -78,6 +86,9 @@ class TestConvenience:
         )
 
     def test_cls(self):
+        """
+        Assert ``forge.cls`` is what we expect it to be.
+        """
         assert forge.cls == forge.FParameter(
             forge.FParameter.POSITIONAL_OR_KEYWORD,
             name='cls',
@@ -86,7 +97,9 @@ class TestConvenience:
         )
 
     def test_args(self):
-        # pylint: disable=W0212, protected-access
+        """
+        Assert ``forge.args`` is what we expect it to be.
+        """
         args = forge.args
         assert isinstance(args, forge._parameter.VarPositional)
         assert args.name == 'args'
@@ -94,7 +107,9 @@ class TestConvenience:
         assert args.validator is None
 
     def test_kwargs(self):
-        # pylint: disable=W0212, protected-access
+        """
+        Assert ``forge.kwargs`` is what we expect it to be.
+        """
         kwargs = forge.kwargs
         assert isinstance(kwargs, forge._parameter.VarKeyword)
         assert kwargs.name == 'kwargs'

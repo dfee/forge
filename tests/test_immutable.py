@@ -9,9 +9,13 @@ from forge._immutable import (
 
 # pylint: disable=C0103, invalid-name
 # pylint: disable=R0201, no-self-use
+# pylint: disable=R0903, too-few-public-methods
 
 
 def test_asdict_with__slots__():
+    """
+    Ensure that ``asdict`` pulls ivars from classes with ``__slots__``
+    """
     class Klass:
         __slots__ = ('value',)
         def __init__(self, value):
@@ -24,6 +28,9 @@ def test_asdict_with__slots__():
 
 
 def test_asdict_with__dict__():
+    """
+    Ensure that ``asdict`` pulls ivars from classes with ``__dict__``
+    """
     class Klass:
         def __init__(self, value):
             self.value = value
@@ -35,6 +42,9 @@ def test_asdict_with__dict__():
 
 
 def test_replace():
+    """
+    Ensure that ``replace`` produces a varied copy
+    """
     class Klass:
         def __init__(self, value):
             self.value = value
@@ -46,11 +56,19 @@ def test_replace():
 
 class TestImmutable:
     def test_type(self):
+        """
+        Ensure an instance of ``Immutable`` has ```__slots__` but not
+        ``__dict__``; i.e. it's truly a slots instance.
+        """
         ins = Immutable()
         assert hasattr(ins, '__slots__')
         assert not hasattr(ins, '__dict__')
 
     def test__init__(self):
+        """
+        Ensure that Immutable.__init__ sets values without relying on
+        ``__setattr__``.
+        """
         class Klass(Immutable):
             __slots__ = ('a', 'b', 'c')
             def __init__(self):
@@ -65,6 +83,9 @@ class TestImmutable:
         pytest.param(1, 2, False, id='ne'),
     ])
     def test__eq__(self, val1, val2, eq):
+        """
+        Ensure equality check compares ivars.
+        """
         class Klass(Immutable):
             __slots__ = ('a',)
             def __init__(self, a):
@@ -73,6 +94,9 @@ class TestImmutable:
         assert (Klass(val1) == Klass(val2)) == eq
 
     def test__eq__type(self):
+        """
+        Ensure equality check compares types
+        """
         class Klass1(Immutable):
             __slots__ = ('a',)
             def __init__(self, a):
@@ -83,9 +107,12 @@ class TestImmutable:
             def __init__(self, a):
                 self.a = a
 
-        assert Klass1(1) != Klass2(2)
+        assert Klass1(1) != Klass2(1)
 
     def test__getattr__(self):
+        """
+        Ensure ``__getattr__`` passes request to ``super().__getattribute__``
+        """
         class Parent:
             called_with = None
             def __getattribute__(self, key):
@@ -99,6 +126,9 @@ class TestImmutable:
         assert Klass.called_with == 'default'
 
     def test__setattr__(self):
+        """
+        Ensure Immutable is immutable; ``__setattr__`` raises
+        """
         class Klass(Immutable):
             a = 1
 

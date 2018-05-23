@@ -73,15 +73,26 @@ FPARAM_VKW_DEFAULTS = dict(  # type: ignore
 
 
 class TestFactory:
-    def test_meta(self):
+    def test_cls(self):
+        """
+        Ensure factories are immutable
+        """
         assert issubclass(Factory, immutable.Immutable)
 
     def test__repr__(self):
+        """
+        Ensure factories are pretty printable using the underlying callable's
+        ``__qualname__``
+        """
         def func():
             pass
         assert repr(Factory(func)) == '<Factory {}>'.format(func.__qualname__)
 
     def test__call__(self):
+        """
+        Ensure calls to the factory are transparently routed to the underlying
+        callable
+        """
         mock = Mock()
         factory = Factory(mock)
         factory()
@@ -97,6 +108,10 @@ class TestFParameter:
         pytest.param(1, dummy_func, None, id='both'),
     ])
     def test__init__default_or_factory(self, default, factory, result):
+        """
+        Ensure that ``default`` and ``factory`` calls to ``FParameter`` produce
+        expected ``default`` ivar result (or raise).
+        """
         kwargs = dict(kind=POSITIONAL_ONLY, default=default, factory=factory)
 
         if result is not None:
@@ -108,15 +123,23 @@ class TestFParameter:
         assert excinfo.value.args[0] == \
             'expected either "default" or "factory", received both'
 
-    @pytest.mark.parametrize(('has_default',), [(True,), (False,)])
-    def test__init__bound_and_default(self, has_default):
+    @pytest.mark.parametrize(('extras', 'raises'), [
+        pytest.param({'default': 1}, False, id='default'),
+        pytest.param({'factory': lambda: 1}, False, id='factory'),
+        pytest.param({}, True, id='no_default_or_factory'),
+    ])
+    def test__init__bound_and_default(self, extras, raises):
+        """
+        Ensure that ``FParameter`` requires a ``default`` or ``factory`` value
+        if ``bound=True``
+        """
         kwargs = dict(
             kind=POSITIONAL_ONLY,
             bound=True,
-            default=1 if has_default else empty,
+            **extras,
         )
 
-        if has_default:
+        if not raises:
             assert FParameter(**kwargs).bound
             return
 
@@ -204,6 +227,9 @@ class TestFParameter:
         ),
     ])
     def test__str__and__repr__(self, kwargs, expected):
+        """
+        Ensure pretty printing for ``FParameter``
+        """
         fparam = FParameter(**kwargs)
         assert str(fparam) == expected
         assert repr(fparam) == '<FParameter "{}">'.format(expected)
@@ -214,6 +240,12 @@ class TestFParameter:
         pytest.param(Factory(lambda: 'value'), 'value', id='factory'),
     ])
     def test_apply_default(self, in_val, out_val):
+        """
+        Ensure that ``apply_default`` returns:
+        1) the non-empty value (if a ``Factory`` ins is supplied)
+        2) the factory-default value (if a ``Factory`` ins is supplied)
+        3) the default value (if ``empty`` is supplied)
+        """
         fparam = FParameter(
             POSITIONAL_ONLY,
             default='default',
@@ -247,6 +279,9 @@ class TestFParameter:
         ),
     ])
     def test_apply_conversion(self, converter, ctx, name, value, to_out):
+        """
+        Ensure conversion works on an individual converter or iterable
+        """
         fparam = FParameter(
             POSITIONAL_ONLY,
             name=name,
@@ -256,6 +291,9 @@ class TestFParameter:
 
     @pytest.mark.parametrize(('has_validation',), [(True,), (False,)])
     def test_apply_validation(self, has_validation):
+        """
+        Ensure validation works on an individual validator
+        """
         called_with = None
         def validator(*args, **kwargs):
             nonlocal called_with
@@ -275,6 +313,9 @@ class TestFParameter:
             assert called_with is None
 
     def test_apply_validation_multiple(self):
+        """
+        Ensure validation works on an iterable of validators
+        """
         called_with = []
         def validator(*args, **kwargs):
             nonlocal called_with
@@ -299,6 +340,13 @@ class TestFParameter:
         pytest.param(True, id='factory'),
     ])
     def test__call__(self, is_factory):
+        """
+        Ensure that calling an ``FParameter`` calls into:
+        1) ``apply_default`` ->
+        2) ``apply_converter`` ->
+        3) ``apply_validator`` ->
+        and returns the expected value
+        """
         mock = Mock()
         ctx, name = object(), 'myparam'
         value = Factory(mock) if is_factory else mock
@@ -335,6 +383,9 @@ class TestFParameter:
         pytest.param('metadata', {'new': 'meta'}, id='metadata'),
     ])
     def test_replace(self, rkey, rval):
+        """
+        Ensure that ``replace`` creates an evolved instance
+        """
         fparam = FParameter(
             kind=POSITIONAL_ONLY,
             name=None,
@@ -352,6 +403,10 @@ class TestFParameter:
             assert getattr(fparam2, k) == v
 
     def test_parameter(self):
+        """
+        Ensure the ``parameter`` factory produces an expected instance of
+        ``inspect.Parameter``
+        """
         kwargs = dict(
             kind=POSITIONAL_ONLY,
             name='a',
@@ -366,6 +421,10 @@ class TestFParameter:
         assert param.annotation == kwargs['type']
 
     def test_parameter_wo_names_raises(self):
+        """
+        Ensure that attempting to produce an instance of ``inspect.Parameter``
+        without an ``FParameter`` ``name`` or ``interface_name`` raises.
+        """
         fparam = FParameter(
             kind=POSITIONAL_ONLY,
             name=None,
@@ -377,12 +436,19 @@ class TestFParameter:
         assert excinfo.value.args[0] == 'Cannot generate an unnamed parameter'
 
     def test_defaults(self):
+        """
+        Ensure that FPARAM_DEFAULTS (used in this module's testing) is accurate.
+        """
         fparam = FParameter(POSITIONAL_ONLY)
         assert fparam.kind == POSITIONAL_ONLY
         for k, v in FPARAM_DEFAULTS.items():
             assert getattr(fparam, k) == v
 
     def test_from_parameter(self):
+        """
+        Ensure expected construction of an instance of ``FParameter`` from an
+        instance of ``inspect.Parameter``
+        """
         kwargs = dict(
             name='a',
             kind=POSITIONAL_ONLY,
@@ -432,6 +498,9 @@ class TestFParameter:
         ),
     ])
     def test_create_positional_only(self, extra_in, extra_out):
+        """
+        Ensure the expected construction of a ``positional-only`` ``FParameter``
+        """
         kwargs = dict(
             type=int,
             converter=dummy_converter,
@@ -474,6 +543,10 @@ class TestFParameter:
         ),
     ])
     def test_create_positional_or_keyword(self, extra_in, extra_out):
+        """
+        Ensure the expected construction of a ``positional-or-keyword``
+        ``FParameter``
+        """
         kwargs = dict(
             type=int,
             converter=dummy_converter,
@@ -506,6 +579,10 @@ class TestFParameter:
         ),
     ])
     def test_create_contextual(self, extra_in, extra_out):
+        """
+        Ensure the expected construction of a ``contextual``
+        ``positional-or-keyword`` ``FParameter``
+        """
         kwargs = dict(
             type=int,
             metadata={'meta': 'data'},
@@ -516,6 +593,9 @@ class TestFParameter:
             {**FPARAM_CTX_DEFAULTS, **kwargs, **extra_out}
 
     def test_create_var_positional(self):
+        """
+        Ensure the expected construction of a ``var-positional`` ``FParameter``
+        """
         kwargs = dict(
             name='b',
             converter=dummy_converter,
@@ -543,6 +623,9 @@ class TestFParameter:
         ),
     ])
     def test_create_keyword_only(self, extra_in, extra_out):
+        """
+        Ensure the expected construction of a ``keyword-only`` ``FParameter``
+        """
         kwargs = dict(
             interface_name='a',
             name='b',
@@ -557,6 +640,9 @@ class TestFParameter:
             {**FPARAM_POK_DEFAULTS, **kwargs, **extra_out}
 
     def test_create_var_keyword(self):
+        """
+        Ensure the expected construction of a ``var-keyword`` ``FParameter``
+        """
         kwargs = dict(
             name='b',
             converter=dummy_converter,
@@ -575,11 +661,18 @@ class TestFParameter:
 class TestVarPositional:
     @staticmethod
     def assert_iterable_and_get_fparam(varp):
+        """
+        Helper function to iterate on the ``VarPostional`` instance and get the
+        underlying ``FParameter``
+        """
         varplist = list(varp)
         assert len(varplist) == 1
         return varplist[0]
 
     def test_defaults(self):
+        """
+        Ensure standard defaults for ``VarPositional`` instances.
+        """
         varp = VarPositional()
         fparam = self.assert_iterable_and_get_fparam(varp)
         assert fparam.name == 'args'
@@ -588,6 +681,10 @@ class TestVarPositional:
         assert not fparam.metadata
 
     def test_new(self):
+        """
+        Ensure that arguments to ``VarPositional`` result in an expected
+        underlying implementation of ``FParameter``.
+        """
         kwargs = dict(
             name='b',
             converter=dummy_converter,
@@ -604,6 +701,9 @@ class TestVarPositional:
         )
 
     def test__call__(self):
+        """
+        Ensure that ``VarPositional.__call__`` is a factory method
+        """
         kwargs = dict(
             name='b',
             converter=dummy_converter,
@@ -622,11 +722,18 @@ class TestVarPositional:
 class TestVarKeyword:
     @staticmethod
     def assert_mapping_and_get_fparam(vark):
+        """
+        Helper function to iterate on the ``VarKeyword`` instance and get the
+        underlying ``FParameter``
+        """
         varklist = list(vark.items())
         assert len(varklist) == 1
         return varklist[0]
 
     def test_defaults(self):
+        """
+        Ensure standard defaults for ``VarKeyword`` instances.
+        """
         vark = VarKeyword()
         name, fparam = self.assert_mapping_and_get_fparam(vark)
         assert name == 'kwargs'
@@ -635,6 +742,10 @@ class TestVarKeyword:
         assert not fparam.metadata
 
     def test_new(self):
+        """
+        Ensure that arguments to ``VarKeyword`` result in an expected underlying
+        implementation of ``FParameter``.
+        """
         kwargs = dict(
             name='b',
             converter=dummy_converter,
@@ -652,6 +763,9 @@ class TestVarKeyword:
         )
 
     def test__call__(self):
+        """
+        Ensure that ``VarKeyword.__call__`` is a factory method
+        """
         kwargs = dict(
             name='b',
             converter=dummy_converter,
@@ -669,6 +783,11 @@ class TestVarKeyword:
         )
 
     def test_mapping(self):
+        """
+        Ensure that mapping produced by ``VarKeyword`` maps the instance
+        ``name`` to the generated ``FParameter`` (for appropriate usage with
+        ``FSignature``)
+        """
         vark = VarKeyword()
         assert vark.name in vark
         assert '{}_'.format(vark.name) not in vark

@@ -683,7 +683,7 @@ class VarPositional(collections.abc.Iterable):
         :param converter: see :paramref:`.FParameter.converter`
         :param validator: see :paramref:`.FParameter.validator`
         :param metadata: see :paramref:`.FParameter.metadata`
-        :return: a new instance of :class:`VarPositional`.
+        :return: a new instance of :class:`VarPositional`
         """
         return type(self)(
             name=name,
@@ -811,16 +811,7 @@ class VarKeyword(collections.abc.Mapping):
         :param converter: see :paramref:`.FParameter.converter`
         :param validator: see :paramref:`.FParameter.validator`
         :param metadata: see :paramref:`.FParameter.metadata`
-        :return: a new instance of :class:`VarKeyword`.
-        """
-
-        """
-        Parameter descriptions are a subset of those defined on
-        :class:`VarPositional`
-
-        :return: a :class:`VarPositional` of :term:`parameter kind`
-            :term:`var-positional` with attributes ``name``, ``converter``,
-            ``validator`` and `metadata`` from the instance.
+        :return: a new instance of :class:`VarKeyword`
         """
         return type(self)(
             name=name,

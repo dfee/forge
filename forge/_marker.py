@@ -42,6 +42,7 @@ class void(metaclass=MarkerMeta):
             return proxied(a, b, c=extra)
     """
     # pylint: disable=C0103, invalid-name
+    # pylint: disable=R0903, too-few-public-methods
     pass
 
 
@@ -61,6 +62,7 @@ class empty(metaclass=MarkerMeta):
     :ivar native: local storage of :class:`inspect.Parameter.empty`
     """
     # pylint: disable=C0103, invalid-name
+    # pylint: disable=R0903, too-few-public-methods
     native = inspect.Parameter.empty
 
     @classmethod
