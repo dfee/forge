@@ -101,23 +101,23 @@ class FSignature(collections.abc.Mapping, immutable.Immutable):
         #. (optional) :term:`var-keyword`
 
     - that non-default :term:`positional-only` or
-    :term:`positional-or-keyword` parameters don't follow their respective
-    similarly-kinded parameters with defaults,
+        :term:`positional-or-keyword` parameters don't follow their respective
+        similarly-kinded parameters with defaults,
 
         .. note::
 
-        Python signatures allow non-default :term:`keyword-only` parameters
-        to follow default :term:`keyword-only` parameters.
+            Python signatures allow non-default :term:`keyword-only` parameters
+            to follow default :term:`keyword-only` parameters.
 
     - that at most there is one :term:`var-positional` parameter,
 
     - that at most there is one :term:`var-keyword` parameter,
 
-    - that at most there is one :term:`contextual` parameter, and that it
-    is the first parameter (if it is provided.)
+    - that at most there is one ``context`` parameter, and that it
+        is the first parameter (if it is provided.)
 
-    - that no two :class:`FParameter`s share the same
-    :paramref:`.FParameter.name` or :paramref:`.FParameter.interface_name`.
+    - that no two instances of :class:`FParameter` share the same
+        :paramref:`.FParameter.name` or :paramref:`.FParameter.interface_name`.
 
     Unlike :class:`inspect.Signature`, :class:`FSignature` does not provide or
     manage ``return type`` annotations. That is the work of :func:`.returns`
@@ -588,9 +588,41 @@ def sign(
     factory to generate forged signatures.
 
     Order fparameters with the following strategy:
-    1) arguments are returned in order
-    2) keyword arguments are sorted by ``_creation_order``, and evolved with
+
+    #. arguments are returned in order
+    #. keyword arguments are sorted by ``_creation_order``, and evolved with
         the ``keyword`` value as the name and interface_name (if not set).
+
+    .. warning::
+
+        When supplying previously-created parameters to :func:`.sign` or
+        :func:`.resign`, those parameters will be ordered by their creation
+        order.
+
+        This is because Python implementations prior to ``3.7`` don't
+        guarantee the ordering of keyword-arguments.
+
+        Therefore, it is recommended that when supplying pre-created
+        parameters to :func:`.sign` or :func:`.resign` to supply them as
+        positional arguments:
+
+        .. testcode::
+
+            import forge
+
+            param_b = forge.arg('b')
+            param_a = forge.arg('a')
+
+            @forge.sign(a=param_a, b=param_b)
+            def func1(**kwargs):
+                pass
+
+            @forge.sign(a, b)
+            def func2(**kwargs):
+                pass
+
+            assert forge.stringify_callable(func1) == 'func1(b, a)'
+            assert forge.stringify_callable(func2) == 'func2(a, b)'
 
     :param fparameters: :class:`~forge.FParameter` instances to be ordered
     :param named_fparameters: :class:`~forge.FParameter` instances to be
@@ -624,9 +656,14 @@ def resign(
     factory that alters already-forged signatures.
 
     Order fparameters with the following strategy:
-    1) arguments are returned in order
-    2) keyword arguments are sorted by ``_creation_order``, and evolved with
+
+    #. arguments are returned in order
+    #. keyword arguments are sorted by ``_creation_order``, and evolved with
         the ``keyword`` value as the name and interface_name (if not set).
+
+    .. warning::
+
+        see the note on :func:`.sign` about order parameters.
 
     :param fparameters: :class:`~forge.FParameter` instances to be ordered
     :param named_fparameters: :class:`~forge.FParameter` instances to be

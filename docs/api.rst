@@ -107,11 +107,11 @@ Classes
 
 Functions
 ---------
+.. autofunction:: forge.sign
+
 .. autofunction:: forge.resign
 
 .. autofunction:: forge.returns
-
-.. autofunction:: forge.sign
 
 
 .. _api_config:

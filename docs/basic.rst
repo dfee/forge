@@ -91,6 +91,34 @@ This is exciting because while we've been able to dynamically create ``class`` o
     Sometimes you'll want to further simplify the forged signature, and to help there is a convenience function :func:`forge.resign` that revises a signature further without providing a second-level of nesting.
     Take a look at the :doc:`api` for more information.
 
+.. warning::
+
+    When supplying previously-created parameters to :func:`.sign` or :func:`.resign`, those parameters will be ordered by their creation order.
+
+    This is because Python implementations prior to ``3.7`` don't guarantee the ordering of keyword-arguments.
+
+    Therefore, it is recommended that when supplying pre-created
+    parameters to :func:`.sign` or :func:`.resign` to supply them as
+    positional arguments:
+
+    .. testcode::
+
+        import forge
+
+        param_b = forge.arg('b')
+        param_a = forge.arg('a')
+
+        @forge.sign(a=param_a, b=param_b)
+        def func1(**kwargs):
+            pass
+
+        @forge.sign(a, b)
+        def func2(**kwargs):
+            pass
+
+        assert forge.stringify_callable(func1) == 'func1(b, a)'
+        assert forge.stringify_callable(func2) == 'func2(a, b)'
+
 
 .. _basic-usage_adding-a-parameter:
 
