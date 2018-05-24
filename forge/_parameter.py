@@ -572,7 +572,7 @@ class FParameter(immutable.Immutable, metaclass=CreationOrderMeta):
             *,
             converter=None,
             validator=None,
-            metadata=None,
+            metadata=None
         ) -> 'FParameter':
         """
         A factory method for creating :term:`var-keyword` :class:`FParameter`

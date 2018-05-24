@@ -154,14 +154,15 @@ class FSignature(collections.abc.Mapping, immutable.Immutable):
                 ]
             ]=None
         ) -> None:
+        # pylint: disable=R0912, too-many-branches
         fparameters = fparameters or []
         context = None
         var_positional = None
         var_keyword = None
 
         # Validation
-        name_set: typing.Set[str] = set()
-        iname_set: typing.Set[str] = set()
+        name_set = set()  # type: Set[str]
+        iname_set = set()  # type: Set[str]
         for i, current in enumerate(fparameters):
             if not isinstance(current, FParameter):
                 raise TypeError(
