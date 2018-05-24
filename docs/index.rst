@@ -23,6 +23,8 @@ The recommended installation method is `pip-installing`_ into a `virtualenv`_:
 Overview
 ========
 
+- :doc:`quickstart` is the fastest way to discover ``forge``.
+    Start here to forge your first signature.
 - :doc:`philosophy` walks you through an example of ``forge`` wrapping the ``stdlib``'s :mod:`logging` module.
     Read this to understand the value proposition, philosphy, and design strategy behind ``forge``.
 - :doc:`basic` gives a comprehensive tour of ``forge``'s features.
@@ -39,6 +41,7 @@ Full Table of Contents
 .. toctree::
     :maxdepth: 2
 
+    quickstart
     philosophy
     basic
     advanced

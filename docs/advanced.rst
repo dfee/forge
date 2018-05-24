@@ -21,6 +21,8 @@ With this pattern, the caller has no ability to override ``default`` values, mak
     import inspect
     from uuid import uuid4
 
+    import forge
+
     TOKEN = 'token_{}'.format(uuid4().hex)
 
     def get_nonce():
