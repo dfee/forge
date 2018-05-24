@@ -55,10 +55,6 @@ Indices and tables
 * :ref:`genindex`
 * :ref:`search`
 
-.. _`hosted on PyPI`: https://pypi.org/project/python-forge
-.. _`pip-installing`: https://pip.pypa.io/en/stable/
-.. _`virtualenv`: https://docs.python.org/3/library/venv.html
-
 .. include:: ../README.rst
     :start-after: project-information-begin
     :end-before: project-information-end

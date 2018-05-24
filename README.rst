@@ -27,9 +27,9 @@ The power of **dynamic signatures** is finally within grasp – **add**, **remo
 
 .. installation-begin
 
-``forge`` is a Python-only package `hosted on PyPI`_ for **Python 3.6+** and **PyPy 3.5+**.
+``forge`` is a Python-only package `hosted on PyPI <https://pypi.org/project/python-forge>`_ for **Python 3.6+** and **PyPy 3.5+**.
 
-The recommended installation method is `pip-installing`_ into a `virtualenv`_:
+The recommended installation method is `pip-installing <https://pip.pypa.io/en/stable/>`_ into a `virtualenv <https://docs.python.org/3/library/venv.html>`_:
 
 .. code-block:: console
 
