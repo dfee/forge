@@ -28,7 +28,7 @@ Re-signing a function
 
 The primary purpose of forge is to alter the public signature of functions:
 
-.. testcode::
+.. code-block:: python
 
     import forge
 
@@ -58,7 +58,7 @@ The primary purpose of forge is to alter the public signature of functions:
 
 You can re-map a parameter to a different ParameterKind (e.g. positional-only to positional-or-keyword *or* keyword-only), and optionally supply a default value:
 
-.. testcode::
+.. code-block:: python
 
     import forge
 
@@ -72,7 +72,7 @@ You can re-map a parameter to a different ParameterKind (e.g. positional-only to
 
 You can also supply type annotations for usage with linters like mypy:
 
-.. testcode::
+.. code-block:: python
 
     import forge
 
@@ -92,7 +92,7 @@ Validating a parameter
 
 You can validate arguments by either passing a validator or an iterable (such as a list or tuple) of validators to your FParameter constructor.
 
-.. testcode::
+.. code-block:: python
 
     import forge
 
@@ -122,7 +122,7 @@ You can validate arguments by either passing a validator or an iterable (such as
 
 You can optionally provide a context parameter, such as ``self``, ``cls``, or create your own named parameter with ``forge.ctx('myparam')``, and use that alongside validation:
 
-.. testcode::
+.. code-block:: python
 
     import forge
 
@@ -161,7 +161,7 @@ Converting a parameter
 
 You can convert an argument by passing a conversion function to your FParameter constructor.
 
-.. testcode::
+.. code-block:: python
 
     import forge
 
@@ -177,7 +177,7 @@ You can convert an argument by passing a conversion function to your FParameter 
 
 You can optionally provide a context parameter, such as ``self``, ``cls``, or create your own named FParameter with ``forge.ctx('myparam')``, and use that alongside conversion:
 
-.. testcode::
+.. code-block:: python
 
     import forge
 
