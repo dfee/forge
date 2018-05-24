@@ -101,7 +101,7 @@ You can validate arguments by either passing a validator or an iterable (such as
 
     def validate_gt5(ctx, name, value):
         if value < 5:
-            raise TypeError(f"{name} must be >= 5")
+            raise TypeError("{name} must be >= 5".format(name=name))
 
     @forge.sign(forge.arg('count', validator=validate_gt5))
     def send_presents(count):
@@ -128,7 +128,10 @@ You can optionally provide a context parameter, such as ``self``, ``cls``, or cr
 
     def validate_color(ctx, name, value):
         if value not in ctx.colors:
-            raise TypeError(f'expected one of {ctx.colors}, received {value}')
+            raise TypeError(
+                'expected one of {ctx.colors}, received {value}'.\
+                format(ctx=ctx, value=value)
+            )
 
     class ColorSelector:
         def __init__(self, *colors):
@@ -182,7 +185,7 @@ You can optionally provide a context parameter, such as ``self``, ``cls``, or cr
     import forge
 
     def titleize(ctx, name, value):
-        return f'{ctx.title} {value}'
+        return '{ctx.title} {value}'.format(ctx=ctx, value=value)
 
     class RoleAnnouncer:
         def __init__(self, title):
@@ -190,7 +193,7 @@ You can optionally provide a context parameter, such as ``self``, ``cls``, or cr
 
         @forge.sign(forge.self, forge.arg('name', converter=titleize))
         def announce(self, name):
-            return f'Now announcing {name}!'
+            return 'Now announcing {name}!'.format(name=name)
 
     doctor_ra = RoleAnnouncer('Doctor')
     captain_ra = RoleAnnouncer('Captain')

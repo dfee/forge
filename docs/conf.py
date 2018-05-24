@@ -34,11 +34,18 @@ highlight_language = 'python3'
 
 html_logo = "_static/forge-vertical.png"
 html_theme = "alabaster"
+
 html_theme_options = {
-    "font_family": '"Avenir Next", Calibri, "PT Sans", sans-serif',
-    "head_font_family": '"Avenir Next", Calibri, "PT Sans", sans-serif',
-    "font_size": "16px",
-    "page_width": "980px",
+    'analytics_id': 'UA-119795890-1',
+    'font_family': '"Avenir Next", Calibri, "PT Sans", sans-serif',
+    'github_repo': 'forge',
+    'github_user': 'dfee',
+    'github_banner': True,
+    'head_font_family': '"Avenir Next", Calibri, "PT Sans", sans-serif',
+    'font_size': '16px',
+    'page_width': '980px',
+    'show_powered_by': False,
+    'show_related': False,
 }
 
 html_static_path = ['_static']
