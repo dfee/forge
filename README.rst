@@ -15,9 +15,10 @@
 
 .. overview-begin
 
-``forge`` is an *elegant* Python package that allows for **meta-programming of function signatures**. Now, you can finally **add**, **remove**, or **enhance parameters** at your will.
+``forge`` is an elegant Python package for crafting function signatures.
+Its aim is to help you write better, more literate code with less boilerplate.
 
-Use it to write **legible** signatures for consumption by team members, the public, or other code.
+The power of **dynamic signatures** is finally within grasp – **add**, **remove**, or **enhance** parameters at will!
 
 .. overview-end
 
