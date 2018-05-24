@@ -22,7 +22,7 @@ project = 'forge'
 author = 'Devin Fee'
 copyright = '2018, ' + author  # pylint: disable=W0622, redefined-builtin
 
-v = pkg_resources.get_distribution('forge').parsed_version
+v = pkg_resources.get_distribution('python-forge').parsed_version
 version = v.base_version  # type: ignore
 release = v.public  # type: ignore
 
