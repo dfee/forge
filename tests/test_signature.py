@@ -11,6 +11,7 @@ from forge._signature import (
     CallArguments,
     FSignature,
     Mapper,
+    _order_fparams,
     pk_strings,
     sign,
     resign,
@@ -113,7 +114,7 @@ class TestFSignature:
         """
         param = inspect.Parameter('x', POSITIONAL_ONLY)
         with pytest.raises(TypeError) as excinfo:
-            FSignature.validate(param)
+            FSignature([param])
         assert excinfo.value.args[0] == \
             "Received non-FParameter '{}'".format(param)
 
@@ -123,7 +124,7 @@ class TestFSignature:
         """
         arg = forge.arg()
         with pytest.raises(ValueError) as excinfo:
-            FSignature.validate(arg)
+            FSignature([arg])
         assert excinfo.value.args[0] == \
             "Received unnamed FParameter: '{}'".format(arg)
 
@@ -132,7 +133,7 @@ class TestFSignature:
         Ensure that non-first fparams cannot be contextual
         """
         with pytest.raises(TypeError) as excinfo:
-            FSignature.validate(forge.arg('a'), forge.ctx('self'))
+            FSignature([forge.arg('a'), forge.ctx('self')])
         assert excinfo.value.args[0] == \
             'Only the first FParameter can be contextual'
 
@@ -141,7 +142,7 @@ class TestFSignature:
         Ensure that a ``interface_name`` between multiple fparams raises
         """
         with pytest.raises(ValueError) as excinfo:
-            FSignature.validate(forge.arg('a1', 'b'), forge.arg('a2', 'b'))
+            FSignature([forge.arg('a1', 'b'), forge.arg('a2', 'b')])
         assert excinfo.value.args[0] == \
             "Received multiple FParameters with interface_name 'b'"
 
@@ -150,7 +151,7 @@ class TestFSignature:
         Ensure that a ``name`` between multiple fparams raises
         """
         with pytest.raises(ValueError) as excinfo:
-            FSignature.validate(forge.arg('a', 'b1'), forge.arg('a', 'b2'))
+            FSignature([forge.arg('a', 'b1'), forge.arg('a', 'b2')])
         assert excinfo.value.args[0] == \
             "Received multiple FParameters with name 'a'"
 
@@ -168,7 +169,7 @@ class TestFSignature:
             ) for i in range(2)
         ]
         with pytest.raises(TypeError) as excinfo:
-            FSignature.validate(*params)
+            FSignature(params)
         assert excinfo.value.args[0] == \
             'Received multiple variable-positional FParameters'
 
@@ -186,7 +187,7 @@ class TestFSignature:
             ) for i in range(2)
         ]
         with pytest.raises(TypeError) as excinfo:
-            FSignature.validate(*params)
+            FSignature(params)
         assert excinfo.value.args[0] == \
             'Received multiple variable-keyword FParameters'
 
@@ -197,7 +198,7 @@ class TestFSignature:
         kwarg_ = forge.kwarg('kwarg')
         arg_ = forge.arg('arg')
         with pytest.raises(SyntaxError) as excinfo:
-            FSignature.validate(kwarg_, arg_)
+            FSignature([kwarg_, arg_])
         assert excinfo.value.args[0] == (
             "{arg_} of kind '{arg_kind}' follows "
             "{kwarg_} of kind '{kwarg_kind}'".format(
@@ -217,7 +218,7 @@ class TestFSignature:
         default = constructor('d', default=None)
         nondefault = constructor('nd')
         with pytest.raises(SyntaxError) as excinfo:
-            FSignature.validate(default, nondefault)
+            FSignature([default, nondefault])
         assert excinfo.value.args[0] == (
             'non-default FParameter follows default FParameter'
         )
@@ -227,29 +228,16 @@ class TestFSignature:
         Ensure that ``keyword-only`` fparams with default values can come after
         fparams without default values (only true for ``keyword-only``!)
         """
-        FSignature.validate(
+        FSignature([
             forge.kwarg('a', default=None),
             forge.kwarg('b'),
-        )
-
-    def test_validate_multiple_fparameter_kinds(self):
-        """
-        Ensure that validation continues between multiple fparameter kinds
-        (required to achieve 100% coverage)
-        """
-        FSignature.validate(
-            forge.pos('a'),
-            forge.arg('b'),
-            *forge.args,
-            forge.kwarg('c'),
-            list(dict(forge.kwargs).values())[0],
-        )
+        ])
 
     def test__repr__(self):
         """
         Ensure pretty printing of FSignature (includes fparams)
         """
-        assert repr(FSignature(forge.self)) == '<FSignature (self)>'
+        assert repr(FSignature([forge.self])) == '<FSignature (self)>'
 
     # Begin collections.abc.Mapping Tests
     def test__getitem__(self):
@@ -258,7 +246,7 @@ class TestFSignature:
         (an abstract collections.abc.Mapping method)
         """
         fparam = forge.arg('a')
-        fsig = FSignature(fparam)
+        fsig = FSignature([fparam])
         assert fsig['a'] is fparam
 
     def test__len__(self):
@@ -266,7 +254,7 @@ class TestFSignature:
         Ensure that ``__len__`` retrieves a count of the fparams
         (an abstract collections.abc.Mapping method)
         """
-        assert len(FSignature(forge.arg('a'))) == 1
+        assert len(FSignature([forge.arg('a')])) == 1
 
     def test__iter__(self):
         """
@@ -274,7 +262,7 @@ class TestFSignature:
         (an abstract collections.abc.Mapping method)
         """
         fparam = forge.arg('a')
-        fsig = FSignature(fparam)
+        fsig = FSignature([fparam])
         assert dict(fsig) == {fparam.name: fparam}
     # End collections.abc.Mapping Tests
 
@@ -323,7 +311,7 @@ class TestFSignature:
         Ensure that the ``var-positional`` fparam is returned (or None)
         """
         fparam = FParameter(VAR_POSITIONAL, 'args')
-        fsig = FSignature(*([fparam] if has_param else []))
+        fsig = FSignature([fparam] if has_param else [])
         assert fsig.var_positional == (fparam if has_param else None)
 
     @pytest.mark.parametrize(('has_param',), [(True,), (False,)])
@@ -332,7 +320,7 @@ class TestFSignature:
         Ensure that the ``var-keyword`` fparam is returned (or None)
         """
         fparam = FParameter(VAR_KEYWORD, 'args')
-        fsig = FSignature(*([fparam] if has_param else []))
+        fsig = FSignature([fparam] if has_param else [])
         assert fsig.var_keyword == (fparam if has_param else None)
 
     @pytest.mark.parametrize(('has_param',), [(True,), (False,)])
@@ -341,7 +329,7 @@ class TestFSignature:
         Ensure that the ``context`` fparam is returned (or None)
         """
         fparam = FParameter(POSITIONAL_OR_KEYWORD, 'args', contextual=True)
-        fsig = FSignature(*([fparam] if has_param else []))
+        fsig = FSignature([fparam] if has_param else [])
         assert fsig.context == (fparam if has_param else None)
 
 
@@ -360,7 +348,7 @@ class TestMapper:
         """
         Ensure the mapper doesn't produce include bound fparams in public sig
         """
-        fsig = FSignature(forge.arg('bound', default=1, bound=True))
+        fsig = FSignature([forge.arg('bound', default=1, bound=True)])
         func = lambda bound: None
         mapper = Mapper(fsig, func)
         assert not mapper.public_signature.parameters
@@ -370,7 +358,7 @@ class TestMapper:
         Ensure the mapper is pretty printable with ``FSignature`` and
         ``inspect.Signature``
         """
-        fsig = FSignature(forge.pos('a', 'b'))
+        fsig = FSignature([forge.pos('a', 'b')])
         callable_ = lambda *, b: None
         mapper = Mapper(fsig, callable_)
         assert repr(mapper) == '<Mapper (a, /) -> (*, b)>'
@@ -383,7 +371,7 @@ class TestMapper:
         fparam = forge.ctx('param') \
             if has_context \
             else forge.arg('param')
-        fsig = FSignature(fparam)
+        fsig = FSignature([fparam])
         mapper = Mapper(fsig, lambda param: None)
 
         kwargs = {'param': object()}
@@ -421,7 +409,7 @@ class TestMapper:
         with and without names being varied.
         """
         from_name, to_name = ('p1', 'p1') if not vary_name else ('p1', 'p2')
-        fsig = FSignature(FParameter(from_kind, from_name, to_name))
+        fsig = FSignature([FParameter(from_kind, from_name, to_name)])
         func = lambda: None
         func.__signature__ = \
             inspect.Signature([inspect.Parameter(to_name, to_kind)])
@@ -440,7 +428,7 @@ class TestMapper:
         """
         Ensure ``bound`` fparams are injected into the mapping.
         """
-        fsig = FSignature(forge.arg('bound', default=1, bound=True))
+        fsig = FSignature([forge.arg('bound', default=1, bound=True)])
         func = lambda bound: bound
         mapper = Mapper(fsig, func)
         assert mapper() == CallArguments(1)
@@ -455,7 +443,7 @@ class TestMapper:
         (w/ and w/o varied name)
         """
         from_name, to_name = ('p1', 'p1') if not vary_name else ('p1', 'p2')
-        fsig = FSignature(FParameter(VAR_POSITIONAL, from_name, to_name))
+        fsig = FSignature([FParameter(VAR_POSITIONAL, from_name, to_name)])
         func = lambda: None
         func.__signature__ = \
             inspect.Signature([inspect.Parameter(to_name, VAR_POSITIONAL)])
@@ -474,7 +462,7 @@ class TestMapper:
         (w/ and w/o varied name)
         """
         from_name, to_name = ('p1', 'p1') if not vary_name else ('p1', 'p2')
-        fsig = FSignature(FParameter(VAR_KEYWORD, from_name, to_name))
+        fsig = FSignature([FParameter(VAR_KEYWORD, from_name, to_name)])
         func = lambda: None
         func.__signature__ = \
             inspect.Signature([inspect.Parameter(to_name, VAR_KEYWORD)])
@@ -511,7 +499,7 @@ class TestMapper:
         Ensure that a lack of required (non-default) arguments raises a
         TypeError that mirrors the one raised when calling the callable directly
         """
-        fsig = FSignature(forge.arg('a'))
+        fsig = FSignature([forge.arg('a')])
         def func(a):
             # pylint: disable=W0613, unused-argument
             pass
@@ -725,6 +713,32 @@ class TestMapper:
         assert Mapper.map_parameters(fsig, to_sig) == {}
 
 
+class TestOrderFparams:
+    def test_args_order_preserved(self):
+        """
+        Ensure that the var-positional arguments *aren't* re-ordered
+        """
+        param_a = forge.arg('a')
+        param_b = forge.arg('b')
+        assert _order_fparams(param_b, param_a) == [param_b, param_a]
+
+    def test_kwargs_reordered(self):
+        """
+        Ensure that the var-keyword arguments *are* re-ordered
+        """
+        param_a = forge.arg('a')
+        param_b = forge.arg('b')
+        assert _order_fparams(b=param_b, a=param_a) == [param_a, param_b]
+
+    def test_args_precede_kwargs(self):
+        """
+        Ensure that var-postional arguments precede var-keyword arguments
+        """
+        param_a = forge.arg('a')
+        param_b = forge.arg('b')
+        assert _order_fparams(param_b, a=param_a) == [param_b, param_a]
+
+
 def test_sign():
     """
     Ensure ``sign`` wrapper appropriately builds and sets ``__mapper__``, and
@@ -740,7 +754,10 @@ def test_sign():
 
     mapper = func.__mapper__
     assert mapper.callable == func.__wrapped__
-    assert mapper.fsignature == FSignature(*forge.args, **forge.kwargs)
+    assert mapper.fsignature == FSignature([
+        forge.vpo('args'),
+        forge.vkw('kwargs'),
+    ])
     assert mapper == Mapper(mapper.fsignature, func.__wrapped__)
 
     func.__mapper__ = Mock(side_effect=func.__mapper__)
@@ -771,7 +788,7 @@ def test_resign():
     new_mapper = func.__mapper__
     assert new_mapper != old_mapper
     assert isinstance(new_mapper, Mapper)
-    assert resigned.__mapper__.fsignature == FSignature(forge.arg('b'))
+    assert resigned.__mapper__.fsignature == FSignature([forge.arg('b')])
 
     resigned.__mapper__ = Mock(side_effect=func.__mapper__)
     call_args = CallArguments(b=1)

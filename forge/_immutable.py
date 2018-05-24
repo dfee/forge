@@ -1,20 +1,26 @@
-from types import MappingProxyType
 import typing
 
 from ._exceptions import ImmutableInstanceError
 
 
-def asdict(obj) -> MappingProxyType:
+def asdict(obj) -> typing.Dict:
     """
-    Provides a "look" into any Python class instance by returning a proxy
-    into the attribute or slot values of the input.
+    Provides a "look" into any Python class instance by returning a dict
+    into the attribute or slot values.
 
     :param obj: any Python class instance
     :return: the attribute or slot values from :paramref:`.asdict.obj`
     """
-    return MappingProxyType(obj.__dict__) \
-        if hasattr(obj, '__dict__') \
-        else MappingProxyType({k: getattr(obj, k) for k in obj.__slots__})
+    if hasattr(obj, '__dict__'):
+        return {
+            k: v for k, v in obj.__dict__.items()
+            if not k.startswith('_')
+        }
+
+    return {
+        k: getattr(obj, k) for k in obj.__slots__
+        if not k.startswith('_')
+    }
 
 
 def replace(obj, **changes):

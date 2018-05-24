@@ -87,17 +87,46 @@ class CallArguments(immutable.Immutable):
 
 class FSignature(collections.abc.Mapping, immutable.Immutable):
     """
-    An immutable representation of a callable signature composed of
-    :class:`forge.FParameter` instances.`
+    An immutable, validated representation of a signature composed of
+    :class:`forge.FParameter` instances.
 
-    Unliked :class:`inspect.Signature`, :class:`FSignature` does not provide or
+    Validation ensures:
+
+    - the appropriate order of parameters by kind:
+
+        #. (optional) :term:`positional-only`, followed by
+        #. (optional) :term:`positional-or-keyword`, followed by
+        #. (optional) :term:`var-positional`, followed by
+        #. (optional) :term:`keyword-only`, followed by
+        #. (optional) :term:`var-keyword`
+
+    - that non-default :term:`positional-only` or
+    :term:`positional-or-keyword` parameters don't follow their respective
+    similarly-kinded parameters with defaults,
+
+        .. note::
+
+        Python signatures allow non-default :term:`keyword-only` parameters
+        to follow default :term:`keyword-only` parameters.
+
+    - that at most there is one :term:`var-positional` parameter,
+
+    - that at most there is one :term:`var-keyword` parameter,
+
+    - that at most there is one :term:`contextual` parameter, and that it
+    is the first parameter (if it is provided.)
+
+    - that no two :class:`FParameter`s share the same
+    :paramref:`.FParameter.name` or :paramref:`.FParameter.interface_name`.
+
+    Unlike :class:`inspect.Signature`, :class:`FSignature` does not provide or
     manage ``return type`` annotations. That is the work of :func:`.returns`
     and / or :class:`.Mapper`.
 
     .. note::
 
-        This class doesn't usually need to be invoked directly. Use one of the
-        constructor methods instead:
+        This class usually doesn't usually need to be invoked directly.
+        Consider using one of the constructor methods instead:
 
         - :func:`~forge.sign` to wrap a callable with a :class:`.FSignature`.
         - :func:`~forge.resign` to revise a wrapped callable's \
@@ -111,50 +140,27 @@ class FSignature(collections.abc.Mapping, immutable.Immutable):
     ``__iter__`` and ``__len__``. Inherits methods: ``__contains__``, ``keys``,
     ``items``, ``values``, ``get``, ``__eq__`` and ``__ne__``.
 
-    :param fparameters: :class:`forge.FParameter` instances passed as arguments
-    :param named_fparameters: :class:`forge.FParameter` instances passed as
-        as keyword arguments.
+    :param fparameters: an ordered list or tuple of :class:`forge.FParameter`
+        instances.
     """
-
     # pylint: disable=R0901, too-many-ancestors
-    @staticmethod
-    def validate(*fparameters: FParameter) -> None:
-        """
-        Validate an ordered sequence of :class:`forge.FParameter` instances for
-        use with a :class:`forge.FSignature`.
 
-        Validation ensures:
+    def __init__(
+            self,
+            fparameters: typing.Optional[
+                typing.Union[
+                    typing.List[FParameter],
+                    typing.Tuple[FParameter],
+                ]
+            ]=None
+        ) -> None:
+        fparameters = fparameters or []
+        context = None
+        var_positional = None
+        var_keyword = None
 
-        - the appropriate order of parameters by kind:
-
-          #. (optional) :term:`positional-only`, followed by
-          #. (optional) :term:`positional-or-keyword`, followed by
-          #. (optional) :term:`var-positional`, followed by
-          #. (optional) :term:`keyword-only`, followed by
-          #. (optional) :term:`var-keyword`
-
-        - that non-default :term:`positional-only` or
-        :term:`positional-or-keyword` parameters don't follow their respective
-        similarly-kinded parameters with defaults,
-
-          .. note::
-
-            Python signatures allow non-default :term:`keyword-only` parameters
-            to follow default :term:`keyword-only` parameters.
-
-        - that at most there is one :term:`var-positional` parameter,
-
-        - that at most there is one :term:`var-keyword` parameter,
-
-        - that at most there is one :term:`contextual` parameter, and that it
-        is the first parameter (if it is provided.)
-
-        - that no two :class:`FParameter`s share the same
-        :paramref:`.FParameter.name` or :paramref:`.FParameter.interface_name`.
-
-        :param fparameters: a sequence of :class:`forge.FParameter` instances
-        """
-        pname_set: typing.Set[str] = set()
+        # Validation
+        name_set: typing.Set[str] = set()
         iname_set: typing.Set[str] = set()
         for i, current in enumerate(fparameters):
             if not isinstance(current, FParameter):
@@ -167,17 +173,23 @@ class FSignature(collections.abc.Mapping, immutable.Immutable):
                     "Received unnamed FParameter: '{}'".\
                     format(current)
                 )
-            elif current.contextual and i > 0:
-                raise TypeError(
-                    'Only the first FParameter can be contextual'
-                )
+            elif current.contextual:
+                if i > 0:
+                    raise TypeError(
+                        'Only the first FParameter can be contextual'
+                    )
+                context = current
+            elif current.kind is FParameter.VAR_POSITIONAL:
+                var_positional = current
+            elif current.kind is FParameter.VAR_KEYWORD:
+                var_keyword = current
 
-            if current.name in pname_set:
+            if current.name in name_set:
                 raise ValueError(
                     "Received multiple FParameters with name '{}'".\
                     format(current.name)
                 )
-            pname_set.add(current.name)
+            name_set.add(current.name)
 
             if current.interface_name in iname_set:
                 raise ValueError(
@@ -214,30 +226,13 @@ class FSignature(collections.abc.Mapping, immutable.Immutable):
                     raise SyntaxError(
                         'non-default FParameter follows default FParameter'
                     )
-
-    def __init__(
-            self,
-            *fparameters: FParameter,
-            **named_fparameters: FParameter
-        ) -> None:
-        fparams = [
-            *fparameters,
-            *[
-                v.replace(
-                    name=k,
-                    interface_name=v.interface_name or k,
-                ) for k, v in named_fparameters.items()
-            ],
-        ]
-        self.validate(*fparams)
+        # End validation
 
         super().__init__(
-            _data=OrderedDict([(fp.name, fp) for fp in fparams]),
-            context=fparams[0] \
-                if fparams and fparams[0].contextual \
-                else None,
-            var_positional=get_var_positional_parameter(*fparams),
-            var_keyword=get_var_keyword_parameter(*fparams),
+            _data=OrderedDict([(fp.name, fp) for fp in fparameters]),
+            context=context,
+            var_positional=var_positional,
+            var_keyword=var_keyword,
         )
 
     def __repr__(self):
@@ -296,7 +291,7 @@ class FSignature(collections.abc.Mapping, immutable.Immutable):
             :paramref:`.FSignature.from_signature.signature` argument.
         """
         # pylint: disable=E1101, no-member
-        return cls(*[
+        return cls([
             FParameter.from_parameter(param)
             for param in signature.parameters.values()
         ])
@@ -554,22 +549,57 @@ class Mapper(immutable.Immutable):
         return types.MappingProxyType(mapping)
 
 
+def _order_fparams(
+        *fparameters: FParameter,
+        **named_fparameters: FParameter
+    ) -> typing.List[FParameter]:
+    """
+    Order fparameters with the following strategy:
+    1) arguments are returned in order
+    2) keyword arguments are sorted by ``_creation_order``, and evolved with
+        the ``keyword`` value as the name and interface_name (if not set).
+
+    :param fparameters: :class:`~forge.FParameter` instances to be ordered
+    :param named_fparameters: :class:`~forge.FParameter` instances to be
+        ordered, updated
+    :return: a list of ordered :class:`~forge.FParameter` instances
+    """
+    return [
+        *fparameters,
+        *[
+            fparam.replace(
+                name=name,
+                interface_name=fparam.interface_name or name,
+            ) for name, fparam in sorted(
+                named_fparameters.items(),
+                key=lambda i: i[1]._creation_order,
+            )
+        ]
+    ]
+
+
 def sign(
         *fparameters: FParameter,
         **named_fparameters: FParameter
     ) -> typing.Callable[..., typing.Any]:
     """
-    Takes instances of :class:`~forge.FParameter` and returns a wrapping factory
-    to generate forged signatures.
+    Takes instances of :class:`~forge.FParameter` and returns a wrapping
+    factory to generate forged signatures.
 
-    :param fparameters: see :paramref:`.FSignature.fparameters`
-    :param named_fparameters: see :paramref:`.FSignature.named_fparameters`
+    Order fparameters with the following strategy:
+    1) arguments are returned in order
+    2) keyword arguments are sorted by ``_creation_order``, and evolved with
+        the ``keyword`` value as the name and interface_name (if not set).
+
+    :param fparameters: :class:`~forge.FParameter` instances to be ordered
+    :param named_fparameters: :class:`~forge.FParameter` instances to be
+        ordered, updated
     :return: a revision factory that takes a callable and updates it so that
         it has a signature as defined by the
         :paramref:`.resign.fparameters` and
         :paramref:`.resign.named_fparameters`
     """
-    fsignature = FSignature(*fparameters, **named_fparameters)
+    fsignature = FSignature(_order_fparams(*fparameters, **named_fparameters))
     def wrapper(callable):
         # pylint: disable=W0622, redefined-builtin
         @functools.wraps(callable)
@@ -589,17 +619,23 @@ def resign(
         **named_fparameters: FParameter
     ) -> typing.Callable[..., typing.Any]:
     """
-    Takes instances of :class:`~forge.FParameter` and returns a revision factory
-    that alters already-forged signatures.
+    Takes instances of :class:`~forge.FParameter` and returns a revision
+    factory that alters already-forged signatures.
 
-    :param fparameters: see :paramref:`.FSignature.fparameters`
-    :param named_fparameters: see :paramref:`.FSignature.named_fparameters`
+    Order fparameters with the following strategy:
+    1) arguments are returned in order
+    2) keyword arguments are sorted by ``_creation_order``, and evolved with
+        the ``keyword`` value as the name and interface_name (if not set).
+
+    :param fparameters: :class:`~forge.FParameter` instances to be ordered
+    :param named_fparameters: :class:`~forge.FParameter` instances to be
+        ordered, updated
     :return: a revision factory that takes a callable and updates it so that
         it has a signature as defined by the
         :paramref:`.resign.fparameters` and
         :paramref:`.resign.named_fparameters`
     """
-    fsignature = FSignature(*fparameters, **named_fparameters)
+    fsignature = FSignature(_order_fparams(*fparameters, **named_fparameters))
     def reviser(callable):
         # pylint: disable=W0622, redefined-builtin
         callable.__mapper__ = Mapper(fsignature, callable.__wrapped__)

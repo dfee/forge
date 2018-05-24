@@ -16,6 +16,7 @@ def test_namespace():
     private_ptn = re.compile(r'^\_[a-zA-Z]')
     assert set(filter(private_ptn.match, forge.__dict__.keys())) == set([
         '_config',
+        '_counter',
         '_exceptions',
         '_immutable',
         '_marker',

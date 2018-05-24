@@ -12,33 +12,37 @@ from forge._immutable import (
 # pylint: disable=R0903, too-few-public-methods
 
 
-def test_asdict_with__slots__():
-    """
-    Ensure that ``asdict`` pulls ivars from classes with ``__slots__``
-    """
-    class Klass:
-        __slots__ = ('value',)
-        def __init__(self, value):
-            self.value = value
+class TestAsDict:
+    def test__slots__(self):
+        """
+        Ensure that ``asdict`` pulls ivars from classes with ``__slots__``,
+        and excludes private attributes (those starting with `_`)
+        """
+        class Klass:
+            __slots__ = ('value', '_priv')
+            def __init__(self, value):
+                self.value = value
+                self._priv = 1
 
-    kwargs = {'value': 1}
-    ins = Klass(**kwargs)
-    assert not hasattr(ins, '__dict__')
-    assert asdict(ins) == kwargs
+        kwargs = {'value': 1}
+        ins = Klass(**kwargs)
+        assert not hasattr(ins, '__dict__')
+        assert asdict(ins) == kwargs
 
+    def test__dict__(self):
+        """
+        Ensure that ``asdict`` pulls ivars from classes with ``__dict__``, and
+        excludes private attributes (those starting with `_`)
+        """
+        class Klass:
+            def __init__(self, value):
+                self.value = value
+                self._priv = 1
 
-def test_asdict_with__dict__():
-    """
-    Ensure that ``asdict`` pulls ivars from classes with ``__dict__``
-    """
-    class Klass:
-        def __init__(self, value):
-            self.value = value
-
-    kwargs = {'value': 1}
-    ins = Klass(**kwargs)
-    assert not hasattr(ins, '__slots__')
-    assert asdict(ins) == kwargs
+        kwargs = {'value': 1}
+        ins = Klass(**kwargs)
+        assert not hasattr(ins, '__slots__')
+        assert asdict(ins) == kwargs
 
 
 def test_replace():

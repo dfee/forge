@@ -5,6 +5,7 @@ import inspect
 import types
 import typing
 
+from forge._counter import CreationOrderMeta
 import forge._immutable as immutable
 from forge._marker import (
     empty,
@@ -60,7 +61,7 @@ class Factory(immutable.Immutable):
         return self.factory()
 
 
-class FParameter(immutable.Immutable):
+class FParameter(immutable.Immutable, metaclass=CreationOrderMeta):
     """
     An immutable representation of a signature parameter that encompasses its
     public name, its interface name, transformations to be applied, and
@@ -110,6 +111,7 @@ class FParameter(immutable.Immutable):
     """
 
     __slots__ = (
+        '_creation_order',
         'kind',
         'name',
         'interface_name',
