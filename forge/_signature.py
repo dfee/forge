@@ -617,7 +617,7 @@ def sign(
             def func1(**kwargs):
                 pass
 
-            @forge.sign(a, b)
+            @forge.sign(param_a, param_b)
             def func2(**kwargs):
                 pass
 
