@@ -11,14 +11,16 @@
 .. image:: https://coveralls.io/repos/github/dfee/forge/badge.svg?branch=master
     :target: https://coveralls.io/github/dfee/forge?branch=master
     :alt: master Coveralls Status
-
+.. image:: https://readthedocs.org/projects/python-forge/badge/
+    :target: http://python-forge.readthedocs.io/en/latest/
+    :alt: Documentation Status
 
 .. overview-begin
 
 ``forge`` is an elegant Python package for crafting function signatures.
 Its aim is to help you write better, more literate code with less boilerplate.
 
-The power of **dynamic signatures** is finally within grasp – **add**, **remove**, or **enhance** parameters at will!
+The power of **dynamic signatures** is finally within grasp – **add**, **remove**, or **enhance parameters** at will!
 
 .. overview-end
 

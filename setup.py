@@ -18,7 +18,7 @@ def permit_setup():
         all([implementation == 'PyPy', v.major == 3, v.minor >= 5]),
     ])
 
-if permit_setup():
-    setup()
-else:
+if not permit_setup():
     raise RuntimeError('CPython 3.6+ or PyPy 3.5+ required')
+
+setup()
