@@ -21,7 +21,7 @@ Use it to write **legible** signatures for consumption by team members, the publ
 
 .. overview-end
 
-.. include:: ../quickstart.rst
+.. include:: docs/quickstart.rst
     :start-after: _quickstart_resigning-a-function
 
 
