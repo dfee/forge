@@ -24,6 +24,20 @@ The power of **dynamic signatures** is finally within grasp – **add**, **remo
 
 .. overview-end
 
+
+.. installation-begin
+
+``forge`` is a Python-only package `hosted on PyPI`_ for **Python 3.6+** and **PyPy 3.5+**.
+
+The recommended installation method is `pip-installing`_ into a `virtualenv`_:
+
+.. code-block:: console
+
+    $ pip install python-forge
+
+.. installation-end
+
+
 .. quickstart-begin
 
 Re-signing a function
@@ -209,35 +223,18 @@ You can optionally provide a context parameter, such as ``self``, ``cls``, or cr
 .. quickstart-end
 
 
-.. _readme-requirements:
+.. project-information-begin
 
-Requirements
-============
+Project information
+===================
 
-- CPython >= 3.6.0
-- PyPy >= 3.5.3
+``forge`` is released under the `MIT <https://choosealicense.com/licenses/mit/>`_ license,
+its documentation lives at `Read the Docs <http://python-forge.rtfd.io/>`_,
+the code on `GitHub <https://github.com/dfee/forge>`_,
+and the latest release on `PyPI <https://pypi.org/project/python-forge/>`_.
+It’s rigorously tested on Python 3.6+ and PyPy 3.5+.
 
+``forge`` is authored by `Devin Fee <https://github.com/dfee>`_.
+Other contributors are listed under https://github.com/dfee/forge/graphs/contributors.
 
-.. _readme-author:
-
-Author
-=======
-
-This package was conceived of and written by `Devin Fee <https://github.com/dfee>`_. Other contributors are listed under https://github.com/dfee/forge/graphs/contributors.
-
-
-.. _readme-license:
-
-License
-=======
-
-``forge`` is offered under the MIT license.
-
-
-.. _readme-source-code:
-
-Source code
-===========
-
-The latest developer version is available in a github repository:
-https://github.com/dfee/forge
+.. project-information-end

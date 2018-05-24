@@ -9,16 +9,13 @@ Release v\ |release| (:doc:`What's new? <changelog>`).
     :end-before: overview-end
 
 
-Getting Started
-===============
+Installation
+============
 
-TODO: ``forge`` is a Python-only package `hosted on PyPI`_ for **Python 3.6+** or **PyPy 6.0.0+**.
+.. include:: ../README.rst
+    :start-after: installation-begin
+    :end-before: installation-end
 
-The recommended installation method is `pip-installing`_ into a `virtualenv`_:
-
-.. code-block:: console
-
-    $ pip install git+git://github.com/dfee/forge.git#egg=forge
 
 Overview
 ========
@@ -47,6 +44,7 @@ Full Table of Contents
     advanced
     api
     glossary
+    contributing
     license
     changelog
 
@@ -57,6 +55,10 @@ Indices and tables
 * :ref:`genindex`
 * :ref:`search`
 
-.. _`hosted on PyPI`: https://pypi.org/project/<TO-BE-DETERMINED>
+.. _`hosted on PyPI`: https://pypi.org/project/python-forge
 .. _`pip-installing`: https://pip.pypa.io/en/stable/
 .. _`virtualenv`: https://docs.python.org/3/library/venv.html
+
+.. include:: ../README.rst
+    :start-after: project-information-begin
+    :end-before: project-information-end

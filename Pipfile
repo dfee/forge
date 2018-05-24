@@ -10,6 +10,7 @@ name = "pypi"
 "e1839a8" = {path = ".", extras = ["testing"], editable = true}
 sphinx-autodoc-typehints = "*"
 sphinx-paramlinks = "*"
+twine = "*"
 
 
 [dev-packages]
