@@ -48,6 +48,7 @@ _metadata_type = typing.Mapping
 
 
 class Factory(immutable.Immutable):
+    # pylint: disable=R0903, too-few-public-methods
     __slots__ = ('factory',)
 
     def __init__(self, factory):
@@ -72,13 +73,15 @@ class FParameter(immutable.Immutable, metaclass=CreationOrderMeta):
         This class doesn't need to be invoked directly. Use one of the
         constructor methods instead:
 
-        - :func:`~forge.pos` for :term:`positional-only` :class:`.FParameter`
+        - :func:`~forge.pos` for :term:`positional-only` \
+        :class:`~forge.FParameter`
         - :func:`~forge.pok` *or* :func:`~forge.arg` for \
-        :term:`positional-or-keyword` :class:`.FParameter`
-        - :func:`~forge.vpo` for :term:`var-positional` :class:`.FParameter`
+        :term:`positional-or-keyword` :class:`~forge.FParameter`
+        - :func:`~forge.vpo` for :term:`var-positional` \
+        :class:`~forge.FParameter`
         - :func:`~forge.kwo` *or* :func:`~forge.kwarg` for \
-        :term:`keyword-only` :class:`.FParameter`
-        - :func:`~forge.vkw` for :term:`var-keyword` :class:`.FParameter`
+        :term:`keyword-only` :class:`~forge.FParameter`
+        - :func:`~forge.vkw` for :term:`var-keyword` :class:`~forge.FParameter`
 
     :param kind: the :term:`parameter kind`, which detemrines the position
         of the parameter in a callable signature.
@@ -105,7 +108,7 @@ class FParameter(immutable.Immutable, metaclass=CreationOrderMeta):
         (requires ``default`` or ``factory`` if True)
     :param contextual: whether the parameter will be passed to
         ``converter`` and ``validator`` callables as the context
-        (only the first parameter in a :class:`FSignature` can be
+        (only the first parameter in a :class:`~forge.FSignature` can be
         contextual)
     :param metadata: optional, extra meta-data that describes the parameter
     """
@@ -171,7 +174,7 @@ class FParameter(immutable.Immutable, metaclass=CreationOrderMeta):
 
     def __str__(self) -> str:
         """
-        Generates a string representation of the FParameter
+        Generates a string representation of the :class:`~forge.FParameter`
         """
         if self.kind == self.VAR_POSITIONAL:
             prefix = '*'
@@ -213,9 +216,10 @@ class FParameter(immutable.Immutable, metaclass=CreationOrderMeta):
     def apply_default(self, value: typing.Any) -> typing.Any:
         """
         Return the argument value (if not :class:`~forge.empty`), or the value
-        from :attr:`default` (if not an instance of :class:`Factory`), or the
-        value obtained by calling :attr:`default` (if an instance of
-        :class:`Factory`).
+        from :paramref:`~forge.FParmeter.default` (if not an instance of
+        :class:`~forge.Factory`), or the value obtained by calling
+        :paramref:`~forge.FParameter.default` (if an instance of
+        :class:`~forge.Factory`).
 
         :param value: the argument value for this parameter
         :return: the input value or a default value
@@ -231,10 +235,10 @@ class FParameter(immutable.Immutable, metaclass=CreationOrderMeta):
         ) -> typing.Any:
         """
         Apply a transform or series of transforms against the argument value
-        with the callables from :attr:`converter`.
+        with the callables from :paramref:`~forge.FParameter.converter`.
 
         :param ctx: the context of this parameter as provided by the
-            :class:`FSignature` (typically self or ctx).
+            :class:`~forge.FSignature` (typically self or ctx).
         :param value: the argument value for this parameter
         :return: the converted value
         """
@@ -255,10 +259,10 @@ class FParameter(immutable.Immutable, metaclass=CreationOrderMeta):
         ) -> typing.Any:
         """
         Apply a validation or series of validations against the argument value
-        with the callables from :attr:`validator`.
+        with the callables from :paramref:`~forge.FParameter.validator`.
 
         :param ctx: the context of this parameter as provided by the
-            :class:`FSignature` (typically self or ctx).
+            :class:`~forge.FSignature` (typically self or ctx).
         :param value: the value the user has supplied or a default value
         :return: the (unchanged) validated value
         """
@@ -277,18 +281,20 @@ class FParameter(immutable.Immutable, metaclass=CreationOrderMeta):
         ) -> typing.Any:
         """
         Can be called after defaults have been applied (if not a ``bound``
-        :class:`.FParameter`) or without a value (i.e.
+        :class:`~forge.FParameter`) or without a value (i.e.
         :class:`inspect.Parameter.emtpy`) in the case of a ``bound``
-        :class:`.FParameter`.
+        :class:`~forge.FParameter`.
 
         Process:
 
-        - conditionally apply the :class:`.Factory`,
-        - convert the resulting value with the :attr:`converter`, and then
-        - validate the resulting value with the :attr:`validator`.
+        - conditionally apply the :class:`~forge.Factory`,
+        - convert the resulting value with the \
+        :paramref:`~forge.FParameter.converter`, and then
+        - validate the resulting value with the \
+        :forge:`~forge.FParameter.validator`.
 
         :param ctx: the context of this parameter as provided by the
-            :class:`FSignature` (typically self or ctx).
+            :class:`~forge.FSignature` (typically self or ctx).
         :param value: the user-supplied (or default) value
         """
         # pylint: disable=W0621, redefined-outer-name
@@ -299,7 +305,7 @@ class FParameter(immutable.Immutable, metaclass=CreationOrderMeta):
     @property
     def parameter(self) -> inspect.Parameter:
         """
-        A public representation of this :class:`FParameter` as an
+        A public representation of this :class:`~forge.FParameter` as an
         :class:`inspect.Parameter`, fit for an :class:`inspect.Signature`
         """
         if not self.name:
@@ -327,21 +333,21 @@ class FParameter(immutable.Immutable, metaclass=CreationOrderMeta):
             metadata=void
         ):
         """
-        An evolution method that generates a new :class:`FParameter` derived
-        from this instance and the provided updates.
+        An evolution method that generates a new :class:`~forge.FParameter`
+        derived from this instance and the provided updates.
 
-        :param kind: see :paramref:`.FParameter.kind`
-        :param name: see :paramref:`.FParameter.name`
-        :param interface_name: see :paramref:`.FParameter.interface_name`
-        :param default: see :paramref:`.FParameter.default`
-        :param factory: see :paramref:`.FParameter.factory`
-        :param type: see :paramref:`.FParameter.type`
-        :param converter: see :paramref:`.FParameter.converter`
-        :param validator: see :paramref:`.FParameter.validator`
-        :param bound: see :paramref:`.FParameter.bound`
-        :param contextual: see :paramref:`.FParameter.contextual`
-        :param metadata: see :paramref:`.FParameter.metadata`
-        :class:`FParameter`
+        :param kind: see :paramref:`~forge.FParameter.kind`
+        :param name: see :paramref:`~forge.FParameter.name`
+        :param interface_name: see :paramref:`~forge.FParameter.interface_name`
+        :param default: see :paramref:`~forge.FParameter.default`
+        :param factory: see :paramref:`~forge.FParameter.factory`
+        :param type: see :paramref:`~forge.FParameter.type`
+        :param converter: see :paramref:`~forge.FParameter.converter`
+        :param validator: see :paramref:`~forge.FParameter.validator`
+        :param bound: see :paramref:`~forge.FParameter.bound`
+        :param contextual: see :paramref:`~forge.FParameter.contextual`
+        :param metadata: see :paramref:`~forge.FParameter.metadata`
+        :return: an instance of `~forge.FParameter`
         """
         # pylint: disable=E1120, no-value-for-parameter
         # pylint: disable=W0622, redefined-builtin
@@ -368,11 +374,11 @@ class FParameter(immutable.Immutable, metaclass=CreationOrderMeta):
     @classmethod
     def from_parameter(cls, parameter: inspect.Parameter) -> 'FParameter':
         """
-        A factory method for creating :class:`FParameter` instances from
+        A factory method for creating :class:`~forge.FParameter` instances from
         :class:`inspect.Parameter` instances.
 
         Parameter descriptions are a subset of those defined on
-        :class:`FParameter`
+        :class:`~forge.FParameter`
         """
         return cls(  # type: ignore
             kind=parameter.kind,
@@ -398,17 +404,17 @@ class FParameter(immutable.Immutable, metaclass=CreationOrderMeta):
         ) -> 'FParameter':
         """
         A factory method for creating :term:`positional-only`
-        :class:`FParameter` instances.
+        :class:`~forge.FParameter` instances.
 
-        :param name: see :paramref:`.FParameter.name`
-        :param interface_name: see :paramref:`.FParameter.interface_name`
-        :param default: see :paramref:`.FParameter.default`
-        :param factory: see :paramref:`.FParameter.factory`
-        :param type: see :paramref:`.FParameter.type`
-        :param converter: see :paramref:`.FParameter.converter`
-        :param validator: see :paramref:`.FParameter.validator`
-        :param bound: see :paramref:`.FParameter.bound`
-        :param metadata: see :paramref:`.FParameter.metadata`
+        :param name: see :paramref:`~forge.FParameter.name`
+        :param interface_name: see :paramref:`~forge.FParameter.interface_name`
+        :param default: see :paramref:`~forge.FParameter.default`
+        :param factory: see :paramref:`~forge.FParameter.factory`
+        :param type: see :paramref:`~forge.FParameter.type`
+        :param converter: see :paramref:`~forge.FParameter.converter`
+        :param validator: see :paramref:`~forge.FParameter.validator`
+        :param bound: see :paramref:`~forge.FParameter.bound`
+        :param metadata: see :paramref:`~forge.FParameter.metadata`
         """
         # pylint: disable=W0622, redefined-builtin
         return cls(  # type: ignore
@@ -440,17 +446,17 @@ class FParameter(immutable.Immutable, metaclass=CreationOrderMeta):
         ) -> 'FParameter':
         """
         A factory method for creating :term:`positional-or-keyword`
-        :class:`FParameter` instances.
+        :class:`~forge.FParameter` instances.
 
-        :param name: see :paramref:`.FParameter.name`
-        :param interface_name: see :paramref:`.FParameter.interface_name`
-        :param default: see :paramref:`.FParameter.default`
-        :param factory: see :paramref:`.FParameter.factory`
-        :param type: see :paramref:`.FParameter.type`
-        :param converter: see :paramref:`.FParameter.converter`
-        :param validator: see :paramref:`.FParameter.validator`
-        :param bound: see :paramref:`.FParameter.bound`
-        :param metadata: see :paramref:`.FParameter.metadata`
+        :param name: see :paramref:`~forge.FParameter.name`
+        :param interface_name: see :paramref:`~forge.FParameter.interface_name`
+        :param default: see :paramref:`~forge.FParameter.default`
+        :param factory: see :paramref:`~forge.FParameter.factory`
+        :param type: see :paramref:`~forge.FParameter.type`
+        :param converter: see :paramref:`~forge.FParameter.converter`
+        :param validator: see :paramref:`~forge.FParameter.validator`
+        :param bound: see :paramref:`~forge.FParameter.bound`
+        :param metadata: see :paramref:`~forge.FParameter.metadata`
         """
         # pylint: disable=W0622, redefined-builtin
         return cls(  # type: ignore
@@ -477,14 +483,14 @@ class FParameter(immutable.Immutable, metaclass=CreationOrderMeta):
         ) -> 'FParameter':
         """
         A factory method for creating :term:`positional-or-keyword`
-        :class:`FParameter` instances that are ``contextual`` (this value is
-        passed to other :class:`FParameter`s ``converter`` and ``validator``
-        functions.)
+        :class:`~forge.FParameter` instances that are ``contextual`` (this value
+        is passed to other :class:`~forge.FParameter`s ``converter`` and
+        ``validator`` functions.)
 
-        :param name: see :paramref:`.FParameter.name`
-        :param interface_name: see :paramref:`.FParameter.interface_name`
-        :param type: see :paramref:`.FParameter.type`
-        :param metadata: see :paramref:`.FParameter.metadata`
+        :param name: see :paramref:`~forge.FParameter.name`
+        :param interface_name: see :paramref:`~forge.FParameter.interface_name`
+        :param type: see :paramref:`~forge.FParameter.type`
+        :param metadata: see :paramref:`~forge.FParameter.metadata`
         """
         # pylint: disable=W0622, redefined-builtin
         return cls(  # type: ignore
@@ -507,12 +513,12 @@ class FParameter(immutable.Immutable, metaclass=CreationOrderMeta):
         ) -> 'FParameter':
         """
         A factory method for creating :term:`var-positional`
-        :class:`FParameter` instances.
+        :class:`~forge.FParameter` instances.
 
-        :param name: see :paramref:`.FParameter.name`
-        :param converter: see :paramref:`.FParameter.converter`
-        :param validator: see :paramref:`.FParameter.validator`
-        :param metadata: see :paramref:`.FParameter.metadata`
+        :param name: see :paramref:`~forge.FParameter.name`
+        :param converter: see :paramref:`~forge.FParameter.converter`
+        :param validator: see :paramref:`~forge.FParameter.validator`
+        :param metadata: see :paramref:`~forge.FParameter.metadata`
         """
         # pylint: disable=W0622, redefined-builtin
         return cls(  # type: ignore
@@ -538,18 +544,18 @@ class FParameter(immutable.Immutable, metaclass=CreationOrderMeta):
             metadata=None
         ) -> 'FParameter':
         """
-        A factory method for creating :term:`keyword-only` :class:`FParameter`
-        instances.
+        A factory method for creating :term:`keyword-only`
+        :class:`~forge.FParameter` instances.
 
-        :param name: see :paramref:`.FParameter.name`
-        :param interface_name: see :paramref:`.FParameter.interface_name`
-        :param default: see :paramref:`.FParameter.default`
-        :param factory: see :paramref:`.FParameter.factory`
-        :param type: see :paramref:`.FParameter.type`
-        :param converter: see :paramref:`.FParameter.converter`
-        :param validator: see :paramref:`.FParameter.validator`
-        :param bound: see :paramref:`.FParameter.bound`
-        :param metadata: see :paramref:`.FParameter.metadata`
+        :param name: see :paramref:`~forge.FParameter.name`
+        :param interface_name: see :paramref:`~forge.FParameter.interface_name`
+        :param default: see :paramref:`~forge.FParameter.default`
+        :param factory: see :paramref:`~forge.FParameter.factory`
+        :param type: see :paramref:`~forge.FParameter.type`
+        :param converter: see :paramref:`~forge.FParameter.converter`
+        :param validator: see :paramref:`~forge.FParameter.validator`
+        :param bound: see :paramref:`~forge.FParameter.bound`
+        :param metadata: see :paramref:`~forge.FParameter.metadata`
         """
         # pylint: disable=W0622, redefined-builtin
         return cls(  # type: ignore
@@ -575,13 +581,13 @@ class FParameter(immutable.Immutable, metaclass=CreationOrderMeta):
             metadata=None
         ) -> 'FParameter':
         """
-        A factory method for creating :term:`var-keyword` :class:`FParameter`
-        instances.
+        A factory method for creating :term:`var-keyword`
+        :class:`~forge.FParameter` instances.
 
-        :param name: see :paramref:`.FParameter.name`
-        :param converter: see :paramref:`.FParameter.converter`
-        :param validator: see :paramref:`.FParameter.validator`
-        :param metadata: see :paramref:`.FParameter.metadata`
+        :param name: see :paramref:`~forge.FParameter.name`
+        :param converter: see :paramref:`~forge.FParameter.converter`
+        :param validator: see :paramref:`~forge.FParameter.validator`
+        :param metadata: see :paramref:`~forge.FParameter.metadata`
         """
         # pylint: disable=W0622, redefined-builtin
         return cls(  # type: ignore
@@ -596,7 +602,7 @@ class FParameter(immutable.Immutable, metaclass=CreationOrderMeta):
 class VarPositional(collections.abc.Iterable):
     """
     A convenience class that generates an iterable consisting of one
-    :class:`FParameter` of :term:`parameter kind` :term:`var-positional`.
+    :class:`~forge.FParameter` of :term:`parameter kind` :term:`var-positional`.
 
     Instances can be used as either ``*args`` or ``*args()``.
 
@@ -614,18 +620,19 @@ class VarPositional(collections.abc.Iterable):
 
     While ``name`` can be supplied (by default it's ``args``),
     ``interface_name`` is unavailable.
-    This is because when :class:`FSignature` maps parameters, the mapping
+    This is because when :class:`~forge.FSignature` maps parameters, the mapping
     between :term:`var-positional` parameters is 1:1, so the interface name for
     :term:`var-positional` is auto-discovered.
 
     Implements :class:`collections.abc.Iterable`, with provided: ``__iter__``.
     Inherits method: ``__next__``.
 
-    :param name: see :paramref:`.FParameter.name`
-    :param converter: see :paramref:`.FParameter.converter`
-    :param validator: see :paramref:`.FParameter.validator`
-    :param metadata: see :paramref:`.FParameter.metadata`
+    :param name: see :paramref:`~forge.FParameter.name`
+    :param converter: see :paramref:`~forge.FParameter.converter`
+    :param validator: see :paramref:`~forge.FParameter.validator`
+    :param metadata: see :paramref:`~forge.FParameter.metadata`
     """
+    # pylint: disable=R0903, too-few-public-methods
     _default_name = 'args'
 
     def __init__(
@@ -644,8 +651,9 @@ class VarPositional(collections.abc.Iterable):
     @property
     def fparameter(self) -> FParameter:
         """
-        :return: a representation of this :class:`VarPositional` as a
-            :class:`FParameter` of :term:`parameter kind`
+        :return: a representation of this
+            :class:`~forge._parameter.VarPositional` as a
+            :class:`~forge.FParameter` of :term:`parameter kind`
             :term:`var-positional`, with attributes ``name``, ``converter``,
             ``validator`` and ``metadata`` from the instance.
         """
@@ -662,8 +670,9 @@ class VarPositional(collections.abc.Iterable):
         Concrete method for :class:`collections.abc.Iterable`
 
         :return: an iterable consisting of one item: the representation of this
-            :class:`VarPositional` as a :class:`FParameter` via
-            :attr:`VarPositional.fparameter`.
+            :class:`~forge._parameter.VarPositional` as a
+            :class:`~forge.FParameter` via
+            :attr:`~forge._parameter.VarPositional.fparameter`.
         """
         return iter((self.fparameter,))
 
@@ -676,16 +685,17 @@ class VarPositional(collections.abc.Iterable):
             metadata: typing.Optional[_metadata_type] = None
         ) -> 'VarPositional':
         """
-        A factory method which creates a new :class:`VarPositional` instance.
+        A factory method which creates a new
+        :class:`~forge._parameter.VarPositional` instance.
         Convenient for use like::
 
             *args(converter=lambda ctx, name, value: value[::-1])
 
-        :param name: see :paramref:`.FParameter.name`
-        :param converter: see :paramref:`.FParameter.converter`
-        :param validator: see :paramref:`.FParameter.validator`
-        :param metadata: see :paramref:`.FParameter.metadata`
-        :return: a new instance of :class:`VarPositional`
+        :param name: see :paramref:`~forge.FParameter.name`
+        :param converter: see :paramref:`~forge.FParameter.converter`
+        :param validator: see :paramref:`~forge.FParameter.validator`
+        :param metadata: see :paramref:`~forge.FParameter.metadata`
+        :return: a new instance of :class:`~forge._parameter.VarPositional`
         """
         return type(self)(
             name=name,
@@ -698,7 +708,7 @@ class VarPositional(collections.abc.Iterable):
 class VarKeyword(collections.abc.Mapping):
     """
     A convenience class that generates an iterable consisting of a mapping
-    of ``name`` to a :class:`FParameter` of :term:`parameter kind`
+    of ``name`` to a :class:`~forge.FParameter` of :term:`parameter kind`
     :term:`var-keyword`.
 
     Instances can be used as either ``**kwargs`` or ``**kwargs()``.
@@ -717,7 +727,7 @@ class VarKeyword(collections.abc.Mapping):
 
     While ``name`` can be supplied (by default it's ``kwargs``),
     ``interface_name`` is unavailable.
-    This is because when :class:`FSignature` maps parameters, the mapping
+    This is because when :class:`~forge.FSignature` maps parameters, the mapping
     between :term:`var-keyword` parameters is 1:1, so the interface name for
     :term:`var-keyword` is auto-discovered.
 
@@ -725,10 +735,10 @@ class VarKeyword(collections.abc.Mapping):
     ``__iter__`` and ``__len__``. Inherits methods: ``__contains__``, ``keys``,
     ``items``, ``values``, ``get``, ``__eq__`` and ``__ne__``.
 
-    :param name: see :paramref:`.FParameter.name`
-    :param converter: see :paramref:`.FParameter.converter`
-    :param validator: see :paramref:`.FParameter.validator`
-    :param metadata: see :paramref:`.FParameter.metadata`
+    :param name: see :paramref:`~forge.FParameter.name`
+    :param converter: see :paramref:`~forge.FParameter.converter`
+    :param validator: see :paramref:`~forge.FParameter.validator`
+    :param metadata: see :paramref:`~forge.FParameter.metadata`
     """
     _default_name = 'kwargs'
 
@@ -748,8 +758,8 @@ class VarKeyword(collections.abc.Mapping):
     @property
     def fparameter(self) -> FParameter:
         """
-        :return: a representation of this :class:`VarKeyword` as a
-            :class:`FParameter` of :term:`parameter kind`
+        :return: a representation of this :class:`~forge._parameter.VarKeyword`
+            as a :class:`~forge.FParameter` of :term:`parameter kind`
             :term:`var-keyword`, with attributes ``name``, ``converter``,
             ``validator`` and ``metadata`` from the instance.
         """
@@ -766,9 +776,11 @@ class VarKeyword(collections.abc.Mapping):
         Concrete method for :class:`collections.abc.Mapping`
 
         :key: only retrieves for :paramref:`.VarKeyword.name`
-        :raise: KeyError (if ``key`` is not :attr:`name`)
-        :return: an representation of this :class:`VarKeyword` as a
-            :class:`FParameter` via :attr:`VarKeyword.fparameter`.
+        :raise: KeyError (if ``key`` is not
+            :paramref:`~forge._parameter.VarKeyword.name`)
+        :return: an representation of this :class:`~forge._parameter.VarKeyword`
+            as a :class:`~forge.FParameter` via
+            :attr:`~forge._parameter.VarKeyword.fparameter`.
         """
         if self.name == key:
             return self.fparameter
@@ -779,8 +791,9 @@ class VarKeyword(collections.abc.Mapping):
         Concrete method for :class:`collections.abc.Mapping`
 
         :return: an iterable consisting of one item: the representation of this
-            :class:`VarKeyword` as a :class:`FParameter` via
-            :attr:`VarKeyword.fparameter`.
+            :class:`~forge._parameter.VarKeyword` as a
+            :class:`~forge.FParameter` via
+            :attr:`~forge._parameter.VarKeyword.fparameter`.
         """
         return iter({self.name: self.fparameter})
 
@@ -801,7 +814,8 @@ class VarKeyword(collections.abc.Mapping):
             metadata: typing.Optional[_metadata_type] = None
         ) -> 'VarKeyword':
         """
-        A factory method which creates a new :class:`VarKeyword` instance.
+        A factory method which creates a new
+        :class:`~forge._parameter.VarKeyword` instance.
         Convenient for use like::
 
             **kwargs(
@@ -809,11 +823,11 @@ class VarKeyword(collections.abc.Mapping):
                     {'_' + k: v for k, v in value.items()},
             )
 
-        :param name: see :paramref:`.FParameter.name`
-        :param converter: see :paramref:`.FParameter.converter`
-        :param validator: see :paramref:`.FParameter.validator`
-        :param metadata: see :paramref:`.FParameter.metadata`
-        :return: a new instance of :class:`VarKeyword`
+        :param name: see :paramref:`~forge.FParameter.name`
+        :param converter: see :paramref:`~forge.FParameter.converter`
+        :param validator: see :paramref:`~forge.FParameter.validator`
+        :param metadata: see :paramref:`~forge.FParameter.metadata`
+        :return: a new instance of :class:`~forge._parameter.VarKeyword`
         """
         return type(self)(
             name=name,

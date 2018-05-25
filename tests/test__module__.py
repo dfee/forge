@@ -28,6 +28,7 @@ def test_namespace():
     public_ptn = re.compile(r'^[a-zA-Z]')
     assert set(filter(public_ptn.match, forge.__dict__.keys())) == set([
         # Parameters
+        'Factory',
         'FParameter',
         'VarKeyword', 'kwargs',
         'VarPositional', 'args',

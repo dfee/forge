@@ -79,6 +79,20 @@ The following example is a bit tedious, but its relevance is that it demonstrate
     assert klass.irange == range(klass.imin, klass.imax)
     assert klass() == (klass.imin, klass.imax)
 
+
+And, this works as expected for coroutine functions:
+
+.. doctest::
+
+    import inspect
+    import forge
+
+    @forge.sign()
+    async def func():
+        pass
+
+    assert inspect.iscoroutinefunction(func)
+
 The original function is available, unmodified at :attr:`func.__wrapped__`.
 In addition, there are two additional attributes on the function, an instance of :class:`inspect.Signature`, and a :class:`~forge.Mapper` instance available at :attr:`__mapper__` that holds information about the new signature, the wrapped callable, and how to *map* arguments between the old and new signatures.
 

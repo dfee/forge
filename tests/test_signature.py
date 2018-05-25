@@ -739,34 +739,66 @@ class TestOrderFparams:
         assert _order_fparams(param_b, a=param_a) == [param_b, param_a]
 
 
-def test_sign():
-    """
-    Ensure ``sign`` wrapper appropriately builds and sets ``__mapper__``, and
-    that a call to the wrapped func traverses ``Mapper.__call__`` and the
-    wrapped function.
-    """
-    @sign(*forge.args, **forge.kwargs)
-    def func(*args, **kwargs):
-        return CallArguments(*args, **kwargs)
+class TestSign:
+    def test_callable(self):
+        """
+        Ensure ``sign`` wrapper appropriately builds and sets ``__mapper__``,
+        and that a call to the wrapped func traverses ``Mapper.__call__`` and
+        the wrapped function.
+        """
+        @sign(*forge.args, **forge.kwargs)
+        def func(*args, **kwargs):
+            return CallArguments(*args, **kwargs)
 
-    assert isinstance(func.__mapper__, Mapper)
-    assert isinstance(func.__signature__, inspect.Signature)
+        assert isinstance(func.__mapper__, Mapper)
+        assert isinstance(func.__signature__, inspect.Signature)
 
-    mapper = func.__mapper__
-    assert mapper.callable == func.__wrapped__
-    assert mapper.fsignature == FSignature([
-        forge.vpo('args'),
-        forge.vkw('kwargs'),
-    ])
-    assert mapper == Mapper(mapper.fsignature, func.__wrapped__)
+        mapper = func.__mapper__
+        assert mapper.callable == func.__wrapped__
+        assert mapper.fsignature == FSignature([
+            forge.vpo('args'),
+            forge.vkw('kwargs'),
+        ])
+        assert mapper == Mapper(mapper.fsignature, func.__wrapped__)
 
-    func.__mapper__ = Mock(side_effect=func.__mapper__)
-    call_args = CallArguments(0, a=1)
-    assert func(*call_args.args, **call_args.kwargs) == call_args
-    func.__mapper__.assert_called_once_with(
-        *call_args.args,
-        **call_args.kwargs,
-    )
+        func.__mapper__ = Mock(side_effect=func.__mapper__)
+        call_args = CallArguments(0, a=1)
+        assert func(*call_args.args, **call_args.kwargs) == call_args
+        func.__mapper__.assert_called_once_with(
+            *call_args.args,
+            **call_args.kwargs,
+        )
+
+    def test_coroutine_function(self, loop):
+        """
+        Ensure ``sign`` wrapper appropriately builds and sets ``__mapper__``,
+        and that a call to the wrapped func traverses ``Mapper.__call__`` and
+        the wrapped function (for coroutine functions).
+        """
+        @sign(*forge.args, **forge.kwargs)
+        async def func(*args, **kwargs):
+            return CallArguments(*args, **kwargs)
+
+        assert inspect.iscoroutinefunction(func)
+        assert isinstance(func.__mapper__, Mapper)
+        assert isinstance(func.__signature__, inspect.Signature)
+
+        mapper = func.__mapper__
+        assert mapper.callable == func.__wrapped__
+        assert mapper.fsignature == FSignature([
+            forge.vpo('args'),
+            forge.vkw('kwargs'),
+        ])
+        assert mapper == Mapper(mapper.fsignature, func.__wrapped__)
+
+        func.__mapper__ = Mock(side_effect=func.__mapper__)
+        call_args = CallArguments(0, a=1)
+        coroutine = func(*call_args.args, **call_args.kwargs)
+        assert loop.run_until_complete(coroutine) == call_args
+        func.__mapper__.assert_called_once_with(
+            *call_args.args,
+            **call_args.kwargs,
+        )
 
 
 def test_resign():
