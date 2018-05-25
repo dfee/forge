@@ -7,6 +7,7 @@ from ._marker import (
     void,
 )
 from ._parameter import (
+    Factory,
     FParameter,
     VarKeyword,
     VarPositional,
