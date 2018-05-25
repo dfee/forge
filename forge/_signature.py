@@ -161,8 +161,8 @@ class FSignature(collections.abc.Mapping, immutable.Immutable):
         var_keyword = None
 
         # Validation
-        name_set = set()  # type: Set[str]
-        iname_set = set()  # type: Set[str]
+        name_set = set()  # type: typing.Set[str]
+        iname_set = set()  # type: typing.Set[str]
         for i, current in enumerate(fparameters):
             if not isinstance(current, FParameter):
                 raise TypeError(
