@@ -134,6 +134,65 @@ This is exciting because while we've been able to dynamically create ``class`` o
         assert forge.stringify_callable(func2) == 'func2(a, b)'
 
 
+.. _basic-usage_reflecting-a-signature:
+
+Reflecting a signature
+======================
+
+Python developers often want to reflect the parameters of another callable, for instance when specializing a callable's usage.
+For example:
+
+.. testcode::
+
+    import logging
+
+    def func(a, b, c=0, *args, **kwargs):
+        return (a, b, c, args, kwargs)
+
+    def log_and_func(a, b, c, *args, **kwargs):
+        logging.warn('{}'.format(dict(a=a, b=b, c=c, args=args, kwargs=kwargs)))
+        return func(a, b, c, *args, **kwargs)
+
+    assert log_and_func(1, 2, 3, 4, d=5) == (1, 2, 3, (4,), {'d': 5})
+
+This can be simplified with :func:`~forge.reflect`:
+
+.. testcode::
+
+    import logging
+    import forge
+
+    def func(a, b, c, *args, **kwargs):
+        return (a, b, c, args, kwargs)
+
+    @forge.reflect(func)
+    def log_and_func(*args, **kwargs):
+        logging.warn('{}'.format(dict(args=args, kwargs=kwargs)))
+        args = (kwargs.pop('a'), kwargs.pop('b'), kwargs.pop('c'), *args)
+        return func(*args, **kwargs)
+
+    assert forge.stringify_callable(log_and_func) == "log_and_func(a, b, c, *args, **kwargs)"
+    assert log_and_func(1, 2, 3, 4, d=5) == (1, 2, 3, (4,), {'d': 5})
+
+:func:`~forge.reflect` also supports :paramref:`~forge.reflect.include` and :paramref:`~forge.reflect.exclude`, which are iterables of parameter names to include or exclude, respectively.
+
+.. testcode::
+
+    import logging
+    import forge
+
+    def func(a, b, c, *args, **kwargs):
+        return (a, b, c, args, kwargs)
+
+    @forge.reflect(func, exclude=['args'])
+    def log_and_func(**kwargs):
+        logging.warn('{}'.format(kwargs))
+        return func(**kwargs)
+
+    assert forge.stringify_callable(log_and_func) == "log_and_func(a, b, c, **kwargs)"
+    assert log_and_func(1, 2, 3, d=5) == (1, 2, 3, (), {'d': 5})
+
+
 .. _basic-usage_adding-a-parameter:
 
 Adding a parameter

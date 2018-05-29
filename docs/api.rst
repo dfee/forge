@@ -109,6 +109,8 @@ Functions
 ---------
 .. autofunction:: forge.sign
 
+.. autofunction:: forge.reflect
+
 .. autofunction:: forge.resign
 
 .. autofunction:: forge.returns
