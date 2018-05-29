@@ -86,6 +86,20 @@ Documentation
 - If you add a new feature, demonstrate its awesomeness on the `examples page`_!
 
 
+Release
+-------
+
+The recipe for releasing new software looks like this:
+
+- Add functionality / docstrings as appropriate
+- Add tests / docstrings as necessary
+- Update ``documentation`` and ``changelog``
+- Tag release in ``setup.cfg``
+- Merge branch into master
+- Add a git tag for the release
+- Build a release using ``python setup.py bdist_wheel`` and publish to PYPI as described in `Packaging Python Projects <https://packaging.python.org/tutorials/packaging-projects/>`_
+
+
 Local Development Environment
 -----------------------------
 
