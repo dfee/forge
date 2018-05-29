@@ -41,6 +41,7 @@ def test_namespace():
         # Signature
         'FSignature',
         'Mapper',
+        'reflect',
         'resign',
         'returns',
         'sign',

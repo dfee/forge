@@ -12,6 +12,7 @@ from forge._signature import (
     FSignature,
     Mapper,
     _order_fparams,
+    reflect,
     pk_strings,
     sign,
     resign,
@@ -340,9 +341,11 @@ class TestMapper:
         Helper factory that generates an ``inspect.Parameter`` based on
         ``name`` , ``kind`` and ``default``
         """
-        return inspect.Parameter(name, kind, default=empty.ccoerce(default)) \
-            if kind is not None \
-            else None
+        return inspect.Parameter(
+            name,
+            kind,
+            default=empty.ccoerce_native(default)
+        ) if kind is not None else None
 
     def test__init__signature_with_bound_params(self):
         """
@@ -737,6 +740,62 @@ class TestOrderFparams:
         param_a = forge.arg('a')
         param_b = forge.arg('b')
         assert _order_fparams(param_b, a=param_a) == [param_b, param_a]
+
+
+class TestReflect:
+    @pytest.fixture
+    def fromfunc(self):
+        """
+        fixture producing expected ``fromfunc``
+        """
+        return lambda a, b, c=0: None
+
+    @pytest.fixture
+    def tofunc(self):
+        """
+        fixture producing raw ``tofunc``
+        """
+        return lambda **kwargs: kwargs
+
+    def test_usage(self, fromfunc, tofunc):
+        """
+        Ensure usage without ``include`` or ``exclude`` works as expected.
+        """
+        wrapped = reflect(fromfunc)(tofunc)
+        assert forge.FSignature.from_callable(wrapped) == FSignature([
+            forge.arg('a'),
+            forge.arg('b'),
+            forge.arg('c', default=0),
+        ])
+        assert wrapped(a=1, b=2) == dict(a=1, b=2, c=0)
+
+    def test_include(self, fromfunc, tofunc):
+        """
+        Ensure usage with ``include``
+        """
+        wrapped = reflect(fromfunc, include=['a', 'b'])(tofunc)
+        assert forge.FSignature.from_callable(wrapped) == FSignature([
+            forge.arg('a'),
+            forge.arg('b'),
+        ])
+        assert wrapped(a=1, b=2) == dict(a=1, b=2)
+
+    def test_exclude(self, fromfunc, tofunc):
+        """
+        Ensure usage with ``exclude``
+        """
+        wrapped = reflect(fromfunc, exclude=['c'])(tofunc)
+        assert forge.FSignature.from_callable(wrapped) == FSignature([
+            forge.arg('a'),
+            forge.arg('b'),
+        ])
+        assert wrapped(a=1, b=2) == dict(a=1, b=2)
+
+    def test_include_exclude_raises(self, fromfunc, tofunc):
+        with pytest.raises(ValueError) as excinfo:
+            reflect(fromfunc, include=['a'], exclude=['b'])
+        assert excinfo.value.args[0] == \
+            "Expected `include`, `exclude`, or neither but received both"
 
 
 class TestSign:

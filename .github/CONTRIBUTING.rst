@@ -76,10 +76,10 @@ Documentation
 
 
      Header of New Top Section
-     -------------------------
+     =========================
 
      Header of New Section
-     ^^^^^^^^^^^^^^^^^^^^^
+     ---------------------
 
      First line of new section.
 

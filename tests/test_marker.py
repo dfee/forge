@@ -53,11 +53,23 @@ class TestEmpty:
         pytest.param(1, 1, id='non_empty'),
         pytest.param(empty, inspect.Parameter.empty, id='empty'),
     ])
-    def test_ccoerce(self, in_, out_):
+    def test_ccoerce_native(self, in_, out_):
         """
-        Ensure that conditional coercion to the native empty works correctly.
+        Ensure that conditional coercion to ``inspect.Parameter.empty``
+        works correctly.
         """
-        assert empty.ccoerce(in_) == out_
+        assert empty.ccoerce_native(in_) == out_
+
+    @pytest.mark.parametrize(('in_', 'out_'), [
+        pytest.param(1, 1, id='non_empty'),
+        pytest.param(inspect.Parameter.empty, empty, id='empty'),
+    ])
+    def test_ccoerce_synthetic(self, in_, out_):
+        """
+        Ensure that conditional coercion to the ``forge.empty`` works correctly.
+        """
+        assert empty.ccoerce_synthetic(in_) == out_
+
 
 
 class TestVoid:

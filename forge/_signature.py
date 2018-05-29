@@ -589,10 +589,45 @@ def _order_fparams(
     ]
 
 
+def reflect(
+        callable: typing.Callable,
+        include: typing.Optional[
+            typing.Union[typing.List, typing.Tuple]
+        ]=None,
+        exclude: typing.Optional[
+            typing.Union[typing.List, typing.Tuple]
+        ]=None
+    ) -> typing.Callable[[typing.Callable], typing.Callable]:
+    """
+    Takes a callable and a list of parameters in include or exclude, and returns
+    a wrapping factory with :paramref:`~forge.reflect.callable` as a template.
+
+    :param callable: a callable whose signature will be used as a template
+    :param include: an optional list of parameters to include in the resultant
+        wrapper.
+    :param exclude: an optional list of parameters to exclude from the resultant
+        wrapper.
+    :return: a wrapping factory that takes a callable and reflect its signature
+        to reflect the signature of :paramref:`~forge.reflect.callable`.
+    """
+    # pylint: disable=W0622, redefined-builtin
+    if include and exclude:
+        raise ValueError(
+            "Expected `include`, `exclude`, or neither but received both"
+        )
+
+    fsig = FSignature.from_callable(callable)
+    if include:
+        return sign(*[v for k, v in fsig.items() if k in include])
+    elif exclude:
+        return sign(*[v for k, v in fsig.items() if k not in exclude])
+    return sign(**fsig)
+
+
 def sign(
         *fparameters: FParameter,
         **named_fparameters: FParameter
-    ) -> typing.Callable[..., typing.Any]:
+    ) -> typing.Callable[[typing.Callable], typing.Callable]:
     """
     Takes instances of :class:`~forge.FParameter` and returns a wrapping
     factory to generate forged signatures.
@@ -637,7 +672,7 @@ def sign(
     :param fparameters: :class:`~forge.FParameter` instances to be ordered
     :param named_fparameters: :class:`~forge.FParameter` instances to be
         ordered, updated
-    :return: a revision factory that takes a callable and updates it so that
+    :return: a wrapping factory that takes a callable and updates it so that
         it has a signature as defined by the
         :paramref:`.resign.fparameters` and
         :paramref:`.resign.named_fparameters`
@@ -670,7 +705,7 @@ def sign(
 def resign(
         *fparameters: FParameter,
         **named_fparameters: FParameter
-    ) -> typing.Callable[..., typing.Any]:
+    ) -> typing.Callable[[typing.Callable], typing.Callable]:
     """
     Takes instances of :class:`~forge.FParameter` and returns a revision
     factory that alters already-forged signatures.
@@ -716,6 +751,6 @@ def returns(
     # pylint: disable=W0622, redefined-builtin
     def inner(callable):
         # pylint: disable=W0622, redefined-builtin
-        set_return_type(callable, empty.ccoerce(type))
+        set_return_type(callable, empty.ccoerce_native(type))
         return callable
     return inner

@@ -101,6 +101,20 @@ class TestFactory:
 
 class TestFParameter:
     # pylint: disable=R0904, too-many-public-methods
+    def test_cls_constants(self):
+        """
+        Ensure cls constants for ``FParameter``
+        """
+        for k, v in {
+                'empty': empty,
+                'POSITIONAL_ONLY': POSITIONAL_ONLY,
+                'POSITIONAL_OR_KEYWORD': POSITIONAL_OR_KEYWORD,
+                'VAR_POSITIONAL': VAR_POSITIONAL,
+                'KEYWORD_ONLY': KEYWORD_ONLY,
+                'VAR_KEYWORD': VAR_KEYWORD,
+            }.items():
+            assert getattr(FParameter, k) is v
+
     @pytest.mark.parametrize(('default', 'factory', 'result'), [
         pytest.param(1, empty, 1, id='default'),
         pytest.param(empty, dummy_func, Factory(dummy_func), id='factory'),
@@ -368,7 +382,6 @@ class TestFParameter:
             converter.assert_called_once_with(ctx, name, mock)
             mock.assert_not_called()
 
-
     @pytest.mark.parametrize(('rkey', 'rval'), [
         pytest.param('kind', KEYWORD_ONLY, id='kind'),
         pytest.param('default', 1, id='default'),
@@ -444,7 +457,12 @@ class TestFParameter:
         for k, v in FPARAM_DEFAULTS.items():
             assert getattr(fparam, k) == v
 
-    def test_from_parameter(self):
+    @pytest.mark.parametrize(('annotation', 'default'), [
+        pytest.param(int, 3, id='annotation_and_default'),
+        pytest.param(empty.native, 3, id='empty_annotation'),
+        pytest.param(int, empty.native, id='empty_default'),
+    ])
+    def test_from_parameter(self, annotation, default):
         """
         Ensure expected construction of an instance of ``FParameter`` from an
         instance of ``inspect.Parameter``
@@ -452,8 +470,8 @@ class TestFParameter:
         kwargs = dict(
             name='a',
             kind=POSITIONAL_ONLY,
-            annotation=int,
-            default=3,
+            annotation=annotation,
+            default=default,
         )
         param = inspect.Parameter(**kwargs)
         fparam = FParameter.from_parameter(param)
@@ -462,8 +480,12 @@ class TestFParameter:
                 kind=kwargs['kind'],
                 name=kwargs['name'],
                 interface_name=kwargs['name'],
-                type=kwargs['annotation'],
-                default=kwargs['default'],
+                type=kwargs['annotation'] \
+                    if kwargs['annotation'] is not empty.native \
+                    else empty,
+                default=kwargs['default'] \
+                    if kwargs['default'] is not empty.native \
+                    else empty,
             ).items():
             assert getattr(fparam, k) == v
 

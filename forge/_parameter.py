@@ -83,6 +83,8 @@ class FParameter(immutable.Immutable, metaclass=CreationOrderMeta):
         :term:`keyword-only` :class:`~forge.FParameter`
         - :func:`~forge.vkw` for :term:`var-keyword` :class:`~forge.FParameter`
 
+    .. versionchanged:: 18.5.1 added :class:`~forge.empty`
+
     :param kind: the :term:`parameter kind`, which detemrines the position
         of the parameter in a callable signature.
     :param name: the public name of the parameter.
@@ -111,6 +113,13 @@ class FParameter(immutable.Immutable, metaclass=CreationOrderMeta):
         (only the first parameter in a :class:`~forge.FSignature` can be
         contextual)
     :param metadata: optional, extra meta-data that describes the parameter
+
+    :cvar empty: :class:`~forge.empty`
+    :cvar POSITIONAL_ONLY: :attr:`inspect.Parameter.POSITIONAL_ONLY`
+    :cvar POSITIONAL_OR_KEYWORD: :attr:`inspect.Parameter.POSITIONAL_OR_KEYWORD`
+    :cvar VAR_POSITIONAL: :attr:`inspect.Parameter.VAR_POSITIONAL`
+    :cvar KEYWORD_ONLY: :attr:`inspect.Parameter.KEYWORD_ONLY`
+    :cvar VAR_KEYWORD: :attr:`inspect.Parameter.VAR_KEYWORD`
     """
 
     __slots__ = (
@@ -127,6 +136,7 @@ class FParameter(immutable.Immutable, metaclass=CreationOrderMeta):
         'metadata',
     )
 
+    empty = empty
     POSITIONAL_ONLY = inspect.Parameter.POSITIONAL_ONLY
     POSITIONAL_OR_KEYWORD = inspect.Parameter.POSITIONAL_OR_KEYWORD
     VAR_POSITIONAL = inspect.Parameter.VAR_POSITIONAL
@@ -313,8 +323,8 @@ class FParameter(immutable.Immutable, metaclass=CreationOrderMeta):
         return inspect.Parameter(
             name=self.name,
             kind=self.kind,
-            default=empty.ccoerce(self.default),
-            annotation=empty.ccoerce(self.type),
+            default=empty.ccoerce_native(self.default),
+            annotation=empty.ccoerce_native(self.type),
         )
 
     def replace(
@@ -384,8 +394,8 @@ class FParameter(immutable.Immutable, metaclass=CreationOrderMeta):
             kind=parameter.kind,
             name=parameter.name,
             interface_name=parameter.name,
-            default=parameter.default,
-            type=parameter.annotation
+            default=cls.empty.ccoerce_synthetic(parameter.default),
+            type=cls.empty.ccoerce_synthetic(parameter.annotation),
         )
 
     @classmethod

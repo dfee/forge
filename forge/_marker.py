@@ -66,11 +66,30 @@ class empty(metaclass=MarkerMeta):
     native = inspect.Parameter.empty
 
     @classmethod
-    def ccoerce(cls, value):
+    def ccoerce_native(cls, value):
         """
-        Conditionally coerce the value to a non-:class:`.empty` value.
+        Conditionally coerce the value to a non-:class:`~forge.empty` value.
 
-        :return: the value, if the value is not an instance of :class:`.empty`,
-            otherwise return :class:`inspect.Paramter.empty`
+        .. versionchanged:: 18.5.1 ``coerce`` -> ``coerce_native``
+
+        :param value: the value to conditionally coerce
+        :return: the value, if the value is not an instance of
+            :class:`~forge.empty`, otherwise return
+            :class:`inspect.Paramter.empty`
         """
         return value if value is not cls else cls.native
+
+    @classmethod
+    def ccoerce_synthetic(cls, value):
+        """
+        Conditionally coerce the value to a
+        non-:class:`inspect.Parameter.empty` value.
+
+        .. versionadded:: 18.5.1
+
+        :param value: the value to conditionally coerce
+        :return: the value, if the value is not an instance of
+            :class:`inspect.Paramter.empty`, otherwise return
+            :class:`~forge.empty`
+        """
+        return value if value is not cls.native else cls
