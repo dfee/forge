@@ -23,7 +23,7 @@ from forge._utils import (
 class CallArguments(immutable.Immutable):
     """
     An immutable container for call arguments, i.e. term:`var-positional`
-    (e.g. `*args``) and :term:`var-keyword` (e.g. **kwargs``).
+    (e.g. ``*args``) and :term:`var-keyword` (e.g. ``**kwargs``).
 
     :param args: positional arguments used in a call
     :param kwargs: keyword arguments used in a call
@@ -246,18 +246,40 @@ class FSignature(collections.abc.Mapping, immutable.Immutable):
         )
 
     # Begin Mapping methods
-    def __getitem__(self, key: str) -> typing.Any:
+    def __getitem__(
+            self,
+            key: typing.Union[str, slice],
+        ) -> typing.Union[FParameter, typing.List[FParameter]]:
         """
         Concrete method for :class:`collections.abc.Mapping`
 
+        .. versionchanged:: v18.5.1 added slice support
+
         :param key: a key that corresponds to a
-            :paramref:`~forge.FParameter.name`
+            :paramref:`~forge.FParameter.name`, or an instance of
+            :class:`slice`, with ``start`` and ``stop`` being valid
+            :paramref:`~forge.FParameter.name`. Note that unlike list slices,
+            *both* the start and stop are included when present in the
+            :class:`~forge.FSignature`.
         :raises KeyError: if an instance of :class:`~forge.FParameter` with
             :paramref:`~forge.FParameter.name` doesn't exist on this
             :class:`~forge.FSignature`.
         :return: the instance of :class:`~forge.FParameter.name` for which
             :paramref:`~forge.FSignature.__getitem__.key` corresponds.
         """
+        if isinstance(key, slice):
+            fparams = []
+            visited_start = not bool(key.start)
+            for name, fparam in self.items():
+                if name == key.stop:
+                    fparams.append(fparam)
+                    break
+                elif visited_start:
+                    fparams.append(fparam)
+                elif name == key.start:
+                    visited_start = True
+                    fparams.append(fparam)
+            return fparams
         return self._data[key]
 
     def __iter__(self) -> typing.Iterator:

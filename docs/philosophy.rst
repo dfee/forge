@@ -74,10 +74,29 @@ If we look at the extended, online documentation for :func:`logging.warning`, we
 
     ...
 
+That's a bit of documentation, but it uncovers why our attempt at supplying keyword arguments raises a :class:`TypeError`.
+The string formatting that the logging methods provide has no relation to the string formatting provided by :meth:`str.format` from `PEP 3101`_ (introduced in Python 2.6 and Python 3.0).
 
-That's a bit of documentation, but it uncovers why our attempt at supplying keyword arguments raises a :class:`TypeError`. The string formatting that the logging methods provide has no relation to the string formatting provided by :meth:`str.format` from `PEP 3101`_ (introduced in Python 2.6 and Python 3.0).
+In fact, there is a significant amount of documentation clarifying `formatting style compatibility <https://docs.python.org/3/howto/logging-cookbook.html#use-of-alternative-formatting-styles>`_ with the ``logging`` methods.
 
-In fact, there is significant amounts of documentation clarifying `formatting style compatibility <https://docs.python.org/3/howto/logging-cookbook.html#use-of-alternative-formatting-styles>`_ with the ``logging`` methods.
+We can also discover what parameters are actually accepted by digging through the source code.
+As documentation is (often) lacking, this is a fairly standard process.
+
+- :func:`logging.warning: `calls <https://github.com/python/cpython/blob/05f1c8902c78dce66aed067444e2b973221bae2b/Lib/logging/__init__.py#L1920>`_ ``root.warning`` (an instance of :class:`logging.Logger`)
+- :meth:`logging.Logger.warning` `calls <https://github.com/python/cpython/blob/05f1c8902c78dce66aed067444e2b973221bae2b/Lib/logging/__init__.py#L1334>`_ :meth:`logging.Logger._log`.
+- :meth:`logging.Logger._log` `has our expected call signature <https://github.com/python/cpython/blob/05f1c8902c78dce66aed067444e2b973221bae2b/Lib/logging/__init__.py#L1445>`_:
+
+.. code-block:: python
+
+    def _log(self, level, msg, args, exc_info=None, extra=None, stack_info=False):
+        """
+        Low-level logging routine which creates a LogRecord and then calls
+        all the handlers of this logger to handle the record.
+        """
+        ...
+
+So there are our parameters!
+
 But, let's have some empathy; the Python core developers certainly don't want to repeat themselves six times – once for each ``logging`` level – right?
 
 This example illuminates the problem that ``forge`` sets out to solve: writing, testing and maintaining signatures requires too much effort.
@@ -125,10 +144,10 @@ Looking back on the code for :func:`logging.debug`, let's try and improve upon t
 
     make_explicit = forge.sign(
         forge.arg('msg'),
-        *forge.args('substitutions'),
-        exc_info=forge.kwarg(default=False),
-        stack_info=forge.kwarg(default=False),
-        extras=forge.kwarg(factory=dict),
+        *forge.args,
+        forge.kwarg('exc_info', default=None),
+        forge.kwarg('extra', default=None),
+        forge.kwarg('stack_info', default=False),
     )
     debug = make_explicit(logging.debug)
     info = make_explicit(logging.info)
@@ -138,7 +157,7 @@ Looking back on the code for :func:`logging.debug`, let's try and improve upon t
     exception = make_explicit(logging.exception)
 
     assert forge.stringify_callable(debug) == \
-        'debug(msg, *substitutions, exc_info=False, stack_info=False, extras=<Factory dict>)'
+        'debug(msg, *args, exc_info=None, extra=None, stack_info=False)'
 
 We've aided our intuition about how to use these functions.
 

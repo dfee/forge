@@ -1,3 +1,4 @@
+from collections import OrderedDict
 import inspect
 from unittest.mock import Mock
 
@@ -24,6 +25,7 @@ from forge._signature import (
 # pylint: disable=R0201, no-self-use
 # pylint: disable=W0212, protected-access
 # pylint: disable=W0621, redefined-outer-name
+# pylint: disable=C0302, too-many-lines
 # pylint: disable=R0904, too-many-public-methods
 
 POSITIONAL_ONLY = FParameter.POSITIONAL_ONLY
@@ -219,7 +221,7 @@ class TestFSignature:
         assert repr(FSignature([forge.self])) == '<FSignature (self)>'
 
     # Begin collections.abc.Mapping Tests
-    def test__getitem__(self):
+    def test__getitem__str(self):
         """
         Ensure that ``__getitem__`` retrieves fparams by ``name``
         (an abstract collections.abc.Mapping method)
@@ -227,6 +229,22 @@ class TestFSignature:
         fparam = forge.arg('a')
         fsig = FSignature([fparam])
         assert fsig['a'] is fparam
+
+    @pytest.mark.parametrize(('start', 'end', 'expected'), [
+        pytest.param('c', None, 'cd', id='start'),
+        pytest.param(None, 'c', 'abc', id='end'),
+        pytest.param('b', 'c', 'bc', id='start_and_end'),
+        pytest.param(None, None, 'abcd', id='no_start_no_end'),
+        pytest.param('x', None, '', id='unknown_start'),
+        pytest.param(None, 'x', 'abcd', id='unknown_end'),
+    ])
+    def test__getitem__slice(self, start, end, expected):
+        """
+        Ensure that ``__getitem__`` retrives from slice.start forward
+        """
+        fparams = OrderedDict([(name, forge.arg(name)) for name in 'abcd'])
+        fsig = FSignature(list(fparams.values()))
+        assert fsig[start:end] == [fparams[e] for e in expected]
 
     def test__len__(self):
         """
@@ -832,7 +850,7 @@ class TestReflect:
         ])
         assert wrapped(a=1, b=2) == dict(a=1, b=2)
 
-    def test_include_exclude_raises(self, fromfunc, tofunc):
+    def test_include_exclude_raises(self, fromfunc):
         with pytest.raises(ValueError) as excinfo:
             reflect(fromfunc, include=['a'], exclude=['b'])
         assert excinfo.value.args[0] == \

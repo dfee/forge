@@ -18,7 +18,6 @@ With this pattern, the caller has no ability to override ``default`` values, mak
 .. testcode::
 
     import logging
-    import inspect
     from uuid import uuid4
 
     import forge
@@ -59,53 +58,32 @@ This is a useful alternative to provided a generic :term:`var-keyword` and *whit
 
 .. testcode::
 
-    import inspect
     import forge
     import requests
 
-    defaults = {
-        k: forge.kwarg(default=None) for k in (
-            'method', 'url', 'params', 'data', 'json', 'headers', 'cookies',
-            'files', 'auth', 'timeout', 'allow_redirects', 'proxies', 'verify',
-            'stream', 'cert',
-        )
-    }
+    common = forge.fsignature(requests.Session.request)['url':]
 
-    request = forge.sign(
-        forge.arg('method'),
-        forge.arg('url'),
-        **{k: v for k, v in defaults.items() if k not in ('method', 'url')},
-    )(requests.request)
+    request = forge.sign(forge.arg('method'), *common)(requests.request)
 
-    head = forge.sign(
-        forge.arg('url'),
-        **{k: v for k, v in defaults.items() if k not in ('url')},
-    )(requests.request)
+    post = forge.sign(*common)(requests.post)
+    get = forge.sign(*common)(requests.get)
+    update = forge.sign(*common)(requests.update)
+    delete = forge.sign(*common)(requests.delete)
+    head = forge.sign(*common)(requests.head)
+    options = forge.sign(*common)(requests.options)
+    patch = forge.sign(*common)(requests.patch)
 
-    get = forge.sign(
-        forge.arg('url'),
-        forge.arg('params', default=None),
-        **{k: v for k, v in defaults.items() if k not in ('url', 'params')},
-    )(requests.get)
-
-    post = forge.sign(
-        forge.arg('url'),
-        forge.arg('data', default=None),
-        forge.arg('json', default=None),
-        **{k: v for k, v in defaults.items() if k not in ('url', 'data', 'json')},
-    )
-
-    # `requests.request` looks like this (notice the var-keyword **kwargs)
+    # `requests.request` looks like this:
     assert forge.stringify_callable(requests.request) == \
         'request(method, url, **kwargs)'
 
-    # our wrapped `request` looks like this
+    # our `request` looks like this:
     assert forge.stringify_callable(request) == (
         'request('
-            'method, url, *, params=None, data=None, json=None, headers=None, '
-            'cookies=None, files=None, auth=None, timeout=None, '
-            'allow_redirects=None, proxies=None, verify=None, stream=None, '
-            'cert=None'
+            'method, url, params=None, data=None, headers=None, cookies=None, '
+            'files=None, auth=None, timeout=None, allow_redirects=True, '
+            'proxies=None, hooks=None, stream=None, verify=None, cert=None, '
+            'json=None'
         ')'
     )
 

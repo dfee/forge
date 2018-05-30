@@ -31,6 +31,10 @@ from ._utils import (
     stringify_callable,
 )
 
+# Signature
+fsignature = FSignature.from_callable
+
+# Parameters
 # pylint: disable=C0103, invalid-name
 pos = FParameter.create_positional_only
 arg = pok = FParameter.create_positional_or_keyword

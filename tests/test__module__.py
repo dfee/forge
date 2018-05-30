@@ -42,6 +42,7 @@ def test_namespace():
         'CallArguments',
         'FSignature',
         'Mapper',
+        'fsignature',
         'reflect',
         'resign',
         'returns',
@@ -63,7 +64,18 @@ def test_namespace():
     ])
 
 
-class TestConvenience:
+class TestSignatureConvenience:
+    @pytest.mark.parametrize(('name', 'method'), [
+        ('fsignature', forge.FSignature.from_callable),
+    ])
+    def test_constructors(self, name, method):
+        """
+        Assert constructor nicknames are what we exect them to be.
+        """
+        assert getattr(forge, name) == method
+
+
+class TestParameterConvenience:
     @pytest.mark.parametrize(('name', 'method'), [
         ('pos', forge.FParameter.create_positional_only),
         ('pok', forge.FParameter.create_positional_or_keyword),
