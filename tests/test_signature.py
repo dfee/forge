@@ -12,10 +12,12 @@ from forge._signature import (
     FSignature,
     Mapper,
     _order_fparams,
-    reflect,
     pk_strings,
-    sign,
+    reflect,
     resign,
+    sign,
+    sort_arguments,
+    sort_arguments_and_call,
 )
 
 # pylint: disable=C0103, invalid-name
@@ -81,30 +83,6 @@ class TestCallArguments:
         """
         assert repr(CallArguments(*args, **kwargs)) == \
             '<CallArguments ({})>'.format(expected)
-
-
-class TestReturns:
-    def test_no__signature__(self):
-        """
-        Ensure we can set the ``return type`` annotation on a function without
-        a ``__signature__``
-        """
-        @forge.returns(int)
-        def myfunc():
-            pass
-        assert myfunc.__annotations__.get('return') == int
-
-    def test__signature__(self):
-        """
-        Ensure we can set the ``return type`` annotation on a function with
-        a ``__signature__``
-        """
-        def myfunc():
-            pass
-        myfunc.__signature__ = inspect.Signature()
-
-        myfunc = forge.returns(int)(myfunc)
-        assert myfunc.__signature__.return_annotation == int
 
 
 class TestFSignature:
@@ -742,61 +720,6 @@ class TestOrderFparams:
         assert _order_fparams(param_b, a=param_a) == [param_b, param_a]
 
 
-class TestReflect:
-    @pytest.fixture
-    def fromfunc(self):
-        """
-        fixture producing expected ``fromfunc``
-        """
-        return lambda a, b, c=0: None
-
-    @pytest.fixture
-    def tofunc(self):
-        """
-        fixture producing raw ``tofunc``
-        """
-        return lambda **kwargs: kwargs
-
-    def test_usage(self, fromfunc, tofunc):
-        """
-        Ensure usage without ``include`` or ``exclude`` works as expected.
-        """
-        wrapped = reflect(fromfunc)(tofunc)
-        assert forge.FSignature.from_callable(wrapped) == FSignature([
-            forge.arg('a'),
-            forge.arg('b'),
-            forge.arg('c', default=0),
-        ])
-        assert wrapped(a=1, b=2) == dict(a=1, b=2, c=0)
-
-    def test_include(self, fromfunc, tofunc):
-        """
-        Ensure usage with ``include``
-        """
-        wrapped = reflect(fromfunc, include=['a', 'b'])(tofunc)
-        assert forge.FSignature.from_callable(wrapped) == FSignature([
-            forge.arg('a'),
-            forge.arg('b'),
-        ])
-        assert wrapped(a=1, b=2) == dict(a=1, b=2)
-
-    def test_exclude(self, fromfunc, tofunc):
-        """
-        Ensure usage with ``exclude``
-        """
-        wrapped = reflect(fromfunc, exclude=['c'])(tofunc)
-        assert forge.FSignature.from_callable(wrapped) == FSignature([
-            forge.arg('a'),
-            forge.arg('b'),
-        ])
-        assert wrapped(a=1, b=2) == dict(a=1, b=2)
-
-    def test_include_exclude_raises(self, fromfunc, tofunc):
-        with pytest.raises(ValueError) as excinfo:
-            reflect(fromfunc, include=['a'], exclude=['b'])
-        assert excinfo.value.args[0] == \
-            "Expected `include`, `exclude`, or neither but received both"
-
 
 class TestSign:
     def test_callable(self):
@@ -860,6 +783,62 @@ class TestSign:
         )
 
 
+class TestReflect:
+    @pytest.fixture
+    def fromfunc(self):
+        """
+        fixture producing expected ``fromfunc``
+        """
+        return lambda a, b, c=0: None
+
+    @pytest.fixture
+    def tofunc(self):
+        """
+        fixture producing raw ``tofunc``
+        """
+        return lambda **kwargs: kwargs
+
+    def test_usage(self, fromfunc, tofunc):
+        """
+        Ensure usage without ``include`` or ``exclude`` works as expected.
+        """
+        wrapped = reflect(fromfunc)(tofunc)
+        assert forge.FSignature.from_callable(wrapped) == FSignature([
+            forge.arg('a'),
+            forge.arg('b'),
+            forge.arg('c', default=0),
+        ])
+        assert wrapped(a=1, b=2) == dict(a=1, b=2, c=0)
+
+    def test_include(self, fromfunc, tofunc):
+        """
+        Ensure usage with ``include``
+        """
+        wrapped = reflect(fromfunc, include=['a', 'b'])(tofunc)
+        assert forge.FSignature.from_callable(wrapped) == FSignature([
+            forge.arg('a'),
+            forge.arg('b'),
+        ])
+        assert wrapped(a=1, b=2) == dict(a=1, b=2)
+
+    def test_exclude(self, fromfunc, tofunc):
+        """
+        Ensure usage with ``exclude``
+        """
+        wrapped = reflect(fromfunc, exclude=['c'])(tofunc)
+        assert forge.FSignature.from_callable(wrapped) == FSignature([
+            forge.arg('a'),
+            forge.arg('b'),
+        ])
+        assert wrapped(a=1, b=2) == dict(a=1, b=2)
+
+    def test_include_exclude_raises(self, fromfunc, tofunc):
+        with pytest.raises(ValueError) as excinfo:
+            reflect(fromfunc, include=['a'], exclude=['b'])
+        assert excinfo.value.args[0] == \
+            "Expected `include`, `exclude`, or neither but received both"
+
+
 def test_resign():
     """
     Ensure ``resign`` replaces the ``__mapper__``, and that a call to the
@@ -888,3 +867,138 @@ def test_resign():
         *call_args.args,
         **call_args.kwargs,
     )
+
+
+class TestReturns:
+    def test_no__signature__(self):
+        """
+        Ensure we can set the ``return type`` annotation on a function without
+        a ``__signature__``
+        """
+        @forge.returns(int)
+        def myfunc():
+            pass
+        assert myfunc.__annotations__.get('return') == int
+
+    def test__signature__(self):
+        """
+        Ensure we can set the ``return type`` annotation on a function with
+        a ``__signature__``
+        """
+        def myfunc():
+            pass
+        myfunc.__signature__ = inspect.Signature()
+
+        myfunc = forge.returns(int)(myfunc)
+        assert myfunc.__signature__.return_annotation == int
+
+
+class TestSortArguments:
+    @pytest.mark.parametrize(('in_', 'expected'), [
+        pytest.param(dict(arguments={'a': 1}), 1, id='arguments'),
+        pytest.param(dict(vkw={'a': 1}), 1, id='vkw'),
+        pytest.param(dict(arguments={'a': 1}, vkw={'a': 2}), 1, id='override'),
+    ])
+    @pytest.mark.parametrize(('kind',), [
+        pytest.param(POSITIONAL_ONLY, id='positional-only'),
+        pytest.param(POSITIONAL_OR_KEYWORD, id='positional-or-keyword'),
+        pytest.param(KEYWORD_ONLY, id='keyword-only'),
+    ])
+    def test_non_variadic(self, kind, in_, expected):
+        """
+        Ensure mapping for kind -> result
+
+        - POSITIONAL_ONLY -> CallArguments(1)
+        - POSITIONAL_OR_KEYWORD -> CallArguments(1)
+        - KEYWORD_ONLY -> CallArguments(a=1)
+
+        with `a` passed as an argument, as a vkw argument, and as an argument
+        overriding a vkw.
+        """
+        sig = inspect.Signature([inspect.Parameter('a', kind)])
+        result = sort_arguments(sig, **in_)
+        if kind is KEYWORD_ONLY:
+            assert result == CallArguments(a=expected)
+        else:
+            assert result == CallArguments(expected)
+
+    @pytest.mark.parametrize(('in_',), [
+        pytest.param(dict(arguments={'a': 1}), id='arguments'),
+        pytest.param(dict(vkw={'a': 1}), id='vkw'),
+        pytest.param(dict(arguments={'a': 1}, vkw={'a': 2}), id='override'),
+    ])
+    def test_to_vkw(self, in_):
+        """
+        Ensure mapping to vkw if parameter with name DNE
+        """
+        sig = inspect.Signature([inspect.Parameter('kwargs', VAR_KEYWORD)])
+        assert sort_arguments(sig, **in_) == CallArguments(a=1)
+
+    @pytest.mark.parametrize(('in_',), [(dict(vpo=[1, 2, 3]),)])
+    def test_vpo_passthrough(self, in_):
+        """
+        Ensure mapping to vpo is pass-through
+        """
+        sig = inspect.Signature([inspect.Parameter('args', VAR_POSITIONAL)])
+        assert sort_arguments(sig, **in_) == CallArguments(*in_['vpo'])
+
+    @pytest.mark.parametrize(('as_',), [('arguments',), ('vkw',)])
+    def test_remainder_no_vkw_param_raises(self, as_):
+        """
+        Ensure a signature without a var-keyword parameter raises when extra
+        arguments are supplied
+        """
+        sig = inspect.Signature()
+        with pytest.raises(TypeError) as excinfo:
+            sort_arguments(sig, **{as_: {'a': 1}})
+        assert excinfo.value.args[0] == 'Cannot sort arguments (a)'
+
+    def test_remainder_no_vpo_param_raises(self):
+        """
+        Ensure a signature without a var-positional parameter raises when a
+        var-positional argument is supplied
+        """
+        sig = inspect.Signature()
+        with pytest.raises(TypeError) as excinfo:
+            sort_arguments(sig, vpo=(1,))
+        assert excinfo.value.args[0] == 'Cannot sort var-positional arguments'
+
+    @pytest.mark.parametrize(('kind',), [
+        pytest.param(POSITIONAL_ONLY, id='positional-only'),
+        pytest.param(POSITIONAL_OR_KEYWORD, id='positional-or-keyword'),
+        pytest.param(KEYWORD_ONLY, id='keyword-only'),
+    ])
+    def test_no_mapping_to_non_default_parameter_raises(self, kind):
+        """
+        Ensure that a non-default parameter must have an argument passed
+        """
+        sig = inspect.Signature([inspect.Parameter('a', kind)])
+        with pytest.raises(ValueError) as excinfo:
+            sort_arguments(sig)
+        assert excinfo.value.args[0] == \
+            "Non-default parameter 'a' has no argument value"
+
+    def test_callable(self):
+        """
+        Ensure that callable's are viable arguments for ``to_``
+        """
+        func = lambda a, b=2, *args, c, d=4, **kwargs: None
+        assert sort_arguments(
+            func,
+            arguments={'a': 1, 'c': 3},
+            vpo=('args1',),
+            vkw={'e': 5},
+        ) == CallArguments(1, 2, 'args1', c=3, d=4, e=5)
+
+
+def test_sort_arguments_and_call():
+    """
+    Ensure that ``sort_arguments_and_call`` works as expected
+    """
+    func = lambda a, b=2, *args, c, d=4, **kwargs: (a, b, args, c, d, kwargs)
+    assert sort_arguments_and_call(
+        func,
+        arguments={'a': 1, 'c': 3},
+        vpo=('args1',),
+        vkw={'e': 5},
+    ) == (1, 2, ('args1',), 3, 4, {'e': 5})

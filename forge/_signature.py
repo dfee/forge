@@ -589,41 +589,6 @@ def _order_fparams(
     ]
 
 
-def reflect(
-        callable: typing.Callable,
-        include: typing.Optional[
-            typing.Union[typing.List, typing.Tuple]
-        ]=None,
-        exclude: typing.Optional[
-            typing.Union[typing.List, typing.Tuple]
-        ]=None
-    ) -> typing.Callable[[typing.Callable], typing.Callable]:
-    """
-    Takes a callable and a list of parameters in include or exclude, and returns
-    a wrapping factory with :paramref:`~forge.reflect.callable` as a template.
-
-    :param callable: a callable whose signature will be used as a template
-    :param include: an optional list of parameters to include in the resultant
-        wrapper.
-    :param exclude: an optional list of parameters to exclude from the resultant
-        wrapper.
-    :return: a wrapping factory that takes a callable and reflect its signature
-        to reflect the signature of :paramref:`~forge.reflect.callable`.
-    """
-    # pylint: disable=W0622, redefined-builtin
-    if include and exclude:
-        raise ValueError(
-            "Expected `include`, `exclude`, or neither but received both"
-        )
-
-    fsig = FSignature.from_callable(callable)
-    if include:
-        return sign(*[v for k, v in fsig.items() if k in include])
-    elif exclude:
-        return sign(*[v for k, v in fsig.items() if k not in exclude])
-    return sign(**fsig)
-
-
 def sign(
         *fparameters: FParameter,
         **named_fparameters: FParameter
@@ -702,6 +667,41 @@ def sign(
     return wrapper
 
 
+def reflect(
+        callable: typing.Callable,
+        include: typing.Optional[
+            typing.Union[typing.List, typing.Tuple]
+        ]=None,
+        exclude: typing.Optional[
+            typing.Union[typing.List, typing.Tuple]
+        ]=None
+    ) -> typing.Callable[[typing.Callable], typing.Callable]:
+    """
+    Takes a callable and a list of parameters in include or exclude, and returns
+    a wrapping factory with :paramref:`~forge.reflect.callable` as a template.
+
+    :param callable: a callable whose signature will be used as a template
+    :param include: an optional list of parameters to include in the resultant
+        wrapper.
+    :param exclude: an optional list of parameters to exclude from the resultant
+        wrapper.
+    :return: a wrapping factory that takes a callable and reflect its signature
+        to reflect the signature of :paramref:`~forge.reflect.callable`.
+    """
+    # pylint: disable=W0622, redefined-builtin
+    if include and exclude:
+        raise ValueError(
+            "Expected `include`, `exclude`, or neither but received both"
+        )
+
+    fsig = FSignature.from_callable(callable)
+    if include:
+        return sign(*[v for k, v in fsig.items() if k in include])
+    elif exclude:
+        return sign(*[v for k, v in fsig.items() if k not in exclude])
+    return sign(**fsig)
+
+
 def resign(
         *fparameters: FParameter,
         **named_fparameters: FParameter
@@ -754,3 +754,122 @@ def returns(
         set_return_type(callable, empty.ccoerce_native(type))
         return callable
     return inner
+
+
+def sort_arguments(
+        to_: typing.Union[typing.Callable[..., typing.Any], inspect.Signature],
+        arguments: typing.Optional[typing.Dict[str, typing.Any]] = None,
+        vpo: typing.Optional[typing.Union[typing.List, typing.Tuple]] = None,
+        vkw: typing.Optional[typing.Dict[str, typing.Any]] = None,
+    ) -> CallArguments:
+    """
+    Sorts the arguments into a :class:`~forge.CallArguments` instance.
+
+    Usage:
+
+    .. testcode::
+
+        import forge
+
+        def func(a, b=0, *args, c, d=0, **kwargs):
+            pass
+
+        assert forge.sort_arguments(
+            func,
+            arguments=dict(a=1, b=2, c=4, d=5),
+            vpo=(3,),
+            vkw=dict(e=6),
+        ) == forge.CallArguments(1, 2, 3, c=4, d=5, e=6)
+
+    .. versionadded:: v18.5.1
+
+    :param to_: a callable or the signature of a callable which provides the
+        template for sorting the arguments
+    :param arguments: a mapping of argument names to argument values.
+        Should reflect a complete mapping of POSITIONAL_ONLY,
+        POSITIONAL_OR_KEYWORD, and KEYWORD_ONLY arguments, though parameters
+        with default values can be omitted.
+    :param vpo: a list or tuple representing the var-positional parameter
+    :param vkw: a list or tuple representing the var-keyword parameter
+    :return: a :class:`~forge.CallArguments` instance which reflects a proper
+        sorting of the arguments
+    """
+    if not isinstance(to_, inspect.Signature):
+        to_ = inspect.signature(to_)
+
+    arguments = {
+        **(vkw or {}),
+        **(arguments or {}),
+    }
+
+    to_ba = to_.bind_partial()
+    to_ba.apply_defaults()
+
+    vpo_param = get_var_positional_parameter(*to_.parameters.values())
+    vkw_param = get_var_keyword_parameter(*to_.parameters.values())
+
+    for name, param in to_.parameters.items():
+        if param in (vpo_param, vkw_param):
+            continue
+
+        elif name in arguments:
+            to_ba.arguments[name] = arguments.pop(name)
+            continue
+
+        elif param.default is empty.native:
+            raise ValueError(
+                "Non-default parameter '{}' has no argument value".format(name)
+            )
+
+    if arguments:
+        if not vkw_param:
+            raise TypeError('Cannot sort arguments ({})'.\
+            format(', '.join(arguments.keys())))
+        to_ba.arguments[vkw_param.name].update(arguments)
+
+    if vpo:
+        if not vpo_param:
+            raise TypeError("Cannot sort var-positional arguments")
+        to_ba.arguments[vpo_param.name] = tuple(vpo)
+
+    return CallArguments.from_bound_arguments(to_ba)
+
+
+def sort_arguments_and_call(
+        to_: typing.Callable[..., typing.Any],
+        arguments: typing.Optional[typing.Dict[str, typing.Any]] = None,
+        vpo: typing.Optional[typing.Union[typing.List, typing.Tuple]] = None,
+        vkw: typing.Optional[typing.Dict[str, typing.Any]] = None,
+    ) -> typing.Any:
+    """
+    Sorts the arguments into a :class:`~forge.CallArguments` instance and calls
+    the supplied callable :paramref:`~forge.sort_arguments_and_call` with the
+    result.
+
+    Usage:
+
+    .. testcode::
+
+        import forge
+
+        def func(a, b=0, *args, c, d=0, **kwargs):
+            return (a, b, args, c, d, kwargs)
+
+        assert forge.sort_arguments_and_call(
+            func,
+            arguments=dict(a=1, b=2, c=4, d=5),
+            vpo=(3,),
+            vkw=dict(e=6),
+        ) == (1, 2, (3,), 4, 5, {'e': 6})
+
+    .. versionadded:: v18.5.1
+
+    :param to_: see :paramref:`~forge.sort_arguments.to_`
+    :param arguments: see :paramref:`~forge.sort_arguments.arguments`
+    :param vpo: see :paramref:`~forge.sort_arguments.vpo`
+    :param vkw: see :paramref:`~forge.sort_arguments.vkw`
+    :return: the result of :paramref:`~forge.sort_arguments_and_call.to_`
+        called with sorted arguments.
+    """
+    call_args = sort_arguments(to_, arguments, vpo, vkw)
+    return to_(*call_args.args, **call_args.kwargs)

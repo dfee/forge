@@ -83,7 +83,7 @@ Documentation
 
      First line of new section.
 
-- If you add a new feature, demonstrate its awesomeness on the `examples page`_!
+- If you add a new feature, demonstrate its awesomeness on the `basic page`_!
 
 
 Release
@@ -157,5 +157,5 @@ Thank you for contributing to ``forge``!
 .. _tox: https://tox.readthedocs.io/
 .. _reStructuredText: http://www.sphinx-doc.org/en/stable/rest.html
 .. _semantic newlines: http://rhodesmill.org/brandon/2012/one-sentence-per-line/
-.. _examples page: https://github.com/dfee/forge/blob/master/docs/examples.rst
+.. _basic page: https://github.com/dfee/forge/blob/master/docs/basic.rst
 .. _CI: https://travis-ci.org/forge/dfee/

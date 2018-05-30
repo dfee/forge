@@ -20,7 +20,6 @@ Parameter
 
 .. _api_parameter-classes:
 
-
 Classes
 -------
 .. autoclass:: forge.FParameter
@@ -93,11 +92,12 @@ Helpers
 Signature
 =========
 
-
 .. _api_signature-classes:
 
 Classes
 -------
+.. autoclass:: forge.CallArguments
+
 .. autoclass:: forge.FSignature
 
 .. autoclass:: forge.Mapper
@@ -114,6 +114,10 @@ Functions
 .. autofunction:: forge.resign
 
 .. autofunction:: forge.returns
+
+.. autofunction:: forge.sort_arguments
+
+.. autofunction:: forge.sort_arguments_and_call
 
 
 .. _api_config:

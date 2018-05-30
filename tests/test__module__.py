@@ -39,12 +39,15 @@ def test_namespace():
         'vkw',
         'vpo',
         # Signature
+        'CallArguments',
         'FSignature',
         'Mapper',
         'reflect',
         'resign',
         'returns',
         'sign',
+        'sort_arguments',
+        'sort_arguments_and_call',
         # Config
         'get_run_validators',
         'set_run_validators',
