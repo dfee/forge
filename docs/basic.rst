@@ -155,7 +155,7 @@ For example:
 
     assert log_and_func(1, 2, 3, 4, d=5) == (1, 2, 3, (4,), {'d': 5})
 
-This can be simplified with :func:`~forge.reflect`, a convenience for applying the call signature of another function, and :func:`~forge.sort_arguments_and_call`, a convenience for "calling out" to the underlying function with appropriately ordered arguments:
+This can be simplified with :func:`~forge.reflect`, a convenience for applying the call signature of another function, and :func:`~forge.callwith`, a convenience for "calling out" to the underlying function with appropriately ordered arguments:
 
 .. testcode::
 
@@ -168,7 +168,7 @@ This can be simplified with :func:`~forge.reflect`, a convenience for applying t
     @forge.reflect(func)
     def log_and_func(*args, **kwargs):
         logging.warning('{}'.format(dict(args=args, kwargs=kwargs)))
-        return forge.sort_arguments_and_call(func, vpo=args, vkw=kwargs)
+        return forge.callwith(func, vpo=args, vkw=kwargs)
 
     assert forge.stringify_callable(log_and_func) == "log_and_func(a, b, c, *args, **kwargs)"
     assert log_and_func(1, 2, 3, 4, d=5) == (1, 2, 3, (4,), {'d': 5})
@@ -186,7 +186,7 @@ This can be simplified with :func:`~forge.reflect`, a convenience for applying t
     @forge.reflect(func, exclude=['args'])
     def log_and_func(**kwargs):
         logging.warning('{}'.format(kwargs))
-        return forge.sort_arguments_and_call(func, vkw=kwargs)
+        return forge.callwith(func, vkw=kwargs)
 
     assert forge.stringify_callable(log_and_func) == "log_and_func(a, b, c, **kwargs)"
     assert log_and_func(1, 2, 3, d=5) == (1, 2, 3, (), {'d': 5})

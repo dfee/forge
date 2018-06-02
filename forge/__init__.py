@@ -1,6 +1,28 @@
+from ._compose import (
+    BaseRevision,
+    BatchRevision as batch,
+    # Unit
+    DeleteRevision as delete,
+    IdentityRevision as identity,
+    InsertRevision as insert,
+    ManageRevision as manage,
+    ModifyRevision as modify,
+    TranslocateRevision as translocate,
+    # Group
+    CopyRevision as copy,
+    ReplaceRevision as replace,
+    returns, # todo make revision
+    SynthesizeRevision as synthesize,
+)
 from ._config import (
     get_run_validators,
     set_run_validators,
+)
+from ._exceptions import (
+    ForgeError,
+    ImmutableInstanceError,
+    NoParameterError,
+    RevisionError,
 )
 from ._marker import (
     empty,
@@ -16,26 +38,27 @@ from ._signature import (
     CallArguments,
     FSignature,
     Mapper,
-    reflect,
-    resign,
-    returns,
-    sign,
-    sort_arguments,
-    sort_arguments_and_call,
 )
 from ._utils import (
+    callwith,
     getparam,
     get_return_type,
     hasparam,
     set_return_type,
+    sort_arguments,
     stringify_callable,
 )
+
+# pylint: disable=C0103, invalid-name
+
+# Compose
+move = translocate
+sign = synthesize
 
 # Signature
 fsignature = FSignature.from_callable
 
 # Parameters
-# pylint: disable=C0103, invalid-name
 pos = FParameter.create_positional_only
 arg = pok = FParameter.create_positional_or_keyword
 kwarg = kwo = FParameter.create_keyword_only

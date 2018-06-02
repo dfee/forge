@@ -1,11 +1,12 @@
 import builtins
 import inspect
+import types
 import typing
 
 from forge._exceptions import NoParameterError
+import forge._immutable as immutable
 from forge._marker import empty
 from forge._parameter import FParameter
-
 
 POSITIONAL_ONLY = inspect.Parameter.POSITIONAL_ONLY
 POSITIONAL_OR_KEYWORD = inspect.Parameter.POSITIONAL_OR_KEYWORD
@@ -17,6 +18,73 @@ VAR_KEYWORD = inspect.Parameter.VAR_KEYWORD
 TGenericCallable = typing.Callable[..., typing.Any]
 TUnionParameter = \
     typing.TypeVar('TUnionParameter', inspect.Parameter, FParameter)
+
+
+class CallArguments(immutable.Immutable):
+    """
+    An immutable container for call arguments, i.e. term:`var-positional`
+    (e.g. ``*args``) and :term:`var-keyword` (e.g. ``**kwargs``).
+
+    :param args: positional arguments used in a call
+    :param kwargs: keyword arguments used in a call
+    """
+    __slots__ = ('args', 'kwargs')
+
+    def __init__(
+            self,
+            *args: typing.Any,
+            **kwargs: typing.Any
+        ) -> None:
+        super().__init__(args=args, kwargs=types.MappingProxyType(kwargs))
+
+    def __repr__(self) -> str:
+        arguments = ', '.join([
+            *[repr(arg) for arg in self.args],
+            *['{}={}'.format(k, v) for k, v in self.kwargs.items()],
+        ])
+        return '<{} ({})>'.format(type(self).__name__, arguments)
+
+    @classmethod
+    def from_bound_arguments(
+            cls,
+            bound: inspect.BoundArguments,
+        ) -> 'CallArguments':
+        """
+        A factory method that creates an instance of
+        :class:`~forge._signature.CallArguments` from an instance of
+        :class:`instance.BoundArguments` generated from
+        :meth:`inspect.Signature.bind` or :meth:`inspect.Signature.bind_partial`
+
+        :param bound: an instance of :class:`inspect.BoundArguments`
+        :return: an unpacked version of :class:`inspect.BoundArguments`
+        """
+        return cls(*bound.args, **bound.kwargs)  # type: ignore
+
+    def to_bound_arguments(
+            self,
+            signature: inspect.Signature,
+            partial: bool = False,
+        ) -> inspect.BoundArguments:
+        """
+        Generates an instance of :class:inspect.BoundArguments` for a given
+        :class:`inspect.Signature`.
+        Does not raise if invalid or incomplete arguments are provided, as the
+        underlying implementation uses :meth:`inspect.Signature.bind_partial`.
+
+        :param signature: an instance of :class:`inspect.Signature` to which
+            :paramref:`.CallArguments.args` and
+            :paramref:`.CallArguments.kwargs` will be bound.
+        :param partial: does not raise if invalid or incomplete arguments are
+            provided, as the underlying implementation uses
+            :meth:`inspect.Signature.bind_partial`
+        :return: an instance of :class:`inspect.BoundArguments` to which
+            :paramref:`.CallArguments.args` and
+            :paramref:`.CallArguments.kwargs` are bound.
+        """
+        return signature.bind_partial(*self.args, **self.kwargs) \
+            if partial \
+            else signature.bind(*self.args, **self.kwargs)
+
 
 
 def getparam(
@@ -153,6 +221,125 @@ def get_var_keyword_parameter(
         if param.kind == inspect.Parameter.VAR_KEYWORD:
             return param
     return None
+
+
+def sort_arguments(
+        to_: typing.Union[typing.Callable[..., typing.Any], inspect.Signature],
+        arguments: typing.Optional[typing.Dict[str, typing.Any]] = None,
+        vpo: typing.Optional[typing.Union[typing.List, typing.Tuple]] = None,
+        vkw: typing.Optional[typing.Dict[str, typing.Any]] = None,
+    ) -> CallArguments:
+    """
+    Sorts the arguments into a :class:`~forge.CallArguments` instance.
+
+    Usage:
+
+    .. testcode::
+
+        import forge
+
+        def func(a, b=0, *args, c, d=0, **kwargs):
+            pass
+
+        assert forge.sort_arguments(
+            func,
+            arguments=dict(a=1, b=2, c=4, d=5),
+            vpo=(3,),
+            vkw=dict(e=6),
+        ) == forge.CallArguments(1, 2, 3, c=4, d=5, e=6)
+
+    .. versionadded:: v18.5.1
+
+    :param to_: a callable or the signature of a callable which provides the
+        template for sorting the arguments
+    :param arguments: a mapping of argument names to argument values.
+        Should reflect a complete mapping of POSITIONAL_ONLY,
+        POSITIONAL_OR_KEYWORD, and KEYWORD_ONLY arguments, though parameters
+        with default values can be omitted.
+    :param vpo: a list or tuple representing the var-positional parameter
+    :param vkw: a list or tuple representing the var-keyword parameter
+    :return: a :class:`~forge.CallArguments` instance which reflects a proper
+        sorting of the arguments
+    """
+    if not isinstance(to_, inspect.Signature):
+        to_ = inspect.signature(to_)
+
+    arguments = {
+        **(vkw or {}),
+        **(arguments or {}),
+    }
+
+    to_ba = to_.bind_partial()
+    to_ba.apply_defaults()
+
+    vpo_param = get_var_positional_parameter(*to_.parameters.values())
+    vkw_param = get_var_keyword_parameter(*to_.parameters.values())
+
+    for name, param in to_.parameters.items():
+        if param in (vpo_param, vkw_param):
+            continue
+
+        elif name in arguments:
+            to_ba.arguments[name] = arguments.pop(name)
+            continue
+
+        elif param.default is empty.native:
+            raise ValueError(
+                "Non-default parameter '{}' has no argument value".format(name)
+            )
+
+    if arguments:
+        if not vkw_param:
+            raise TypeError('Cannot sort arguments ({})'.\
+            format(', '.join(arguments.keys())))
+        to_ba.arguments[vkw_param.name].update(arguments)
+
+    if vpo:
+        if not vpo_param:
+            raise TypeError("Cannot sort var-positional arguments")
+        to_ba.arguments[vpo_param.name] = tuple(vpo)
+
+    return CallArguments.from_bound_arguments(to_ba)
+
+
+def callwith(
+        to_: typing.Callable[..., typing.Any],
+        arguments: typing.Optional[typing.Dict[str, typing.Any]] = None,
+        vpo: typing.Optional[typing.Union[typing.List, typing.Tuple]] = None,
+        vkw: typing.Optional[typing.Dict[str, typing.Any]] = None,
+    ) -> typing.Any:
+    """
+    Sorts the arguments into a :class:`~forge.CallArguments` instance and calls
+    the supplied callable :paramref:`~forge.callwith` with the
+    result.
+
+    Usage:
+
+    .. testcode::
+
+        import forge
+
+        def func(a, b=0, *args, c, d=0, **kwargs):
+            return (a, b, args, c, d, kwargs)
+
+        assert forge.callwith(
+            func,
+            arguments=dict(a=1, b=2, c=4, d=5),
+            vpo=(3,),
+            vkw=dict(e=6),
+        ) == (1, 2, (3,), 4, 5, {'e': 6})
+
+    .. versionadded:: v18.5.1
+
+    :param to_: see :paramref:`~forge.sort_arguments.to_`
+    :param arguments: see :paramref:`~forge.sort_arguments.arguments`
+    :param vpo: see :paramref:`~forge.sort_arguments.vpo`
+    :param vkw: see :paramref:`~forge.sort_arguments.vkw`
+    :return: the result of :paramref:`~forge.callwith.to_`
+        called with sorted arguments.
+    """
+    call_args = sort_arguments(to_, arguments, vpo, vkw)
+    return to_(*call_args.args, **call_args.kwargs)
 
 
 def stringify_parameters(*parameters: TUnionParameter) -> str:

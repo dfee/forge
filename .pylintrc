@@ -68,6 +68,8 @@ confidence=
 disable=
     C0111, missing-docstring
     C0304, missing-final-newline,
+    E1127, invalid-slice-index,
+    R0903, too-few-public-methods,
     W0212, protected-access,
 
 

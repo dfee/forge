@@ -9,7 +9,6 @@ from forge._immutable import (
 
 # pylint: disable=C0103, invalid-name
 # pylint: disable=R0201, no-self-use
-# pylint: disable=R0903, too-few-public-methods
 
 
 class TestAsDict:

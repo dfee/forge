@@ -13,7 +13,7 @@ Versions follow `CalVer`_ with a strict backwards compatibility policy. The thir
 
 - Added :class:`~forge.empty` as class variable to :class:`~forge.FParameter`
 - Added :func:`~forge.reflect` which makes a wrapper that reflects a callable's signature
-- Added :func:`~forge.sort_arguments` and :func:`~forge.sort_arguments_and_call` which are convenience functions for re-packaging arguments for reflected functions.
+- Added :func:`~forge.sort_arguments` and :func:`~forge.callwith` which are convenience functions for re-packaging arguments for reflected functions.
 - Added :func:`~forge.fsignature` which is a convenience for :func:`~forge.FSignature.from_callable` to reflect the functionality of :func:`inspect.signature` (itself a convenience for :func:`inspect.Signature.from_callable`)
 - Added slice notation support for :class:`~forge.FSignature` objects.
 - Exposed :class:`~forge.CallArguments`

@@ -52,7 +52,6 @@ class Immutable:
 
     :param kwargs: an attribute:argument mapping that are set on the instance
     """
-    # pylint: disable=R0903, too-few-public-methods
     __slots__ = ()
 
     def __init__(self, **kwargs):

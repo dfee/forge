@@ -15,6 +15,7 @@ def test_namespace():
     """
     private_ptn = re.compile(r'^\_[a-zA-Z]')
     assert set(filter(private_ptn.match, forge.__dict__.keys())) == set([
+        '_compose',
         '_config',
         '_counter',
         '_exceptions',
@@ -27,56 +28,95 @@ def test_namespace():
 
     public_ptn = re.compile(r'^[a-zA-Z]')
     assert set(filter(public_ptn.match, forge.__dict__.keys())) == set([
-        # Parameters
+        ## Compose
+        'BaseRevision',
+        # unit
+        'delete', 'insert', 'modify', 'translocate', 'move', 'replace',
+        # meta
+        'batch', # collection
+        # group
+        'copy',
+        'identity',
+        'manage',
+        'synthesize', 'sign',
+        # other
+        'returns',
+
+        ## Parameters
         'Factory',
         'FParameter',
+        # variadic
         'VarKeyword', 'kwargs',
         'VarPositional', 'args',
+        # context
         'ctx', 'self', 'cls',
-        'pos',
-        'pok', 'arg',
-        'kwo', 'kwarg',
-        'vkw',
-        'vpo',
-        # Signature
-        'CallArguments',
+        # constructors
+        'pos', 'pok', 'arg', 'kwo', 'kwarg', 'vkw', 'vpo',
+
+        ## Signature
         'FSignature',
         'Mapper',
         'fsignature',
-        'reflect',
-        'resign',
-        'returns',
-        'sign',
-        'sort_arguments',
-        'sort_arguments_and_call',
-        # Config
+
+        ## Config
         'get_run_validators',
         'set_run_validators',
-        # Markers
+
+        ## Exceptions
+        'ForgeError',
+        'ImmutableInstanceError',
+        'ForgeError',
+        'NoParameterError',
+        'RevisionError',
+
+        ## Markers
         'empty',
         'void',
-        # Utils
+
+        ## Utils
+        'CallArguments',
+        'callwith',
         'getparam',
         'hasparam',
         'get_return_type',
         'set_return_type',
+        'sort_arguments',
         'stringify_callable',
     ])
 
 
-class TestSignatureConvenience:
-    @pytest.mark.parametrize(('name', 'method'), [
-        ('fsignature', forge.FSignature.from_callable),
+class TestComposeConvenience:
+    @pytest.mark.parametrize(('name', 'obj'), [
+        ('copy', forge._compose.CopyRevision),
+        ('delete', forge._compose.DeleteRevision),
+        ('insert', forge._compose.InsertRevision),
+        ('manage', forge._compose.ManageRevision),
+        ('modify', forge._compose.ModifyRevision),
+        ('move', forge._compose.TranslocateRevision),
+        ('translocate', forge._compose.TranslocateRevision),
+        ('replace', forge._compose.ReplaceRevision),
     ])
-    def test_constructors(self, name, method):
+    def test_constructors(self, name, obj):
         """
         Assert constructor nicknames are what we exect them to be.
         """
-        assert getattr(forge, name) == method
+        assert getattr(forge, name) == obj
+
+
+class TestSignatureConvenience:
+    @pytest.mark.parametrize(('name', 'obj'), [
+        ('fsignature', forge.FSignature.from_callable),
+    ])
+    def test_constructors(self, name, obj):
+        """
+        Assert constructor nicknames are what we exect them to be.
+        """
+        assert getattr(forge, name) == obj
+
 
 
 class TestParameterConvenience:
-    @pytest.mark.parametrize(('name', 'method'), [
+    @pytest.mark.parametrize(('name', 'obj'), [
         ('pos', forge.FParameter.create_positional_only),
         ('pok', forge.FParameter.create_positional_or_keyword),
         ('arg', forge.FParameter.create_positional_or_keyword),
@@ -86,11 +126,11 @@ class TestParameterConvenience:
         ('kwarg', forge.FParameter.create_keyword_only),
         ('vkw', forge.FParameter.create_var_keyword),
     ])
-    def test_constructors(self, name, method):
+    def test_constructors(self, name, obj):
         """
         Assert constructor nicknames are what we exect them to be.
         """
-        assert getattr(forge, name) == method
+        assert getattr(forge, name) == obj
 
     def test_self(self):
         """

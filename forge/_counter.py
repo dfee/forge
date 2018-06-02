@@ -4,7 +4,6 @@ class Counter:
 
     :ivar count: the next index for creation.
     """
-    # pylint: disable=R0903, too-few-public-methods
     __slots__ = ('count',)
 
     def __init__(self):

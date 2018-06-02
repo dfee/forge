@@ -117,7 +117,7 @@ Functions
 
 .. autofunction:: forge.sort_arguments
 
-.. autofunction:: forge.sort_arguments_and_call
+.. autofunction:: forge.callwith
 
 
 .. _api_config:

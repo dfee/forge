@@ -18,7 +18,6 @@ def test_cretion_order_meta():
     Ensure that ``CreationOrderMeta`` classes have instances that are ordered.
     """
     class Klass(metaclass=CreationOrderMeta):
-        # pylint: disable=R0903, too-few-public-methods
         pass
 
     assert hasattr(Klass, '_creation_counter')

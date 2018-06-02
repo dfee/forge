@@ -48,7 +48,6 @@ _metadata_type = typing.Mapping
 
 
 class Factory(immutable.Immutable):
-    # pylint: disable=R0903, too-few-public-methods
     __slots__ = ('factory',)
 
     def __init__(self, factory):
@@ -642,7 +641,6 @@ class VarPositional(collections.abc.Iterable):
     :param validator: see :paramref:`~forge.FParameter.validator`
     :param metadata: see :paramref:`~forge.FParameter.metadata`
     """
-    # pylint: disable=R0903, too-few-public-methods
     _default_name = 'args'
 
     def __init__(
