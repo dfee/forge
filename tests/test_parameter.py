@@ -415,9 +415,9 @@ class TestFParameter:
                 v = Factory(dummy_func)
             assert getattr(fparam2, k) == v
 
-    def test_parameter(self):
+    def test_native(self):
         """
-        Ensure the ``parameter`` factory produces an expected instance of
+        Ensure the ``native`` property produces an expected instance of
         ``inspect.Parameter``
         """
         kwargs = dict(
@@ -427,13 +427,13 @@ class TestFParameter:
             default=None,
             type=int,
         )
-        param = FParameter(**kwargs).parameter
+        param = FParameter(**kwargs).native
         assert param.kind == kwargs['kind']
         assert param.name == kwargs['name']
         assert param.default == kwargs['default']
         assert param.annotation == kwargs['type']
 
-    def test_parameter_wo_names_raises(self):
+    def test_native_wo_names_raises(self):
         """
         Ensure that attempting to produce an instance of ``inspect.Parameter``
         without an ``FParameter`` ``name`` or ``interface_name`` raises.
@@ -445,7 +445,7 @@ class TestFParameter:
         )
         with pytest.raises(TypeError) as excinfo:
             # pylint: disable=W0104, pointless-statement
-            fparam.parameter
+            fparam.native
         assert excinfo.value.args[0] == 'Cannot generate an unnamed parameter'
 
     def test_defaults(self):
@@ -462,7 +462,7 @@ class TestFParameter:
         pytest.param(empty.native, 3, id='empty_annotation'),
         pytest.param(int, empty.native, id='empty_default'),
     ])
-    def test_from_parameter(self, annotation, default):
+    def test_from_native(self, annotation, default):
         """
         Ensure expected construction of an instance of ``FParameter`` from an
         instance of ``inspect.Parameter``
@@ -474,7 +474,7 @@ class TestFParameter:
             default=default,
         )
         param = inspect.Parameter(**kwargs)
-        fparam = FParameter.from_parameter(param)
+        fparam = FParameter.from_native(param)
         for k, v in dict(
                 FPARAM_DEFAULTS,
                 kind=kwargs['kind'],

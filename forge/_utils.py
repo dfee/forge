@@ -144,43 +144,6 @@ def hasparam(
     return name in inspect.signature(callable).parameters
 
 
-def get_return_type(callable: TGenericCallable) -> typing.Any:
-    """
-    A convenience for retrieving the ``return-type`` annotation from a callable
-
-    :param callable: a callable whose ``return-type`` annotation is retrieved
-    :return: the ``return-type`` annotation from
-        :paramref:`.get_return_type.callable`
-    """
-    # pylint: disable=W0622, redefined-builtin
-    return inspect.signature(callable).return_annotation
-
-
-def set_return_type(
-        callable: TGenericCallable,
-        type: typing.Any,
-    ) -> None:
-    """
-    Set the ``return-type`` annotation on a callable.
-
-    :param callable: a callable whose ``return-type`` annotation will be set
-    :param type: the annotation to set for :paramref:`.set_return_type.callable`
-    """
-    # pylint: disable=W0622, redefined-builtin
-    if not builtins.callable(callable):
-        raise TypeError('{} is not callable'.format(callable))
-    if hasattr(callable, '__signature__'):
-        # https://github.com/python/mypy/issues/1170
-        new_ = callable.__signature__.replace(  # type: ignore
-            return_annotation=type,
-        )
-        callable.__signature__ = new_  # type: ignore
-    elif type is inspect.Signature.empty:
-        callable.__annotations__.pop('return', None)
-    else:
-        callable.__annotations__['return'] = type
-
-
 def get_var_positional_parameter(
         *parameters: TUnionParameter
     ) -> typing.Optional[TUnionParameter]:
@@ -351,47 +314,6 @@ def callwith(
     return to_(*call_args.args, **call_args.kwargs)
 
 
-def stringify_parameters(*parameters: TUnionParameter) -> str:
-    """
-    Builds a string representation of the provided parameters for use in
-    pretty-printing a signature. Includes markers ``/`` and ``*`` to distinguish
-    parameters based on :term:`parameter kind`, as well as the ``type-hint``
-    annotation and ``default`` value for a parameter (if provided).
-
-    :param parameters: parameters to render to string
-    :return: a string with parameters separated by ``,``
-    """
-    if not parameters:
-        return ''
-
-    has_positional = parameters[0].kind is POSITIONAL_ONLY
-    has_var_positional = get_var_positional_parameter(*parameters)
-
-    components = []
-    for i, param in enumerate(parameters):
-        last_ = parameters[i - 1] if (i > 0) else None
-        next_ = parameters[i + 1] if (len(parameters) > i + 1) else None
-
-        if (
-                not has_var_positional and
-                parameters[i].kind is KEYWORD_ONLY and
-                (not last_ or last_.kind is not KEYWORD_ONLY)
-            ):
-            components.append('*')
-
-        components.append(str(param))
-        if (
-                has_positional and
-                parameters[i].kind is POSITIONAL_ONLY and
-                (
-                    not next_ or
-                    next_.kind is not POSITIONAL_ONLY)
-            ):
-            components.append('/')
-
-    return ', '.join(components)
-
-
 def stringify_callable(callable: typing.Callable) -> str:
     """
     Build a string representation of a callable, including the callable's
@@ -407,16 +329,5 @@ def stringify_callable(callable: typing.Callable) -> str:
     """
     # pylint: disable=W0622, redefined-builtin
     sig = inspect.signature(callable)
-    rtype = ''
-    if sig.return_annotation is not empty.native:
-        rtype = ' -> {}'.format(
-            sig.return_annotation.__name__ \
-            if inspect.isclass(sig.return_annotation) \
-            else str(sig.return_annotation)
-        )
-
-    return '{name}({params}){rtype}'.format(
-        name=getattr(callable, '__name__', str(callable)),
-        params=stringify_parameters(*sig.parameters.values()),
-        rtype=rtype,
-    )
+    name = getattr(callable, '__name__', str(callable))
+    return '{}{}'.format(name, sig)

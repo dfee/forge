@@ -42,10 +42,7 @@ from ._signature import (
 from ._utils import (
     callwith,
     getparam,
-    get_return_type,
     hasparam,
-    set_return_type,
-    sort_arguments,
     stringify_callable,
 )
 

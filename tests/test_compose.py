@@ -50,35 +50,35 @@ def func(request, _func):
         else forge.copy(_func)(_func)
 
 
-class TestReturns:
-    def test_no__signature__(self):
-        """
-        Ensure we can set the ``return type`` annotation on a function without
-        a ``__signature__``
-        """
-        @returns(int)
-        def myfunc():
-            pass
-        assert myfunc.__annotations__.get('return') == int
+# class TestReturns:
+#     def test_no__signature__(self):
+#         """
+#         Ensure we can set the ``return type`` annotation on a function without
+#         a ``__signature__``
+#         """
+#         @returns(int)
+#         def myfunc():
+#             pass
+#         assert myfunc.__annotations__.get('return') == int
 
-    def test__signature__(self):
-        """
-        Ensure we can set the ``return type`` annotation on a function with
-        a ``__signature__``
-        """
-        def myfunc():
-            pass
-        myfunc.__signature__ = inspect.Signature()
+#     def test__signature__(self):
+#         """
+#         Ensure we can set the ``return type`` annotation on a function with
+#         a ``__signature__``
+#         """
+#         def myfunc():
+#             pass
+#         myfunc.__signature__ = inspect.Signature()
 
-        myfunc = returns(int)(myfunc)
-        assert myfunc.__signature__.return_annotation == int
+#         myfunc = returns(int)(myfunc)
+#         assert myfunc.__signature__.return_annotation == int
 
 
 class BaseTestRevision:
     def run_strategy(self, strategy, revision, func):
         fsig = forge.fsignature(func)
-        if strategy == 'apply':
-            return list(revision.apply(*fsig.values()))
+        if strategy == 'revise':
+            return list(revision.revise(*fsig.values()))
         elif strategy == '__call__':
             func2 = revision(func)
             return forge.fsignature(func2)[:]
@@ -96,7 +96,7 @@ class TestRevision:
         """
         # pylint: disable=W0108, unnecessary-lambda
         rev = BaseRevision()
-        rev.apply = lambda *fparams: fparams
+        rev.revise = lambda *fparams: fparams
         func = lambda *args, **kwargs: CallArguments(*args, **kwargs)
         if as_coroutine:
             func = asyncio.coroutine(func)
@@ -133,7 +133,7 @@ class TestRevision:
         wrapped function; i.e. no double wrapping.
         """
         rev = BaseRevision()
-        rev.apply = lambda *fparams: fparams
+        rev.revise = lambda *fparams: fparams
         # pylint: disable=W0108, unnecessary-lambda
         func = lambda **kwargs: CallArguments(**kwargs)
 
@@ -156,7 +156,7 @@ class TestRevision:
 def test_identity_revision():
     rev = IdentityRevision()
     in_ = (forge.arg('a'),)
-    assert rev.apply(*in_) == in_
+    assert rev.revise(*in_) == in_
 
 
 class TestSynthesizeRevision:
@@ -189,7 +189,7 @@ class TestSynthesizeRevision:
 
 
 class TestBatchRevision(BaseTestRevision):
-    @pytest.mark.parametrize(('strategy',), [('apply',), ('__call__',)])
+    @pytest.mark.parametrize(('strategy',), [('revise',), ('__call__',)])
     @pytest.mark.parametrize(('revisions', 'expected'), [
         # Empty
         pytest.param(
@@ -233,7 +233,7 @@ class TestBatchRevision(BaseTestRevision):
 
 
 class TestDeleteRevision(BaseTestRevision):
-    @pytest.mark.parametrize(('strategy',), [('apply',), ('__call__',)])
+    @pytest.mark.parametrize(('strategy',), [('revise',), ('__call__',)])
     @pytest.mark.parametrize(('selector', 'expected'), [
         pytest.param(
             'c',
@@ -274,7 +274,7 @@ class TestDeleteRevision(BaseTestRevision):
 
 
 class TestInsertRevision(BaseTestRevision):
-    @pytest.mark.parametrize(('strategy',), [('apply',), ('__call__',)])
+    @pytest.mark.parametrize(('strategy',), [('revise',), ('__call__',)])
     @pytest.mark.parametrize(('kwargs', 'expected'), [
         # index
         pytest.param(
@@ -432,7 +432,7 @@ class TestTranslocateRevision:
 
 
 class TestCopyRevision:
-    @pytest.mark.parametrize(('strategy',), [('apply',), ('__call__',)])
+    @pytest.mark.parametrize(('strategy',), [('revise',), ('__call__',)])
     @pytest.mark.parametrize(('include', 'exclude', 'expected'), [
         # Neither
         pytest.param(None, None, ('a', 'b', 'c'), id='no_include_no_exclude'),
@@ -473,7 +473,7 @@ class TestCopyRevision:
             id='include_and_exclude',
         ),
     ])
-    def test_apply(self, strategy, include, exclude, expected):
+    def test_revise(self, strategy, include, exclude, expected):
         """
         Ensure usage without ``include`` or ``exclude``
         """
@@ -488,9 +488,9 @@ class TestCopyRevision:
             return
 
         rev = CopyRevision(fromfunc, include=include, exclude=exclude)
-        if strategy == 'apply':
+        if strategy == 'revise':
             fparams_prev = list(fsig_prev.values())
-            fparams_next = rev.apply(*fparams_prev)
+            fparams_next = rev.revise(*fparams_prev)
             fsig_next = forge.FSignature(fparams_next)
         elif strategy == '__call__':
             func2 = rev(func)
@@ -517,10 +517,10 @@ class TestReplaceRevision:
         pytest.param(lambda param: param.name == 'kwargs', id='callable'),
         pytest.param('kwargs', id='string'),
     ])
-    def test_apply(self, func, selector):
+    def test_revise(self, func, selector):
         fparam = forge.arg('c')
         fsig = forge.fsignature(func)
-        next_ = ReplaceRevision(selector, fparam).apply(*fsig.values())
+        next_ = ReplaceRevision(selector, fparam).revise(*fsig.values())
         assert next_ == [*fsig['a':'b'], fparam]
 
     @pytest.mark.parametrize(('selector',), [
@@ -547,5 +547,5 @@ def test_manage_revision():
     rev = ManageRevision(reverse)
 
     fparams = list(forge.fsignature(func).values())
-    assert [fp.name for fp in rev.apply(*fparams)] == ['c', 'b', 'a']
+    assert [fp.name for fp in rev.revise(*fparams)] == ['c', 'b', 'a']
     assert called_with == tuple(fparams)

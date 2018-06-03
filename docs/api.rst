@@ -147,8 +147,4 @@ Utils
 
 .. autofunction:: forge.hasparam
 
-.. autofunction:: forge.get_return_type
-
-.. autofunction:: forge.set_return_type
-
 .. autofunction:: forge.stringify_callable

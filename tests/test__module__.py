@@ -78,9 +78,6 @@ def test_namespace():
         'callwith',
         'getparam',
         'hasparam',
-        'get_return_type',
-        'set_return_type',
-        'sort_arguments',
         'stringify_callable',
     ])
 

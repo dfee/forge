@@ -12,10 +12,8 @@ from forge._parameter import (
 )
 from forge._utils import (
     CallArguments,
-    get_return_type,
     get_var_positional_parameter,
     get_var_keyword_parameter,
-    stringify_parameters,
 )
 
 
@@ -76,22 +74,27 @@ class FSignature(collections.abc.Mapping, immutable.Immutable):
     ``__iter__`` and ``__len__``. Inherits methods: ``__contains__``, ``keys``,
     ``items``, ``values``, ``get``, ``__eq__`` and ``__ne__``.
 
-    :param fparameters: an ordered list or tuple of :class:`~forge.FParameter`
+    :param parameters: an ordered list or tuple of :class:`~forge.FParameter`
         instances.
     """
     # pylint: disable=R0901, too-many-ancestors
 
     def __init__(
             self,
-            fparameters: typing.Optional[
+            parameters: typing.Optional[
                 typing.Union[
                     typing.List[FParameter],
                     typing.Tuple[FParameter, ...],
                 ]
             ]=None,
+            *,
+            return_annotation: typing.Any = empty.native,
+            __validate_parameter__: bool = False
         ) -> None:
+        # TODO: add return_annotation to docs
+        # TODO: add __validate_parameter__ to docs
         # pylint: disable=R0912, too-many-branches
-        fparameters = fparameters or []
+        parameters = parameters or []
         context = None
         var_positional = None
         var_keyword = None
@@ -99,7 +102,7 @@ class FSignature(collections.abc.Mapping, immutable.Immutable):
         # Validation
         name_set = set()  # type: typing.Set[str]
         iname_set = set()  # type: typing.Set[str]
-        for i, current in enumerate(fparameters):
+        for i, current in enumerate(parameters):
             if not isinstance(current, FParameter):
                 raise TypeError(
                     "Received non-FParameter '{}'".\
@@ -107,13 +110,13 @@ class FSignature(collections.abc.Mapping, immutable.Immutable):
                 )
             elif not (current.name and current.interface_name):
                 raise ValueError(
-                    "Received unnamed FParameter: '{}'".\
+                    "Received unnamed parameter: '{}'".\
                     format(current)
                 )
             elif current.contextual:
                 if i > 0:
                     raise TypeError(
-                        'Only the first FParameter can be contextual'
+                        'Only the first parameter can be contextual'
                     )
                 context = current
             elif current.kind is FParameter.VAR_POSITIONAL:
@@ -123,19 +126,19 @@ class FSignature(collections.abc.Mapping, immutable.Immutable):
 
             if current.name in name_set:
                 raise ValueError(
-                    "Received multiple FParameters with name '{}'".\
+                    "Received multiple parameters with name '{}'".\
                     format(current.name)
                 )
             name_set.add(current.name)
 
             if current.interface_name in iname_set:
                 raise ValueError(
-                    "Received multiple FParameters with interface_name '{}'".\
+                    "Received multiple parameters with interface_name '{}'".\
                     format(current.interface_name)
                 )
             iname_set.add(current.interface_name)
 
-            last = fparameters[i-1] if i > 0 else None
+            last = parameters[i-1] if i > 0 else None
             if not last:
                 continue
 
@@ -148,11 +151,11 @@ class FSignature(collections.abc.Mapping, immutable.Immutable):
             elif current.kind is last.kind:
                 if current.kind is FParameter.VAR_POSITIONAL:
                     raise TypeError(
-                        'Received multiple variable-positional FParameters'
+                        'Received multiple variable-positional parameters'
                     )
                 elif current.kind is FParameter.VAR_KEYWORD:
                     raise TypeError(
-                        'Received multiple variable-keyword FParameters'
+                        'Received multiple variable-keyword parameters'
                     )
                 elif current.kind in (
                         FParameter.POSITIONAL_ONLY,
@@ -161,22 +164,28 @@ class FSignature(collections.abc.Mapping, immutable.Immutable):
                     and last.default is not empty \
                     and current.default is empty:
                     raise SyntaxError(
-                        'non-default FParameter follows default FParameter'
+                        'non-default parameter follows default parameter'
                     )
         # End validation
 
         super().__init__(
-            _data=OrderedDict([(fp.name, fp) for fp in fparameters]),
+            _data=OrderedDict([(param.name, param) for param in parameters]),
             context=context,
             var_positional=var_positional,
             var_keyword=var_keyword,
+            return_annotation=return_annotation
         )
 
-    def __repr__(self):
-        return '<{} ({})>'.format(
-            type(self).__name__,
-            stringify_parameters(*self._data.values()),
+    def __str__(self):
+        sig = inspect.Signature(
+            [fp.native for fp in self.values()],
+            return_annotation=self.return_annotation,
+            __validate_parameters__=False,
         )
+        return str(sig)
+
+    def __repr__(self):
+        return '<{} {}>'.format(type(self).__name__, self)
 
     # Begin Mapping methods
     def __getitem__(
@@ -201,18 +210,18 @@ class FSignature(collections.abc.Mapping, immutable.Immutable):
             :paramref:`~forge.FSignature.__getitem__.key` corresponds.
         """
         if isinstance(key, slice):
-            fparams = []
+            params = []
             visited_start = not bool(key.start)
-            for name, fparam in self.items():
+            for name, param in self.items():
                 if name == key.stop:
-                    fparams.append(fparam)
+                    params.append(param)
                     break
                 elif visited_start:
-                    fparams.append(fparam)
+                    params.append(param)
                 elif name == key.start:
                     visited_start = True
-                    fparams.append(fparam)
-            return fparams
+                    params.append(param)
+            return params
         return self._data[key]
 
     def __iter__(self) -> typing.Iterator:
@@ -234,6 +243,17 @@ class FSignature(collections.abc.Mapping, immutable.Immutable):
         return len(self._data)
     # End Mapping methods
 
+    @property
+    def native(self):
+        """
+        Provides a representation of this :class:`~forge.FSignature` as an
+        instance of :class:`inspect.Signature`
+        """
+        return inspect.Signature([
+            param.native for param in self.values()
+            if not param.bound
+        ], return_annotation=self.return_annotation)
+
     @classmethod
     def from_signature(cls, signature: inspect.Signature) -> 'FSignature':
         """
@@ -253,11 +273,12 @@ class FSignature(collections.abc.Mapping, immutable.Immutable):
         :return: an instance of :class:`~forge.FSignature` derived from the
             :paramref:`~forge.FSignature.from_signature.signature` argument.
         """
+        # TODO: test return_annotation
         # pylint: disable=E1101, no-member
         return cls([
-            FParameter.from_parameter(param)
-            for param in signature.parameters.values()
-        ])
+            FParameter.from_native(native)
+            for native in signature.parameters.values()
+        ], return_annotation=signature.return_annotation)
 
     @classmethod
     def from_callable(cls, callable: typing.Callable) -> 'FSignature':
@@ -312,13 +333,7 @@ class Mapper(immutable.Immutable):
         ) -> None:
         # pylint: disable=W0622, redefined-builtin
         private_signature = inspect.signature(callable)
-        public_signature = inspect.Signature(
-            parameters=[
-                fp.parameter for fp in fsignature.values()
-                if fp.bound is False
-            ],
-            return_annotation=get_return_type(callable),
-        )
+        public_signature = fsignature.native
         parameter_map = self.map_parameters(fsignature, private_signature)
 
         super().__init__(
@@ -400,13 +415,9 @@ class Mapper(immutable.Immutable):
         return CallArguments.from_bound_arguments(private_ba)
 
     def __repr__(self) -> str:
-        pubstr = stringify_parameters(
-            *self.public_signature.parameters.values()
-        )
-        privstr = stringify_parameters(
-            *self.private_signature.parameters.values()
-        )
-        return '<{} ({}) -> ({})>'.format(type(self).__name__, pubstr, privstr)
+        pubstr = str(self.public_signature)
+        privstr = str(self.private_signature)
+        return '<{} {} => {}>'.format(type(self).__name__, pubstr, privstr)
 
     def get_context(self, arguments: typing.Mapping) -> typing.Any:
         return arguments[self.fsignature.context.name] \
@@ -437,6 +448,7 @@ class Mapper(immutable.Immutable):
             are mapped.
         '''
         # pylint: disable=W0622, redefined-builtin
+        # TODO: fsignature / signature -> from_ / to_
         fparam_vpo = fsignature.var_positional
         fparam_vkw = fsignature.var_keyword
         fparam_idx = {

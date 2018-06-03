@@ -312,10 +312,11 @@ class FParameter(immutable.Immutable, metaclass=CreationOrderMeta):
         return self.apply_validation(ctx, converted)
 
     @property
-    def parameter(self) -> inspect.Parameter:
+    def native(self) -> inspect.Parameter:
         """
-        A public representation of this :class:`~forge.FParameter` as an
-        :class:`inspect.Parameter`, fit for an :class:`inspect.Signature`
+        A native representation of this :class:`~forge.FParameter` as an
+        :class:`inspect.Parameter`, fit for an instance of
+        :class:`inspect.Signature`
         """
         if not self.name:
             raise TypeError('Cannot generate an unnamed parameter')
@@ -381,20 +382,25 @@ class FParameter(immutable.Immutable, metaclass=CreationOrderMeta):
         })
 
     @classmethod
-    def from_parameter(cls, parameter: inspect.Parameter) -> 'FParameter':
+    def from_native(cls, native: inspect.Parameter) -> 'FParameter':
         """
         A factory method for creating :class:`~forge.FParameter` instances from
         :class:`inspect.Parameter` instances.
 
         Parameter descriptions are a subset of those defined on
         :class:`~forge.FParameter`
+
+        :param native: an instance of :class:`inspect.Parameter`, used as a
+            template for creating a new :class:`~forge.FParameter`
+        :return: a new instance of :class:`~forge.FParameter`, using
+            :paramref:`~forge.FParameter.from_native.native` as a template
         """
         return cls(  # type: ignore
-            kind=parameter.kind,
-            name=parameter.name,
-            interface_name=parameter.name,
-            default=cls.empty.ccoerce_synthetic(parameter.default),
-            type=cls.empty.ccoerce_synthetic(parameter.annotation),
+            kind=native.kind,
+            name=native.name,
+            interface_name=native.name,
+            default=cls.empty.ccoerce_synthetic(native.default),
+            type=cls.empty.ccoerce_synthetic(native.annotation),
         )
 
     @classmethod

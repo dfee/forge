@@ -47,7 +47,7 @@ class TestFSignature:
         with pytest.raises(ValueError) as excinfo:
             FSignature([arg])
         assert excinfo.value.args[0] == \
-            "Received unnamed FParameter: '{}'".format(arg)
+            "Received unnamed parameter: '{}'".format(arg)
 
     def test_validate_late_contextual_fparam_raises(self):
         """
@@ -56,7 +56,7 @@ class TestFSignature:
         with pytest.raises(TypeError) as excinfo:
             FSignature([forge.arg('a'), forge.ctx('self')])
         assert excinfo.value.args[0] == \
-            'Only the first FParameter can be contextual'
+            'Only the first parameter can be contextual'
 
     def test_validate_multiple_interface_name_raises(self):
         """
@@ -65,7 +65,7 @@ class TestFSignature:
         with pytest.raises(ValueError) as excinfo:
             FSignature([forge.arg('a1', 'b'), forge.arg('a2', 'b')])
         assert excinfo.value.args[0] == \
-            "Received multiple FParameters with interface_name 'b'"
+            "Received multiple parameters with interface_name 'b'"
 
     def test_validate_multiple_name_raises(self):
         """
@@ -74,7 +74,7 @@ class TestFSignature:
         with pytest.raises(ValueError) as excinfo:
             FSignature([forge.arg('a', 'b1'), forge.arg('a', 'b2')])
         assert excinfo.value.args[0] == \
-            "Received multiple FParameters with name 'a'"
+            "Received multiple parameters with name 'a'"
 
     def test_validate_multiple_var_positional_fparameters_raises(self):
         """
@@ -92,7 +92,7 @@ class TestFSignature:
         with pytest.raises(TypeError) as excinfo:
             FSignature(params)
         assert excinfo.value.args[0] == \
-            'Received multiple variable-positional FParameters'
+            'Received multiple variable-positional parameters'
 
     def test_validate_multiple_var_keyword_fparameters_raises(self):
         """
@@ -110,7 +110,7 @@ class TestFSignature:
         with pytest.raises(TypeError) as excinfo:
             FSignature(params)
         assert excinfo.value.args[0] == \
-            'Received multiple variable-keyword FParameters'
+            'Received multiple variable-keyword parameters'
 
     def test_validate_out_of_order_fparameters_raises(self):
         """
@@ -141,7 +141,7 @@ class TestFSignature:
         with pytest.raises(SyntaxError) as excinfo:
             FSignature([default, nondefault])
         assert excinfo.value.args[0] == (
-            'non-default FParameter follows default FParameter'
+            'non-default parameter follows default parameter'
         )
 
     def test_validate_default_kw_only_follows_non_default_kw_only(self):
@@ -154,11 +154,13 @@ class TestFSignature:
             forge.kwarg('b'),
         ])
 
-    def test__repr__(self):
+    def test__str__and__repr__(self):
         """
-        Ensure pretty printing of FSignature (includes fparams)
+        Ensure printing and repr of FSignature
         """
-        assert repr(FSignature([forge.self])) == '<FSignature (self)>'
+        sig = FSignature([forge.self])
+        assert str(sig) == '(self)'
+        assert repr(sig) == '<FSignature (self)>'
 
     # Begin collections.abc.Mapping Tests
     def test__getitem__str(self):
@@ -203,7 +205,30 @@ class TestFSignature:
         assert dict(fsig) == {fparam.name: fparam}
     # End collections.abc.Mapping Tests
 
-    def test_from_signature(self):
+    @pytest.mark.parametrize(('bound',), [(True,), (False,)])
+    def test_native(self, bound):
+        """
+        Ensure the generation of an ``inspect.Signature``
+        """
+        fsig = FSignature(
+            [forge.arg('x', bound=bound, default=1)],
+            return_annotation=int,
+        )
+        if bound:
+            assert fsig.native == inspect.Signature(return_annotation=int)
+            return
+
+        assert fsig.native == inspect.Signature(
+            [inspect.Parameter('x', POSITIONAL_OR_KEYWORD, default=1)],
+            return_annotation=int,
+        )
+
+
+    @pytest.mark.parametrize(('return_annotation',), [
+        pytest.param(empty.native, id='empty'),
+        pytest.param(bool, id='bool'),
+    ])
+    def test_from_signature(self, return_annotation):
         """
         Ensure a ``FSignature`` can be adequately generated from an
         ``inspect.Signature``
@@ -215,7 +240,7 @@ class TestFSignature:
                 default=0,
                 annotation=int,
             ),
-        ])
+        ], return_annotation=return_annotation)
         fsig = FSignature.from_signature(sig)
         assert len(fsig) == 1
         assert fsig['a'] == FParameter(
@@ -225,6 +250,7 @@ class TestFSignature:
             default=0,
             type=int,
         )
+        assert fsig.return_annotation == return_annotation
 
     def test_from_callable(self):
         """
@@ -283,15 +309,6 @@ class TestMapper:
             default=empty.ccoerce_native(default)
         ) if kind is not None else None
 
-    def test__init__signature_with_bound_params(self):
-        """
-        Ensure the mapper doesn't produce include bound fparams in public sig
-        """
-        fsig = FSignature([forge.arg('bound', default=1, bound=True)])
-        func = lambda bound: None
-        mapper = Mapper(fsig, func)
-        assert not mapper.public_signature.parameters
-
     def test__repr__(self):
         """
         Ensure the mapper is pretty printable with ``FSignature`` and
@@ -300,7 +317,7 @@ class TestMapper:
         fsig = FSignature([forge.pos('a', 'b')])
         callable_ = lambda *, b: None
         mapper = Mapper(fsig, callable_)
-        assert repr(mapper) == '<Mapper (a, /) -> (*, b)>'
+        assert repr(mapper) == '<Mapper (a, /) => (*, b)>'
 
     @pytest.mark.parametrize(('has_context',), [(True,), (False,)])
     def test_get_context(self, has_context):

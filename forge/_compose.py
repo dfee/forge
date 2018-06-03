@@ -15,12 +15,12 @@ from forge._signature import (
     FSignature,
     Mapper,
 )
-from forge._utils import set_return_type
 
 # TODO: SortRevision
+# TODO: "Compose -> Revise"
 
 
-_apply_return_type = typing.Union[
+_revise_return_type = typing.Union[
     typing.List[FParameter],
     typing.Tuple[FParameter, ...],
 ]
@@ -64,10 +64,10 @@ class BaseRevision:
     Functions as an identity revision
     """
     @abstractmethod
-    def apply(
+    def revise(
             self,
             *previous: FParameter
-        ) -> _apply_return_type:
+        ) -> _revise_return_type:
         raise NotImplementedError()
 
     def __call__(
@@ -94,7 +94,7 @@ class BaseRevision:
             existing = False
             fsig = FSignature.from_callable(callable)
 
-        fparams = self.apply(*fsig.values())
+        fparams = self.revise(*fsig.values())
         fsignature = FSignature(fparams)
 
         # Previously revised; already wrapped
@@ -126,22 +126,22 @@ class BatchRevision(BaseRevision):
                 raise TypeError("received non-revision '{}'".format(rev))
         self.revisions = revisions
 
-    def apply(
+    def revise(
             self,
             *previous: FParameter
-        ) -> _apply_return_type:
+        ) -> _revise_return_type:
         return functools.reduce(
-            lambda previous, revision: revision.apply(*previous),
+            lambda previous, revision: revision.revise(*previous),
             self.revisions,
             previous,
         )
 
 
 class IdentityRevision(BaseRevision):
-    def apply(
+    def revise(
             self,
             *previous: FParameter
-        ) -> _apply_return_type:
+        ) -> _revise_return_type:
         return previous
 
 
@@ -209,10 +209,10 @@ class SynthesizeRevision(BaseRevision):
             ]
         ]
 
-    def apply(
+    def revise(
             self,
             *previous: FParameter
-        ) -> _apply_return_type:
+        ) -> _revise_return_type:
         """
         Returns the :class:`~forge.FParameter<FParameters>` from initialization
 
@@ -227,10 +227,10 @@ class DeleteRevision(BaseRevision):
     def __init__(self, selector):
         self.selector = FParameterSelector(selector)
 
-    def apply(
+    def revise(
             self,
             *previous: FParameter
-        ) -> _apply_return_type:
+        ) -> _revise_return_type:
         next_, selected = [], None
         for prev in previous:
             if self.selector(prev):
@@ -263,10 +263,10 @@ class InsertRevision(BaseRevision):
         self.before = FParameterSelector(before) if before else None
         self.after = FParameterSelector(after) if after else None
 
-    def apply(
+    def revise(
             self,
             *previous: FParameter
-        ) -> _apply_return_type:
+        ) -> _revise_return_type:
         if self.before:
             next_, visited = [], False
             for prev in previous:
@@ -335,10 +335,10 @@ class ModifyRevision(BaseRevision):
             }.items() if v is not void
         }
 
-    def apply(
+    def revise(
             self,
             *previous: FParameter
-        ) -> _apply_return_type:
+        ) -> _revise_return_type:
         if callable(self.selector):
             return [
                 prev.replace(**self.updates) \
@@ -374,10 +374,10 @@ class TranslocateRevision(BaseRevision):
         self.before = FParameterSelector(before) if before else None
         self.after = FParameterSelector(after) if after else None
 
-    def apply(
+    def revise(
             self,
             *previous: FParameter
-        ) -> _apply_return_type:
+        ) -> _revise_return_type:
         if self.before:
             next_, selected, idx = [], None, None
             for i, prev in enumerate(previous):
@@ -455,15 +455,15 @@ class ManageRevision(BaseRevision):
     """
     def __init__(
             self,
-            callable: typing.Callable[..., _apply_return_type]
+            callable: typing.Callable[..., _revise_return_type]
         ) -> None:
         # pylint: disable=W0622, redefined-builtin
         self.callable = callable
 
-    def apply(
+    def revise(
             self,
             *previous: FParameter
-        ) -> _apply_return_type:
+        ) -> _revise_return_type:
         """
         Returns with a call to the user supplied :term:`callable`,
         :paramref:`~forge._compose.ManageRevision.callable`
@@ -499,10 +499,10 @@ class CopyRevision(BaseRevision):
             self.exclude = None
 
 
-    def apply(
+    def revise(
             self,
             *previous: FParameter
-        ) -> _apply_return_type:
+        ) -> _revise_return_type:
         fsig = FSignature.from_callable(self.callable)
         if self.include:
             return [fp for fp in fsig.values() if self.include(fp)]
@@ -516,10 +516,10 @@ class ReplaceRevision(BaseRevision):
         self.selector = FParameterSelector(selector)
         self.fparameter = fparameter
 
-    def apply(
+    def revise(
             self,
             *previous: FParameter
-        ) -> _apply_return_type:
+        ) -> _revise_return_type:
         return [
             self.fparameter if self.selector(prev) else prev
             for prev in previous
@@ -537,6 +537,7 @@ def returns(
     :return: a factory that takes a callable and updates it to reflect
         the ``return-type`` as provided to :paramref:`.returns.type`
     """
+    # TODO: revise impl after update "Revision"
     # pylint: disable=W0622, redefined-builtin
     def inner(callable):
         # pylint: disable=W0622, redefined-builtin
