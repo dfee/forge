@@ -225,12 +225,14 @@ def get_var_keyword_parameter(
 
 def sort_arguments(
         to_: typing.Union[typing.Callable[..., typing.Any], inspect.Signature],
-        arguments: typing.Optional[typing.Dict[str, typing.Any]] = None,
-        vpo: typing.Optional[typing.Union[typing.List, typing.Tuple]] = None,
-        vkw: typing.Optional[typing.Dict[str, typing.Any]] = None,
+        named: typing.Optional[typing.Dict[str, typing.Any]] = None,
+        unnamed: typing.Optional[typing.Iterable] = None,
     ) -> CallArguments:
     """
-    Sorts the arguments into a :class:`~forge.CallArguments` instance.
+    Iterates over the :paramref:`~forge.sort_arguments.named` arguments and
+    assinging the values to the parameters with the key as a name.
+    :paramref:`~forge.sort_arguments.unnamed` arguments are assigned to the
+    :term:`var-positional` parameter.
 
     Usage:
 
@@ -238,39 +240,36 @@ def sort_arguments(
 
         import forge
 
-        def func(a, b=0, *args, c, d=0, **kwargs):
-            pass
+        def func(a, b=2, *args, c, d=5, **kwargs):
+            return (a, b, args, c, d, kwargs)
 
-        assert forge.sort_arguments(
+        assert forge.callwith(
             func,
-            arguments=dict(a=1, b=2, c=4, d=5),
-            vpo=(3,),
-            vkw=dict(e=6),
+            named=dict(a=1, c=4, e=6),
+            unnamed=(3,),
         ) == forge.CallArguments(1, 2, 3, c=4, d=5, e=6)
 
     .. versionadded:: v18.5.1
 
-    :param to_: a callable or the signature of a callable which provides the
-        template for sorting the arguments
-    :param arguments: a mapping of argument names to argument values.
-        Should reflect a complete mapping of POSITIONAL_ONLY,
-        POSITIONAL_OR_KEYWORD, and KEYWORD_ONLY arguments, though parameters
-        with default values can be omitted.
-    :param vpo: a list or tuple representing the var-positional parameter
-    :param vkw: a list or tuple representing the var-keyword parameter
-    :return: a :class:`~forge.CallArguments` instance which reflects a proper
-        sorting of the arguments
+    :param to_: a callable to call with the named and unnamed parameters
+    :param named: a mapping of parameter names to argument values.
+        Appropriate values are all :term:`positional-only`,
+        :term:`positional-or-keyword`, and :term:`keyword-only` arguments,
+        as well as additional :term:`var-keyword` mapped arguments which will
+        be used to construct the :term:`var-positional` argument on
+        :paramref:`~forge.callwith.to_` (if it has such an argument).
+        Parameters on :paramref:`~forge.callwith.to_` with default values can
+        be ommitted (as expected).
+    :param unnamed: an iterable to be passed as the :term:`var-positional`
+        parameter. Requires :paramref:`~forge.callwith.to_` to accept
+        :term:`var-positional` arguments.
     """
     if not isinstance(to_, inspect.Signature):
         to_ = inspect.signature(to_)
-
-    arguments = {
-        **(vkw or {}),
-        **(arguments or {}),
-    }
-
     to_ba = to_.bind_partial()
     to_ba.apply_defaults()
+
+    arguments = named.copy() if named else {}
 
     vpo_param = get_var_positional_parameter(*to_.parameters.values())
     vkw_param = get_var_keyword_parameter(*to_.parameters.values())
@@ -294,24 +293,29 @@ def sort_arguments(
             format(', '.join(arguments.keys())))
         to_ba.arguments[vkw_param.name].update(arguments)
 
-    if vpo:
+    if unnamed:
         if not vpo_param:
             raise TypeError("Cannot sort var-positional arguments")
-        to_ba.arguments[vpo_param.name] = tuple(vpo)
+        to_ba.arguments[vpo_param.name] = tuple(unnamed)
 
     return CallArguments.from_bound_arguments(to_ba)
 
 
 def callwith(
         to_: typing.Callable[..., typing.Any],
-        arguments: typing.Optional[typing.Dict[str, typing.Any]] = None,
-        vpo: typing.Optional[typing.Union[typing.List, typing.Tuple]] = None,
-        vkw: typing.Optional[typing.Dict[str, typing.Any]] = None,
+        named: typing.Optional[typing.Dict[str, typing.Any]] = None,
+        unnamed: typing.Optional[typing.Iterable] = None,
     ) -> typing.Any:
     """
-    Sorts the arguments into a :class:`~forge.CallArguments` instance and calls
-    the supplied callable :paramref:`~forge.callwith` with the
-    result.
+    Calls and returns the result of :paramref:`~forge.callwith.to_` with the
+    supplied ``named`` and ``unnamed`` arguments.
+
+    The arguments and their order as supplied to
+    :paramref:`~forge.callwith.to_` is determined by
+    iterating over the :paramref:`~forge.callwith.named` arguments and
+    assinging the values to the parameters with the key as a name.
+    :paramref:`~forge.callwith.unnamed` arguments are assigned to the
+    :term:`var-positional` parameter.
 
     Usage:
 
@@ -319,26 +323,31 @@ def callwith(
 
         import forge
 
-        def func(a, b=0, *args, c, d=0, **kwargs):
+        def func(a, b=2, *args, c, d=5, **kwargs):
             return (a, b, args, c, d, kwargs)
 
         assert forge.callwith(
             func,
-            arguments=dict(a=1, b=2, c=4, d=5),
-            vpo=(3,),
-            vkw=dict(e=6),
+            named=dict(a=1, c=4, e=6),
+            unnamed=(3,),
         ) == (1, 2, (3,), 4, 5, {'e': 6})
 
     .. versionadded:: v18.5.1
 
-    :param to_: see :paramref:`~forge.sort_arguments.to_`
-    :param arguments: see :paramref:`~forge.sort_arguments.arguments`
-    :param vpo: see :paramref:`~forge.sort_arguments.vpo`
-    :param vkw: see :paramref:`~forge.sort_arguments.vkw`
-    :return: the result of :paramref:`~forge.callwith.to_`
-        called with sorted arguments.
+    :param to_: a callable to call with the named and unnamed parameters
+    :param named: a mapping of parameter names to argument values.
+        Appropriate values are all :term:`positional-only`,
+        :term:`positional-or-keyword`, and :term:`keyword-only` arguments,
+        as well as additional :term:`var-keyword` mapped arguments which will
+        be used to construct the :term:`var-positional` argument on
+        :paramref:`~forge.callwith.to_` (if it has such an argument).
+        Parameters on :paramref:`~forge.callwith.to_` with default values can
+        be ommitted (as expected).
+    :param unnamed: an iterable to be passed as the :term:`var-positional`
+        parameter. Requires :paramref:`~forge.callwith.to_` to accept
+        :term:`var-positional` arguments.
     """
-    call_args = sort_arguments(to_, arguments, vpo, vkw)
+    call_args = sort_arguments(to_, named, unnamed)
     return to_(*call_args.args, **call_args.kwargs)
 
 

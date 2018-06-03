@@ -342,81 +342,62 @@ def test_stringify_callable(callable, expected):
 
 
 class TestSortArguments:
-    @pytest.mark.parametrize(('in_', 'expected'), [
-        pytest.param(dict(arguments={'a': 1}), 1, id='arguments'),
-        pytest.param(dict(vkw={'a': 1}), 1, id='vkw'),
-        pytest.param(dict(arguments={'a': 1}, vkw={'a': 2}), 1, id='override'),
+    @pytest.mark.parametrize(('kind', 'named', 'unnamed', 'expected'), [
+        pytest.param(  # func(param, /)
+            POSITIONAL_ONLY, dict(param=1), None, CallArguments(1),
+            id='positional-only',
+        ),
+        pytest.param(  # func(param)
+            POSITIONAL_OR_KEYWORD, dict(param=1), None, CallArguments(1),
+            id='positional-or-keyword',
+        ),
+        pytest.param(  # func(*param)
+            VAR_POSITIONAL, None, (1,), CallArguments(1),
+            id='var-positional',
+        ),
+        pytest.param(  # func(*, param)
+            KEYWORD_ONLY, dict(param=1), None, CallArguments(param=1),
+            id='keyword-only',
+        ),
+        pytest.param( # func(**param)
+            VAR_KEYWORD, dict(param=1), None, CallArguments(param=1),
+            id='var-keyword',
+        ),
     ])
-    @pytest.mark.parametrize(('kind',), [
-        pytest.param(POSITIONAL_ONLY, id='positional-only'),
-        pytest.param(POSITIONAL_OR_KEYWORD, id='positional-or-keyword'),
-        pytest.param(KEYWORD_ONLY, id='keyword-only'),
+    def test_sorting(self, kind, named, unnamed, expected):
+        """
+        """
+        to_ = inspect.Signature([inspect.Parameter('param', kind)])
+        result = sort_arguments(to_, named, unnamed)
+        assert result == expected
+
+    @pytest.mark.parametrize(('kind', 'expected'), [
+        pytest.param(  # func(param=1, /)
+            POSITIONAL_ONLY, CallArguments(1),
+            id='positional-only',
+        ),
+        pytest.param(  # func(param=1)
+            POSITIONAL_OR_KEYWORD, CallArguments(1),
+            id='positional-or-keyword',
+        ),
+        pytest.param(  # func(*, param=1)
+            KEYWORD_ONLY, CallArguments(param=1),
+            id='keyword-only',
+        ),
     ])
-    def test_non_variadic(self, kind, in_, expected):
+    def test_sorting_with_defaults(self, kind, expected):
         """
-        Ensure mapping for kind -> result
-
-        - POSITIONAL_ONLY -> CallArguments(1)
-        - POSITIONAL_OR_KEYWORD -> CallArguments(1)
-        - KEYWORD_ONLY -> CallArguments(a=1)
-
-        with `a` passed as an argument, as a vkw argument, and as an argument
-        overriding a vkw.
         """
-        sig = inspect.Signature([inspect.Parameter('a', kind)])
-        result = sort_arguments(sig, **in_)
-        if kind is KEYWORD_ONLY:
-            assert result == CallArguments(a=expected)
-        else:
-            assert result == CallArguments(expected)
-
-    @pytest.mark.parametrize(('in_',), [
-        pytest.param(dict(arguments={'a': 1}), id='arguments'),
-        pytest.param(dict(vkw={'a': 1}), id='vkw'),
-        pytest.param(dict(arguments={'a': 1}, vkw={'a': 2}), id='override'),
-    ])
-    def test_to_vkw(self, in_):
-        """
-        Ensure mapping to vkw if parameter with name DNE
-        """
-        sig = inspect.Signature([inspect.Parameter('kwargs', VAR_KEYWORD)])
-        assert sort_arguments(sig, **in_) == CallArguments(a=1)
-
-    @pytest.mark.parametrize(('in_',), [(dict(vpo=[1, 2, 3]),)])
-    def test_vpo_passthrough(self, in_):
-        """
-        Ensure mapping to vpo is pass-through
-        """
-        sig = inspect.Signature([inspect.Parameter('args', VAR_POSITIONAL)])
-        assert sort_arguments(sig, **in_) == CallArguments(*in_['vpo'])
-
-    @pytest.mark.parametrize(('as_',), [('arguments',), ('vkw',)])
-    def test_remainder_no_vkw_param_raises(self, as_):
-        """
-        Ensure a signature without a var-keyword parameter raises when extra
-        arguments are supplied
-        """
-        sig = inspect.Signature()
-        with pytest.raises(TypeError) as excinfo:
-            sort_arguments(sig, **{as_: {'a': 1}})
-        assert excinfo.value.args[0] == 'Cannot sort arguments (a)'
-
-    def test_remainder_no_vpo_param_raises(self):
-        """
-        Ensure a signature without a var-positional parameter raises when a
-        var-positional argument is supplied
-        """
-        sig = inspect.Signature()
-        with pytest.raises(TypeError) as excinfo:
-            sort_arguments(sig, vpo=(1,))
-        assert excinfo.value.args[0] == 'Cannot sort var-positional arguments'
+        to_ = inspect.Signature([inspect.Parameter('param', kind, default=1)])
+        result = sort_arguments(to_)
+        assert result == expected
 
     @pytest.mark.parametrize(('kind',), [
         pytest.param(POSITIONAL_ONLY, id='positional-only'),
         pytest.param(POSITIONAL_OR_KEYWORD, id='positional-or-keyword'),
         pytest.param(KEYWORD_ONLY, id='keyword-only'),
     ])
-    def test_no_mapping_to_non_default_parameter_raises(self, kind):
+    def test_no_argument_for_non_default_param_raises(self, kind):
         """
         Ensure that a non-default parameter must have an argument passed
         """
@@ -426,17 +407,33 @@ class TestSortArguments:
         assert excinfo.value.args[0] == \
             "Non-default parameter 'a' has no argument value"
 
+    def test_extra_to_sig_without_vko_raises(self):
+        """
+        Ensure a signature without a var-keyword parameter raises when extra
+        arguments are supplied
+        """
+        sig = inspect.Signature()
+        with pytest.raises(TypeError) as excinfo:
+            sort_arguments(sig, {'a': 1})
+        assert excinfo.value.args[0] == 'Cannot sort arguments (a)'
+
+    def test_unnamaed_to_sig_without_vpo_raises(self):
+        """
+        Ensure a signature without a var-positional parameter raises when a
+        var-positional argument is supplied
+        """
+        sig = inspect.Signature()
+        with pytest.raises(TypeError) as excinfo:
+            sort_arguments(sig, unnamed=(1,))
+        assert excinfo.value.args[0] == 'Cannot sort var-positional arguments'
+
     def test_callable(self):
         """
         Ensure that callable's are viable arguments for ``to_``
         """
         func = lambda a, b=2, *args, c, d=4, **kwargs: None
-        assert sort_arguments(
-            func,
-            arguments={'a': 1, 'c': 3},
-            vpo=('args1',),
-            vkw={'e': 5},
-        ) == CallArguments(1, 2, 'args1', c=3, d=4, e=5)
+        assert sort_arguments(func, dict(a=1, c=3, e=5), ('args1',)) == \
+            CallArguments(1, 2, 'args1', c=3, d=4, e=5)
 
 
 def test_callwith():
@@ -444,9 +441,5 @@ def test_callwith():
     Ensure that ``callwith`` works as expected
     """
     func = lambda a, b=2, *args, c, d=4, **kwargs: (a, b, args, c, d, kwargs)
-    assert callwith(
-        func,
-        arguments={'a': 1, 'c': 3},
-        vpo=('args1',),
-        vkw={'e': 5},
-    ) == (1, 2, ('args1',), 3, 4, {'e': 5})
+    assert callwith(func, dict(a=1, c=3, e=5), ('args1',)) == \
+        (1, 2, ('args1',), 3, 4, {'e': 5})
