@@ -67,9 +67,11 @@ confidence=
 # --disable=W"
 disable=
     C0111, missing-docstring
+    C0302, too-many-lines,
     C0304, missing-final-newline,
     E1127, invalid-slice-index,
     R0903, too-few-public-methods,
+    R0904, too-many-public-methods,
     W0212, protected-access,
 
 

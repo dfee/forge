@@ -3,7 +3,6 @@ import re
 import pytest
 
 import forge
-import forge._parameter
 
 # pylint: disable=C0103, invalid-name
 # pylint: disable=R0201, no-self-use
@@ -21,9 +20,7 @@ def test_namespace():
         '_exceptions',
         '_immutable',
         '_marker',
-        '_parameter',
         '_signature',
-        '_utils',
     ])
 
     public_ptn = re.compile(r'^[a-zA-Z]')
@@ -155,8 +152,9 @@ class TestParameterConvenience:
         """
         Assert ``forge.args`` is what we expect it to be.
         """
+        import forge._signature
         args = forge.args
-        assert isinstance(args, forge._parameter.VarPositional)
+        assert isinstance(args, forge._signature.VarPositional)
         assert args.name == 'args'
         assert args.converter is None
         assert args.validator is None
@@ -165,8 +163,9 @@ class TestParameterConvenience:
         """
         Assert ``forge.kwargs`` is what we expect it to be.
         """
+        import forge._signature
         kwargs = forge.kwargs
-        assert isinstance(kwargs, forge._parameter.VarKeyword)
+        assert isinstance(kwargs, forge._signature.VarKeyword)
         assert kwargs.name == 'kwargs'
         assert kwargs.converter is None
         assert kwargs.validator is None

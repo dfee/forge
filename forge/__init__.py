@@ -1,4 +1,5 @@
 from ._compose import (
+    Mapper,
     BaseRevision,
     BatchRevision as batch,
     # Unit
@@ -28,18 +29,13 @@ from ._marker import (
     empty,
     void,
 )
-from ._parameter import (
-    Factory,
-    FParameter,
-    VarKeyword,
-    VarPositional,
-)
 from ._signature import (
     CallArguments,
+    Factory,
+    FParameter,
     FSignature,
-    Mapper,
-)
-from ._utils import (
+    VarKeyword,
+    VarPositional,
     callwith,
     getparam,
     hasparam,

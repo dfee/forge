@@ -3,27 +3,262 @@ import asyncio
 import builtins
 import functools
 import inspect
+import types
 import typing
 
 from forge._exceptions import RevisionError
+import forge._immutable as immutable
 from forge._marker import (
     empty,
     void,
 )
-from forge._parameter import FParameter
 from forge._signature import (
+    CallArguments,
+    FParameter,
     FSignature,
-    Mapper,
+    _get_pk_string,
+    get_var_keyword_parameter,
+    get_var_positional_parameter,
 )
 
 # TODO: SortRevision
-# TODO: "Compose -> Revise"
 
-
+# TODO: remove
 _revise_return_type = typing.Union[
     typing.List[FParameter],
     typing.Tuple[FParameter, ...],
 ]
+
+
+class Mapper(immutable.Immutable):
+    """
+    An immutable data structure that provides the recipe for mapping
+    an :class:`~forge.FSignature` to an underlying callable.
+
+    :param fsignature: an instance of :class:`~forge.FSignature` that provides
+        the public and private interface.
+    :param callable: a callable that ultimately receives the arguments provided
+        to public :class:`~forge.FSignature` interface.
+
+    :ivar callable: see :paramref:`~forge._signature.Mapper.callable`
+    :ivar fsignature: see :paramref:`~forge._signature.Mapper.fsignature`
+    :ivar parameter_map: a :class:`types.MappingProxy` that exposes the strategy
+        of how to map from the :paramref:`.Mapper.fsignature` to the
+        :paramref:`.Mapper.callable`
+    :ivar private_signature: a cached copy of
+        :paramref:`~forge._signature.Mapper.callable`'s
+        :class:`inspect.Signature`
+    :ivar public_signature: a cached copy of
+        :paramref:`~forge._signature.Mapper.fsignature`'s manifest as a
+        :class:`inspect.Signature`
+    """
+    __slots__ = (
+        'callable',
+        'fsignature',
+        'parameter_map',
+        'private_signature',
+        'public_signature',
+    )
+
+    def __init__(
+            self,
+            fsignature: FSignature,
+            callable: typing.Callable[..., typing.Any],
+        ) -> None:
+        # pylint: disable=W0622, redefined-builtin
+        private_signature = inspect.signature(callable)
+        public_signature = fsignature.native
+        parameter_map = self.map_parameters(fsignature, private_signature)
+
+        super().__init__(
+            callable=callable,
+            fsignature=fsignature,
+            private_signature=private_signature,
+            public_signature=public_signature,
+            parameter_map=parameter_map,
+        )
+
+    def __call__(
+            self,
+            *args: typing.Any,
+            **kwargs: typing.Any
+        ) -> CallArguments:
+        """
+        Maps the arguments from the :paramref:`~forge.Mapper.public_signature`
+        to the :paramref:`~forge.Mapper.private_signature`.
+
+        Follows the strategy:
+
+        #. bind the arguments to the :paramref:`~forge.Mapper.public_signature`
+        #. partialy bind the :paramref:`~forge.Mapper.private_signature`
+        #. identify the context argument (if one exists) from
+        :class:`~forge.FParameter`s on the :class:`~forge.FSignature`
+        #. iterate over the intersection of bound arguments and ``bound`` \
+        parameters on the :paramref:`.Mapper.fsignature` to the \
+        :paramref:`~forge.Mapper.private_signature` of the \
+        :parmaref:`.Mapper.callable`, getting their transformed value by \
+        calling :meth:`~forge.FParameter.__call__`
+        #. map the resulting value into the private_signature bound arguments
+        #. generate and return a :class:`~forge._signature.CallArguments` from \
+        the private_signature bound arguments.
+
+        :param args: the positional arguments to map
+        :param kwargs: the keyword arguments to map
+        :return: transformed :paramref:`~forge.Mapper.__call__.args` and
+            :paramref:`~forge.Mapper.__call__.kwargs` mapped from
+            :paramref:`~forge.Mapper.public_signature` to
+            :paramref:`~forge.Mapper.private_signature`
+        """
+        try:
+            public_ba = self.public_signature.bind(*args, **kwargs)
+        except TypeError as exc:
+            raise TypeError(
+                '{callable_name}() {message}'.\
+                format(
+                    callable_name=self.callable.__name__,
+                    message=exc.args[0],
+                ),
+            )
+        public_ba.apply_defaults()
+
+        private_ba = self.private_signature.bind_partial()
+        private_ba.apply_defaults()
+        ctx = self.get_context(public_ba.arguments)
+
+        for from_name, from_param in self.fsignature.parameters.items():
+            from_val = public_ba.arguments.get(from_name, empty)
+            to_name = self.parameter_map[from_name]
+            to_param = self.private_signature.parameters[to_name]
+            to_val = self.fsignature.parameters[from_name](ctx, from_val)
+
+            if to_param.kind is FParameter.VAR_POSITIONAL:
+                # e.g. f(*args) -> g(*args)
+                private_ba.arguments[to_name] = to_val
+            elif to_param.kind is FParameter.VAR_KEYWORD:
+                if from_param.kind is FParameter.VAR_KEYWORD:
+                    # e.g. f(**kwargs) -> g(**kwargs)
+                    private_ba.arguments[to_name].update(to_val)
+                else:
+                    # e.g. f(a) -> g(**kwargs)
+                    private_ba.arguments[to_name]\
+                        [from_param.interface_name] = to_val
+            else:
+                # e.g. f(a) -> g(a)
+                private_ba.arguments[to_name] = to_val
+
+        return CallArguments.from_bound_arguments(private_ba)
+
+    def __repr__(self) -> str:
+        pubstr = str(self.public_signature)
+        privstr = str(self.private_signature)
+        return '<{} {} => {}>'.format(type(self).__name__, pubstr, privstr)
+
+    def get_context(self, arguments: typing.Mapping) -> typing.Any:
+        return arguments[self.fsignature.context.name] \
+            if self.fsignature.context \
+            else None
+
+    @staticmethod
+    def map_parameters(
+            fsignature: FSignature,
+            signature: inspect.Signature,
+        ) -> types.MappingProxyType:
+        '''
+        Build a mapping of parameters from the
+        :paramref:`.Mapper.map_parameters.fsignature` to the
+        :paramref:`.Mapper.map_parameters.signature`.
+
+        Strategy rules:
+        #. every *to_* :term:`positional-only` must be mapped to
+        #. every *to_* :term:`positional-or-keyword` w/o default must be
+        mapped to
+        #. every *to_* :term:`keyword-only` w/o default must be mapped to
+        #. *from_* :term:`var-positional` requires *to_* :term:`var-positional`
+        #. *from_* :term:`var-keyword` requires *to_* :term:`var-keyword`
+
+        :param fsignature: the :class:`~forge.FSignature` to map from
+        :param signature: the :class:`inspect.Signature` to map to
+        :return: a :class:`types.MappingProxyType` that shows how arguments
+            are mapped.
+        '''
+        # pylint: disable=W0622, redefined-builtin
+        # TODO: fsignature / signature -> from_ / to_
+        fparam_vpo = fsignature.var_positional
+        fparam_vkw = fsignature.var_keyword
+        fparam_idx = {
+            fparam.interface_name: fparam
+            for fparam in fsignature.parameters.values()
+            if fparam not in (fparam_vpo, fparam_vkw)
+        }
+
+        param_vpo = get_var_positional_parameter(
+            *signature.parameters.values()
+        )
+        param_vkw = get_var_keyword_parameter(
+            *signature.parameters.values()
+        )
+        param_idx = {
+            param.name: param
+            for param in signature.parameters.values()
+            if param not in (param_vpo, param_vkw)
+        }
+
+        mapping = {}
+        for name in list(param_idx):
+            param = param_idx.pop(name)
+            try:
+                param_t = fparam_idx.pop(name)
+            except KeyError:
+                # masked mapping, e.g. f() -> g(a=1)
+                if param.default is not empty.native:
+                    continue
+
+                # invalid mapping, e.g. f() -> g(a)
+                kind_repr = _get_pk_string(param.kind)
+                raise TypeError(
+                    "Missing requisite mapping to non-default {kind_repr} "
+                    "parameter '{pri_name}'".\
+                    format(kind_repr=kind_repr, pri_name=name)
+                )
+            else:
+                mapping[param_t.name] = name
+
+        if fparam_vpo:
+            # invalid mapping, e.g. f(*args) -> g()
+            if not param_vpo:
+                kind_repr = _get_pk_string(FParameter.VAR_POSITIONAL)
+                raise TypeError(
+                    "Missing requisite mapping from {kind_repr} parameter "
+                    "'{fparam_vpo.name}'".\
+                    format(kind_repr=kind_repr, fparam_vpo=fparam_vpo)
+                )
+            # var-positional mapping, e.g. f(*args) -> g(*args)
+            mapping[fparam_vpo.name] = param_vpo.name
+
+        if fparam_vkw:
+            # invalid mapping, e.g. f(**kwargs) -> g()
+            if not param_vkw:
+                kind_repr = _get_pk_string(FParameter.VAR_KEYWORD)
+                raise TypeError(
+                    "Missing requisite mapping from {kind_repr} parameter "
+                    "'{fparam_vkw.name}'".\
+                    format(kind_repr=kind_repr, fparam_vkw=fparam_vkw)
+                )
+            # var-keyword mapping, e.g. f(**kwargs) -> g(**kwargs)
+            mapping[fparam_vkw.name] = param_vkw.name
+
+        if fparam_idx:
+            # invalid mapping, e.g. f(a) -> g()
+            if not param_vkw:
+                raise TypeError(
+                    "Missing requisite mapping from parameters ({})".\
+                    format(', '.join([pt.name for pt in fparam_idx.values()]))
+                )
+            # to-var-keyword mapping, e.g. f(a) -> g(**kwargs)
+            for param_t in fparam_idx.values():
+                mapping[param_t.name] = param_vkw.name
+
+        return types.MappingProxyType(mapping)
 
 
 class FParameterSelector:
@@ -47,13 +282,12 @@ class FParameterSelector:
         ) -> None:
         self.selector = selector
 
-    def __call__(self, fparameter: FParameter) -> bool:
+    def __call__(self, parameter: FParameter) -> bool:
         if isinstance(self.selector, str):
-            return self.selector == fparameter.name
+            return self.selector == parameter.name
         elif isinstance(self.selector, typing.Iterable):
-            return fparameter.name in self.selector
-        # else: self.selector is a callable
-        return self.selector(fparameter)
+            return parameter.name in self.selector
+        return self.selector(parameter) # self.selector is a callable
 
     def __repr__(self) -> str:
         return '<{} {}>'.format(type(self).__name__, self.selector)
@@ -64,10 +298,7 @@ class BaseRevision:
     Functions as an identity revision
     """
     @abstractmethod
-    def revise(
-            self,
-            *previous: FParameter
-        ) -> _revise_return_type:
+    def revise(self, previous: FSignature) -> FSignature:
         raise NotImplementedError()
 
     def __call__(
@@ -89,17 +320,16 @@ class BaseRevision:
         # pylint: disable=W0622, redefined-builtin
         if hasattr(callable, '__mapper__'):
             existing = True
-            fsig = callable.__mapper__.fsignature  # type: ignore
+            prev_ = callable.__mapper__.fsignature  # type: ignore
         else:
             existing = False
-            fsig = FSignature.from_callable(callable)
+            prev_ = FSignature.from_callable(callable)
 
-        fparams = self.revise(*fsig.values())
-        fsignature = FSignature(fparams)
+        next_ = self.revise(prev_)
 
         # Previously revised; already wrapped
         if existing:
-            mapper = Mapper(fsignature, callable.__wrapped__)  # type: ignore
+            mapper = Mapper(next_, callable.__wrapped__)  # type: ignore
             callable.__mapper__ = mapper  # type: ignore
             callable.__signature__ = mapper.public_signature  # type: ignore
             return callable
@@ -114,7 +344,7 @@ class BaseRevision:
         if inspect.iscoroutinefunction(callable):
             inner = asyncio.coroutine(inner)
 
-        inner.__mapper__ = Mapper(fsignature, callable)  # type: ignore
+        inner.__mapper__ = Mapper(next_, callable)  # type: ignore
         inner.__signature__ = inner.__mapper__.public_signature  # type: ignore
         return inner
 
@@ -150,7 +380,7 @@ class SynthesizeRevision(BaseRevision):
     Revision that builds a new signature from instances of
     :class:`~forge.FParameter`
 
-    Order fparameters with the following strategy:
+    Order parameters with the following strategy:
 
     #. arguments are returned in order
     #. keyword arguments are sorted by ``_creation_order``, and evolved with \
@@ -187,40 +417,36 @@ class SynthesizeRevision(BaseRevision):
             assert forge.stringify_callable(func1) == 'func1(b, a)'
             assert forge.stringify_callable(func2) == 'func2(a, b)'
 
-    :param fparameters: :class:`~forge.FParameter` instances to be ordered
-    :param named_fparameters: :class:`~forge.FParameter` instances to be
+    :param parameters: :class:`~forge.FParameter` instances to be ordered
+    :param named_parameters: :class:`~forge.FParameter` instances to be
         ordered, updated
     :return: a wrapping factory that takes a callable and updates it so that
         it has a signature as defined by the
-        :paramref:`.resign.fparameters` and
-        :paramref:`.resign.named_fparameters`
+        :paramref:`.resign.parameters` and
+        :paramref:`.resign.named_parameters`
     """
-    def __init__(self, *fparameters, **named_fparameters):
-        self.fparameters = [
-            *fparameters,
+    def __init__(self, *parameters, **named_parameters):
+        self.parameters = [
+            *parameters,
             *[
-                fparam.replace(
+                param.replace(
                     name=name,
-                    interface_name=fparam.interface_name or name,
-                ) for name, fparam in sorted(
-                    named_fparameters.items(),
+                    interface_name=param.interface_name or name,
+                ) for name, param in sorted(
+                    named_parameters.items(),
                     key=lambda i: i[1]._creation_order,
                 )
             ]
         ]
 
-    def revise(
-            self,
-            *previous: FParameter
-        ) -> _revise_return_type:
+    def revise(self, previous: FSignature) -> FSignature:
         """
-        Returns the :class:`~forge.FParameter<FParameters>` from initialization
+        Produces a signature with the parameters provided at initialization.
 
-        :param previous: previous :class:`~forge.FParameter` instances
-        :return: :class:`~forge.FParameter` instances for building a new
-            :class:`~forge.FSignature`
+        :param previous: previous signature
+        :return: updated signature
         """
-        return self.fparameters
+        return previous.replace(parameters=self.parameters)
 
 
 class DeleteRevision(BaseRevision):
@@ -244,7 +470,7 @@ class DeleteRevision(BaseRevision):
 
 
 class InsertRevision(BaseRevision):
-    def __init__(self, fparameter, *, index=None, before=None, after=None):
+    def __init__(self, parameter, *, index=None, before=None, after=None):
         provided = dict(filter(
             lambda i: i[1] is not None,
             {'index': index, 'before': before, 'after': after}.items(),
@@ -258,7 +484,7 @@ class InsertRevision(BaseRevision):
                 "expected 'index', 'before' or 'after' received multiple"
             )
 
-        self.fparameter = fparameter
+        self.parameter = parameter
         self.index = index
         self.before = FParameterSelector(before) if before else None
         self.after = FParameterSelector(after) if after else None
@@ -272,12 +498,12 @@ class InsertRevision(BaseRevision):
             for prev in previous:
                 if not visited and self.before(prev):
                     visited = True
-                    next_.append(self.fparameter)
+                    next_.append(self.parameter)
                 next_.append(prev)
             if not visited:
                 raise RevisionError(
                     'cannot insert {fp} before selector; selector not found'.\
-                    format(fp=self.fparameter)
+                    format(fp=self.parameter)
                 )
 
         elif self.after:
@@ -286,16 +512,16 @@ class InsertRevision(BaseRevision):
                 next_.append(prev)
                 if not visited and self.after(prev):
                     visited = True
-                    next_.append(self.fparameter)
+                    next_.append(self.parameter)
             if not visited:
                 raise RevisionError(
                     'cannot insert {fp} after selector; selector not found'.\
-                    format(fp=self.fparameter)
+                    format(fp=self.parameter)
                 )
 
         else:
             next_ = list(previous)
-            next_.insert(self.index, self.fparameter)
+            next_.insert(self.index, self.parameter)
 
         return next_
 
@@ -512,16 +738,16 @@ class CopyRevision(BaseRevision):
 
 
 class ReplaceRevision(BaseRevision):
-    def __init__(self, selector, fparameter):
+    def __init__(self, selector, parameter):
         self.selector = FParameterSelector(selector)
-        self.fparameter = fparameter
+        self.parameter = parameter
 
     def revise(
             self,
             *previous: FParameter
         ) -> _revise_return_type:
         return [
-            self.fparameter if self.selector(prev) else prev
+            self.parameter if self.selector(prev) else prev
             for prev in previous
         ]
 
