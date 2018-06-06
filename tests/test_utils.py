@@ -1,4 +1,5 @@
 import inspect
+import sys
 
 import pytest
 
@@ -84,9 +85,15 @@ def test_repr_callable(strategy):
 
     if strategy == 'class_callable':
         ins = Dummy()
-        assert repr_callable(ins) == '{}(value:int=1) -> int'.format(ins)
+        expected = '{}(value:int=1) -> int'.format(ins) \
+            if sys.version_info.minor < 7 \
+            else '{}(value: int = 1) -> int'.format(ins)
+        assert repr_callable(ins) == expected
     elif strategy == 'function':
-        assert repr_callable(Dummy) == 'Dummy(value:int=0) -> None'
+        expected = 'Dummy(value:int=0) -> None' \
+            if sys.version_info.minor < 7 \
+            else 'Dummy}(value: int = 0) -> None'
+        assert repr_callable(Dummy) == expected
     else:
         raise TypeError('Unknown strategy {}'.format(strategy))
 
