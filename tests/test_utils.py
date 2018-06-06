@@ -122,6 +122,13 @@ class TestSortArguments:
         ),
     ])
     def test_sorting(self, kind, named, unnamed, expected):
+        """
+        Ensure that a named argument is appropriately sorted into a:
+        - positional-only param
+        - positional-or-keyword param
+        - keyword-only param
+        - var-keyword param
+        """
         to_ = inspect.Signature([inspect.Parameter('param', kind)])
         result = sort_arguments(to_, named, unnamed)
         assert result == expected
@@ -141,6 +148,9 @@ class TestSortArguments:
         ),
     ])
     def test_sorting_with_defaults(self, kind, expected):
+        """
+        Ensure that unsuplied named arguments use default values
+        """
         to_ = inspect.Signature([inspect.Parameter('param', kind, default=1)])
         result = sort_arguments(to_)
         assert result == expected

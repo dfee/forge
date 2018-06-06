@@ -841,7 +841,7 @@ class TestParameterConvenience:
     ])
     def test_constructors(self, name, obj):
         """
-        Assert constructor nicknames are what we exect them to be.
+        Ensure constructor nicknames are what we exect them to be.
         """
         assert getattr(forge, name) == obj
 
@@ -858,7 +858,7 @@ class TestParameterConvenience:
 
     def test_cls(self):
         """
-        Assert ``forge.cls`` is what we expect it to be.
+        Ensure ``forge.cls`` is what we expect it to be.
         """
         assert forge.cls == forge.FParameter(
             forge.FParameter.POSITIONAL_OR_KEYWORD,
@@ -869,7 +869,7 @@ class TestParameterConvenience:
 
     def test_args(self):
         """
-        Assert ``forge.args`` is what we expect it to be.
+        Ensure ``forge.args`` is what we expect it to be.
         """
         args = forge.args
         assert isinstance(args, forge._signature.VarPositional)
@@ -879,7 +879,7 @@ class TestParameterConvenience:
 
     def test_kwargs(self):
         """
-        Assert ``forge.kwargs`` is what we expect it to be.
+        Ensure ``forge.kwargs`` is what we expect it to be.
         """
         kwargs = forge.kwargs
         assert isinstance(kwargs, forge._signature.VarKeyword)
@@ -945,6 +945,10 @@ class TestFParameterSequence:
         ),
     ])
     def test__str__and__repr__(self, params, expected):
+        """
+        Ensure that FParameterSequence generates a string and representation
+        as expected by passing directly to inspect.Signature
+        """
         seq = FParameterSequence(params, validate=False)
         assert str(seq) == expected
         assert repr(seq) == '<FParameterSequence {}>'.format(expected)
@@ -1186,6 +1190,10 @@ class TestFSignature:
         ),
     ])
     def test_replace(self, in_, kwargs, out_):
+        """
+        Ensure ``replace`` of ``parameters`` or ``return_annotation`` with
+        optional validation.
+        """
         assert in_.replace(**kwargs) == out_
 
 

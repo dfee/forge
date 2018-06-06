@@ -478,11 +478,18 @@ class TestRevision:
         func3.__mapper__.assert_called_once_with(**call_args.kwargs)
 
     def test_revise(self):
+        """
+        Ensure that the revise function is the identity function
+        """
         rev = Revision()
         in_ = FSignature()
         assert rev.revise(in_) is in_
 
     def test__call__validates(self):
+        """
+        Ensure that `__call__` validates the signature. Notable because
+        `revise` methods typically don't validate.
+        """
         rev = Revision()
         rev.revise = lambda prev: FSignature(
             [forge.arg('b'), forge.pos('a')],
@@ -499,6 +506,10 @@ class TestRevision:
 ## Test Group Revisions
 class TestCompose:
     def test_revise(self):
+        """
+        Ensure that ``compose`` applies the underlying revisions from top to
+        bottom.
+        """
         fsig1 = FSignature()
         mock1 = Mock(
             spec=Revision,
@@ -519,11 +530,17 @@ class TestCompose:
         mock2.revise.assert_called_once_with(fsig1)
 
     def test_revise_none(self):
+        """
+        Ensure that ``compose`` without any revisions is the identity function
+        """
         fsig = FSignature()
         rev = compose()
         assert rev.revise(fsig) is fsig
 
     def test_non_revision_raises(self):
+        """
+        Ensure that supplying a non-revision to ``compose`` raises TypeError
+        """
         with pytest.raises(TypeError) as excinfo:
             compose(1)
         assert excinfo.value.args[0] == "received non-revision '1'"
@@ -591,6 +608,12 @@ class TestCopy:
 
     ])
     def test_revise(self, include, exclude, expected):
+        """
+        Ensure that ``copy`` copies a callable's signature, or the select
+        parameters with ``include`` and ``exclude``.
+        Also ensures that ``include`` and ``exclude`` take selector values;
+        i.e. what's supplied to ``findparam``.
+        """
         func = lambda a, b, c: None
         if isinstance(expected, Exception):
             with pytest.raises(type(expected)) as excinfo:
@@ -605,7 +628,8 @@ class TestCopy:
 class TestManage:
     def test_revise(self):
         """
-        Assert that manage revision utilizes the custom callable
+        Ensure that manage revision passes the input signature to the user
+        supplied function and returns (the user-defined function's) value.
         """
         fsig = fsignature(lambda a, b, c: None)
         reverse = Mock(
@@ -771,6 +795,12 @@ class TestSort:
         ),
     ])
     def test_revise(self, in_, sortkey, expected):
+        """
+        Ensure that parameter sorting:
+        - doesn't validate the signature
+        - by default sorts by (kind, has-default, name)
+        - takes advantage of user-supplied sortkey
+        """
         rev = sort(sortkey)
         in_ = FSignature(in_, __validate_parameters__=False)
         expected = FSignature(expected, __validate_parameters__=False)
@@ -839,6 +869,12 @@ class TestDelete:
         ]
     )
     def test_revision(self, selector, multiple, raising, in_, out_):
+        """
+        Ensure that delete:
+        - raises if ``raising = True``
+        - deletes multiple if ``multiple = True``
+        - takes selector values; i.e. what's supplied to ``findparam``.
+        """
         # pylint: disable=R0913, too-many-arguments
         rev = delete(selector, multiple, raising)
         if isinstance(out_, Exception):
@@ -933,6 +969,13 @@ class TestInsert:
         pytest.param([forge.arg('a')], id='iterable'),
     ])
     def test_revise(self, insertion, index, before, after, in_, out_):
+        """
+        Ensure that insert:
+        - takes a parameter or iterable of parameters for ``insertion``
+        - accepts an index
+        - accepts before or after as selector values; i.e. what's supplied to \
+        ``findparam``.
+        """
         # pylint: disable=R0913, too-many-arguments
         rev = insert(insertion, index=index, before=before, after=after)
         if isinstance(out_, Exception):
@@ -948,12 +991,19 @@ class TestInsert:
         pytest.param(dict(before='a', after='b'), id='before_and_after'),
     ])
     def test_combo_raises(self, kwargs):
+        """
+        Ensure that insertion with more than one of (index, before, or after)
+        raises.
+        """
         with pytest.raises(TypeError) as excinfo:
             insert(forge.arg('x'), **kwargs)
         assert excinfo.value.args[0] == \
             "expected 'index', 'before' or 'after' received multiple"
 
     def test_no_position_raises(self):
+        """
+        Ensure that insertion without index, before, or after raises.
+        """
         with pytest.raises(TypeError) as excinfo:
             insert(forge.arg('x'))
         assert excinfo.value.args[0] == \
@@ -986,6 +1036,10 @@ class TestModify:
         pytest.param(dict(metadata={'a': 1}), id='metadata'),
     ])
     def test_revise(self, revision):
+        """
+        Ensure that ``modify`` appropriately revises every attribute of a
+        parameter.
+        """
         in_param = forge.pos('a')
         out_param = in_param.replace(**revision)
         assert in_param != out_param # ensure we've got a good test setup
@@ -995,6 +1049,10 @@ class TestModify:
 
     @pytest.mark.parametrize(('multiple',), [(True,), (False,)])
     def test_revise_multiple(self, multiple):
+        """
+        Ensure that passing ``multiple=True`` allows for modification of every
+        parameter that matches the selector; i.e. values passed to ``findparam``
+        """
         in_ = FSignature([forge.arg('a'), forge.arg('b')])
         rev = modify(('a', 'b'), multiple=multiple, kind=POSITIONAL_ONLY)
         out_ = rev.revise(in_)
@@ -1007,6 +1065,10 @@ class TestModify:
 
     @pytest.mark.parametrize(('raising',), [(True,), (False,)])
     def test_revise_no_match(self, raising):
+        """
+        Ensure that only when ``raising=True``, an exception is raised if
+        ``selector`` doesn't match a parameter.
+        """
         in_ = FSignature([forge.arg('a')])
         rev = modify('x', raising=raising, kind=POSITIONAL_ONLY)
 
@@ -1031,6 +1093,10 @@ class TestModify:
         assert rev.revise(in_) == out_
 
     def test_accepted_params(self):
+        """
+        Ensure that ``modify`` takes the same arguments as
+        ``FParameter.replace``. Keeps code in sync.
+        """
         assert fsignature(modify).parameters['name':] == \
             fsignature(FParameter.replace).parameters['name':]
 
@@ -1045,6 +1111,10 @@ class TestReplace:
         ),
     ])
     def test_revise(self, selector):
+        """
+        Ensure that ``replace`` accepts selector values; i.e. those passed to
+        ``findparam``.
+        """
         new_param = forge.arg('new')
         old_param = forge.arg('old')
         in_ = FSignature([old_param])
@@ -1054,6 +1124,9 @@ class TestReplace:
         assert rev.revise(in_) == out_
 
     def test_no_match_raises(self):
+        """
+        Ensure that if selector doesn't find a match, an exception is rasied.
+        """
         rev = replace('i', forge.arg('a'))
         with pytest.raises(ValueError) as excinfo:
             rev.revise(FSignature())
@@ -1075,6 +1148,9 @@ class TestReplace:
 
 class TestTranslocate:
     def test_move(self):
+        """
+        Ensure that forge.move is a nickname for ``translocate``
+        """
         assert forge.move is translocate
 
     @pytest.mark.parametrize(('index', 'before', 'after'), [
@@ -1107,6 +1183,12 @@ class TestTranslocate:
         pytest.param(lambda param: param.name == 'b', id='selector_callable'),
     ])
     def test_revise(self, selector, index, before, after):
+        """
+        Ensure that ``translocate``:
+        - takes index
+        - takes before as a selector value; i.e. value passed to ``findparam``
+        - takes after as a selector value; i.e. value passed to ``findparam``
+        """
         # pylint: disable=R0913, too-many-arguments
         rev = translocate(selector, index=index, before=before, after=after)
         in_ = FSignature([forge.arg('a'), forge.arg('c'), forge.arg('b')])
@@ -1120,6 +1202,9 @@ class TestTranslocate:
         assert rev.revise(in_) == out_
 
     def test_revise_selector_no_match_raises(self):
+        """
+        Ensure that a ``selector`` without a match raises
+        """
         rev = translocate('x', index=0)
         with pytest.raises(ValueError) as excinfo:
             rev.revise(fsignature(lambda a: None))
@@ -1127,6 +1212,9 @@ class TestTranslocate:
             "No parameter matched selector 'x'"
 
     def test_revise_before_no_match_raises(self):
+        """
+        Ensure that a ``before`` value with a match raises
+        """
         rev = translocate('a', before='x')
         with pytest.raises(ValueError) as excinfo:
             rev.revise(fsignature(lambda a: None))
@@ -1134,6 +1222,9 @@ class TestTranslocate:
             "No parameter matched selector 'x'"
 
     def test_revise_after_no_match_raises(self):
+        """
+        Ensure that an ``after`` value with a match raises
+        """
         rev = translocate('a', after='x')
         with pytest.raises(ValueError) as excinfo:
             rev.revise(fsignature(lambda a: None))
@@ -1146,12 +1237,19 @@ class TestTranslocate:
         pytest.param(dict(before='a', after='b'), id='before_and_after'),
     ])
     def test_combo_raises(self, kwargs):
+        """
+        Ensure that ``index``, ``before``, or ``after`` can be passed, but not a
+        combination
+        """
         with pytest.raises(TypeError) as excinfo:
             translocate(forge.arg('x'), **kwargs)
         assert excinfo.value.args[0] == \
             "expected 'index', 'before' or 'after' received multiple"
 
     def test_no_position_raises(self):
+        """
+        Ensure that ``index``, ``before``, or ``after`` must be passed
+        """
         with pytest.raises(TypeError) as excinfo:
             translocate(forge.arg('x'))
         assert excinfo.value.args[0] == \
