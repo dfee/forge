@@ -414,7 +414,7 @@ class copy(Revision):  # pylint: disable=C0103, invalid-name
             callable: typing.Callable[..., typing.Any],
             *,
             include: typing.Optional[_TYPE_FINDITER_SELECTOR] = None,
-            exclude: typing.Optional[_TYPE_FINDITER_SELECTOR] = None,
+            exclude: typing.Optional[_TYPE_FINDITER_SELECTOR] = None
         ) -> None:
         # pylint: disable=W0622, redefined-builtin
         if include is not None and exclude is not None:
@@ -809,7 +809,7 @@ class insert(Revision):  # pylint: disable=C0103, invalid-name
             *,
             index: int = None,
             before: _TYPE_FINDITER_SELECTOR = None,
-            after: _TYPE_FINDITER_SELECTOR = None,
+            after: _TYPE_FINDITER_SELECTOR = None
         ) -> None:
         provided = dict(filter(
             lambda i: i[1] is not None,

@@ -92,7 +92,7 @@ def test_repr_callable(strategy):
     elif strategy == 'function':
         expected = 'Dummy(value:int=0) -> None' \
             if sys.version_info.minor < 7 \
-            else 'Dummy}(value: int = 0) -> None'
+            else 'Dummy(value: int = 0) -> None'
         assert repr_callable(Dummy) == expected
     else:
         raise TypeError('Unknown strategy {}'.format(strategy))
