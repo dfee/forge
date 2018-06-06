@@ -26,17 +26,23 @@ _get_pk_string = _PARAMETER_KIND_STRINGS.__getitem__
 
 
 class Factory(immutable.Immutable):
-    # TODO: document
+    """
+    A Factory object is a wrapper around a callable that gets called to generate
+    a default value everytime a function is invoked.
+
+    :param factory: a callable which is invoked without argument to generate
+        a default value.
+    """
     __slots__ = ('factory',)
 
-    def __init__(self, factory):
+    def __init__(self, factory: typing.Callable[[], typing.Any]) -> None:
         # pylint: disable=C0102, blacklisted-name
         super().__init__(factory=factory)
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return '<{} {}>'.format(type(self).__name__, self.factory.__qualname__)
 
-    def __call__(self):
+    def __call__(self) -> typing.Any:
         return self.factory()
 
 
@@ -884,8 +890,28 @@ _TYPE_FPM_VALIDATE = bool  # pylint: disable=C0103, invalid-name
 
 
 class FParameterSequence(collections.abc.Mapping):
-    # TODO: document
-    # TODO: move to parameters
+    """
+    A sequence of :class:`~forge.FParameter` instances that represent the
+    parameter sequence of a signature.
+
+    This class implements the :class:`collections.abc.Mapping` interface,
+    gaining the following methods:
+    - ``__contains__``,
+    - ``keys``,
+    - ``items``,
+    - ``values``,
+    - ``get``,
+    ``__eq__``, and
+    ``__ne__``.
+
+    In additon, `__getitem__` provides slice access by parameter name, as
+    described in :meth:`~forge.FParameterSequence.__getitem__`
+
+    :param parameters: an ordered list or tuple of :class:`~forge.FParameter`
+        instances.
+    :param validate: whether the sequence should be validated by
+        :meth:`~forge.FParameterSequence.validate`
+    """
     def __init__(
             self,
             parameters: _TYPE_FPM_PARAMETERS = None,
@@ -950,20 +976,50 @@ class FParameterSequence(collections.abc.Mapping):
         """
         return len(self._data)
 
-    def __str__(self):
-        # TODO: test
-        sig = inspect.Signature(
+    def __str__(self) -> str:
+        # https://github.com/python/mypy/issues/5156
+        sig = inspect.Signature(  # type: ignore
             [fp.native for fp in self.values()],
             __validate_parameters__=False,
         )
         return str(sig)
 
-    def __repr__(self):
-        # TODO: test
+    def __repr__(self) -> str:
         return '<{} {}>'.format(type(self).__name__, str(self))
 
     @classmethod
     def validate(cls, *parameters: FParameter) -> None:
+        """
+        Validation ensures:
+
+        - the appropriate order of parameters by kind:
+
+            #. (optional) :term:`positional-only`, followed by
+            #. (optional) :term:`positional-or-keyword`, followed by
+            #. (optional) :term:`var-positional`, followed by
+            #. (optional) :term:`keyword-only`, followed by
+            #. (optional) :term:`var-keyword`
+
+        - that non-default :term:`positional-only` or
+            :term:`positional-or-keyword` parameters don't follow their
+            respective similarly-kinded parameters with defaults,
+
+            .. note::
+
+                Python signatures allow non-default :term:`keyword-only`
+                parameters to follow default :term:`keyword-only` parameters.
+
+        - that at most there is one :term:`var-positional` parameter,
+
+        - that at most there is one :term:`var-keyword` parameter,
+
+        - that at most there is one ``context`` parameter, and that it
+            is the first parameter (if it is provided.)
+
+        - that no two instances of :class:`~forge.FParameter` share the same
+            :paramref:`~forge.FParameter.name` or
+            :paramref:`~forge.FParameter.interface_name`.
+        """
         # pylint: disable=R0912, too-many-branches
         name_set = set()  # type: typing.Set[str]
         iname_set = set()  # type: typing.Set[str]
@@ -1063,7 +1119,11 @@ def finditer(
     if isinstance(selector, str):
         return filter(lambda param: param.name == selector, parameters)
     elif isinstance(selector, typing.Iterable):
-        return filter(lambda param: param.name in selector, parameters)
+        selector = list(selector)
+        return filter(
+            lambda param: param.name in selector,  # type: ignore
+            parameters,
+        )
     elif callable(selector):
         return filter(selector, parameters)
     else:
@@ -1135,56 +1195,12 @@ class FSignature(immutable.Immutable):
     An immutable, validated representation of a signature composed of
     :class:`~forge.FParameter` instances.
 
-    Validation ensures:
-
-    - the appropriate order of parameters by kind:
-
-        #. (optional) :term:`positional-only`, followed by
-        #. (optional) :term:`positional-or-keyword`, followed by
-        #. (optional) :term:`var-positional`, followed by
-        #. (optional) :term:`keyword-only`, followed by
-        #. (optional) :term:`var-keyword`
-
-    - that non-default :term:`positional-only` or
-        :term:`positional-or-keyword` parameters don't follow their respective
-        similarly-kinded parameters with defaults,
-
-        .. note::
-
-            Python signatures allow non-default :term:`keyword-only` parameters
-            to follow default :term:`keyword-only` parameters.
-
-    - that at most there is one :term:`var-positional` parameter,
-
-    - that at most there is one :term:`var-keyword` parameter,
-
-    - that at most there is one ``context`` parameter, and that it
-        is the first parameter (if it is provided.)
-
-    - that no two instances of :class:`~forge.FParameter` share the same
-        :paramref:`~forge.FParameter.name` or
-        :paramref:`~forge.FParameter.interface_name`.
-
-    .. note::
-
-        This class usually doesn't usually need to be invoked directly.
-        Consider using one of the constructor methods instead:
-
-        - :func:`~forge.sign` to wrap a callable with a \
-        :class:`~forge.FSignature`.
-        - :func:`~forge.resign` to revise a wrapped callable's \
-        :class:`~forge.FSignature`.
-        - :func:`~forge.FSignature.from_callable` to generate a \
-        :class:`~forge.FSignature` from any Python callable.
-        - :func:`~forge.FSignature.from_signature` to generate a \
-        :class:`~forge.FSignature` from a :class:`inspect.Signature`.
-
-    Implements :class:`collections.abc.Mapping`, with provided: ``__getitem__``,
-    ``__iter__`` and ``__len__``. Inherits methods: ``__contains__``, ``keys``,
-    ``items``, ``values``, ``get``, ``__eq__`` and ``__ne__``.
-
     :param parameters: an ordered list or tuple of :class:`~forge.FParameter`
         instances.
+    :param return_annotation: the return type annotation for the signature
+    :param __validate_parameters__: whether the sequence of provided parameters
+        should be validated (passed to the constructor of
+        :class:`~forge.FParameterSequence`)
     """
     # pylint: disable=R0901, too-many-ancestors
 
@@ -1195,8 +1211,6 @@ class FSignature(immutable.Immutable):
             return_annotation: _TYPE_FS_RETURN_ANNOTATION = empty.native,
             __validate_parameters__: _TYPE_FS__VALIDATE_PARAMETERS__ = False
         ) -> None:
-        # TODO: add return_annotation to docs
-        # TODO: add __validate_parameter__ to docs
         super().__init__(
             parameters=FParameterSequence(
                 parameters,
@@ -1217,7 +1231,7 @@ class FSignature(immutable.Immutable):
         return '<{} {}>'.format(type(self).__name__, self)
 
     @classmethod
-    def from_signature(cls, signature: inspect.Signature) -> 'FSignature':
+    def from_native(cls, signature: inspect.Signature) -> 'FSignature':
         """
         A factory method that creates an instance of
         :class:`~forge.FSignature` from an instance of
@@ -1227,15 +1241,14 @@ class FSignature(immutable.Immutable):
         instances.
 
         The ``return type`` annotation from the provided signature is not
-        retained, as :meth:`~forge.FSignature.from_signature` doesn't provide
+        retained, as :meth:`~forge.FSignature.from_native` doesn't provide
         this functionality.
 
         :param signature: an instance of :class:`inspect.Signature` from which
             to derive the :class:`~forge.FSignature`
         :return: an instance of :class:`~forge.FSignature` derived from the
-            :paramref:`~forge.FSignature.from_signature.signature` argument.
+            :paramref:`~forge.FSignature.from_native.signature` argument.
         """
-        # TODO: test return_annotation
         # pylint: disable=E1101, no-member
         return cls([
             FParameter.from_native(native)
@@ -1247,7 +1260,7 @@ class FSignature(immutable.Immutable):
         """
         A factory method that creates an instance of
         :class:`~forge.FSignature` from a callable. Calls down to
-        :meth:`~forge.FSignature.from_signature` to do the heavy loading.
+        :meth:`~forge.FSignature.from_native` to do the heavy loading.
 
         :param callable: a callable from which to derive the
             :class:`~forge.FSignature`
@@ -1255,7 +1268,7 @@ class FSignature(immutable.Immutable):
             :paramref:`~forge.FSignature.from_callable.callable` argument.
         """
         # pylint: disable=W0622, redefined-builtin
-        return cls.from_signature(inspect.signature(callable))
+        return cls.from_native(inspect.signature(callable))
 
     @property
     def native(self) -> inspect.Signature:
@@ -1287,9 +1300,9 @@ class FSignature(immutable.Immutable):
     def replace(
             self,
             *,
-            parameters: typing.Union[_TYPE_FS_PARAMETERS, void] = void,
-            return_annotation: _TYPE_FS_RETURN_ANNOTATION = void,
-            __validate_parameters__: _TYPE_FS__VALIDATE_PARAMETERS__ = True
+            parameters=void,
+            return_annotation=void,
+            __validate_parameters__=True
         ) -> 'FSignature':
         """
         Returns a copy of this :class:`~forge.FSignature` with replaced

@@ -23,6 +23,7 @@ from forge._signature import (
     VarKeyword,
     VarPositional,
     finditer,
+    fsignature,
     get_context_parameter,
     get_var_keyword_parameter,
     get_var_positional_parameter,
@@ -887,6 +888,66 @@ class TestParameterConvenience:
 
 
 class TestFParameterSequence:
+    # Begin collections.abc.Mapping Tests
+    def test__getitem__str(self):
+        """
+        Ensure that ``__getitem__`` retrieves fparams by ``name``
+        (an abstract collections.abc.Mapping method)
+        """
+        fparam = forge.arg('a')
+        fpseq = FParameterSequence([fparam])
+        assert fpseq['a'] is fparam
+
+    @pytest.mark.parametrize(('start', 'end', 'expected'), [
+        pytest.param('c', None, 'cd', id='start'),
+        pytest.param(None, 'c', 'abc', id='end'),
+        pytest.param('b', 'c', 'bc', id='start_and_end'),
+        pytest.param(None, None, 'abcd', id='no_start_no_end'),
+        pytest.param('x', None, '', id='unknown_start'),
+        pytest.param(None, 'x', 'abcd', id='unknown_end'),
+    ])
+    def test__getitem__slice(self, start, end, expected):
+        """
+        Ensure that ``__getitem__`` retrives from slice.start forward
+        """
+        fparams = OrderedDict([(name, forge.arg(name)) for name in 'abcd'])
+        fpseq = FParameterSequence(list(fparams.values()))
+        assert fpseq[start:end] == [fparams[e] for e in expected]
+
+    def test__len__(self):
+        """
+        Ensure that ``__len__`` retrieves a count of the fparams
+        (an abstract collections.abc.Mapping method)
+        """
+        assert len(FParameterSequence([forge.arg('a')])) == 1
+
+    def test__iter__(self):
+        """
+        Ensure that ``__iter__`` returns an iterator over all fparams
+        (an abstract collections.abc.Mapping method)
+        """
+        fparam = forge.arg('a')
+        fpseq = FParameterSequence([fparam])
+        assert dict(fpseq) == {fparam.name: fparam}
+    # End collections.abc.Mapping Tests
+
+    @pytest.mark.parametrize(('params', 'expected'), [
+        pytest.param(
+            [forge.arg('a'), forge.arg('b')],
+            '(a, b)',
+            id='valid',
+        ),
+        pytest.param(
+            [forge.arg('a'), forge.pos('b')],
+            '(a, b, /)',
+            id='invalid',
+        ),
+    ])
+    def test__str__and__repr__(self, params, expected):
+        seq = FParameterSequence(params, validate=False)
+        assert str(seq) == expected
+        assert repr(seq) == '<FParameterSequence {}>'.format(expected)
+
     def test_validate_non_fparameter_raises(self):
         """
         Ensure that non-fparams raise a TypeError by validating a
@@ -1013,51 +1074,11 @@ class TestFParameterSequence:
             forge.kwarg('b'),
         ])
 
-    # Begin collections.abc.Mapping Tests
-    def test__getitem__str(self):
-        """
-        Ensure that ``__getitem__`` retrieves fparams by ``name``
-        (an abstract collections.abc.Mapping method)
-        """
-        fparam = forge.arg('a')
-        fpseq = FParameterSequence([fparam])
-        assert fpseq['a'] is fparam
-
-    @pytest.mark.parametrize(('start', 'end', 'expected'), [
-        pytest.param('c', None, 'cd', id='start'),
-        pytest.param(None, 'c', 'abc', id='end'),
-        pytest.param('b', 'c', 'bc', id='start_and_end'),
-        pytest.param(None, None, 'abcd', id='no_start_no_end'),
-        pytest.param('x', None, '', id='unknown_start'),
-        pytest.param(None, 'x', 'abcd', id='unknown_end'),
-    ])
-    def test__getitem__slice(self, start, end, expected):
-        """
-        Ensure that ``__getitem__`` retrives from slice.start forward
-        """
-        fparams = OrderedDict([(name, forge.arg(name)) for name in 'abcd'])
-        fpseq = FParameterSequence(list(fparams.values()))
-        assert fpseq[start:end] == [fparams[e] for e in expected]
-
-    def test__len__(self):
-        """
-        Ensure that ``__len__`` retrieves a count of the fparams
-        (an abstract collections.abc.Mapping method)
-        """
-        assert len(FParameterSequence([forge.arg('a')])) == 1
-
-    def test__iter__(self):
-        """
-        Ensure that ``__iter__`` returns an iterator over all fparams
-        (an abstract collections.abc.Mapping method)
-        """
-        fparam = forge.arg('a')
-        fpseq = FParameterSequence([fparam])
-        assert dict(fpseq) == {fparam.name: fparam}
-    # End collections.abc.Mapping Tests
-
 
 class TestFSignature:
+    def test_fsignature(self):
+        assert fsignature == FSignature.from_callable
+
     def test__str__and__repr__(self):
         """
         Ensure printing and repr of FSignature
@@ -1088,7 +1109,7 @@ class TestFSignature:
         pytest.param(empty.native, id='empty'),
         pytest.param(bool, id='bool'),
     ])
-    def test_from_signature(self, return_annotation):
+    def test_from_native(self, return_annotation):
         """
         Ensure a ``FSignature`` can be adequately generated from an
         ``inspect.Signature``
@@ -1101,7 +1122,7 @@ class TestFSignature:
                 annotation=int,
             ),
         ], return_annotation=return_annotation)
-        fsig = FSignature.from_signature(sig)
+        fsig = FSignature.from_native(sig)
         assert len(fsig.parameters) == 1
         assert fsig.parameters['a'] == FParameter(
             kind=POSITIONAL_OR_KEYWORD,

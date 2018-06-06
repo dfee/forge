@@ -185,7 +185,7 @@ class TestMapper:
         """
         from_param = self.make_param('a', from_kind, default=1)
         from_sig = inspect.Signature([from_param])
-        fsig = FSignature.from_signature(from_sig)
+        fsig = FSignature.from_native(from_sig)
         func = lambda: None
         func.__signature__ = \
             inspect.Signature([inspect.Parameter('kwargs', VAR_KEYWORD)])
@@ -254,7 +254,7 @@ class TestMapper:
         # pylint: disable=R0914, too-many-locals
         from_param = self.make_param(from_name, from_kind, from_default)
         from_sig = inspect.Signature([from_param] if from_param else None)
-        fsig = FSignature.from_signature(from_sig)
+        fsig = FSignature.from_native(from_sig)
         to_param = self.make_param(to_name, to_kind, to_default)
         to_sig = inspect.Signature([to_param])
 
@@ -311,7 +311,7 @@ class TestMapper:
         """
         from_param = self.make_param('from_', from_kind)
         from_sig = inspect.Signature([from_param])
-        fsig = FSignature.from_signature(from_sig)
+        fsig = FSignature.from_native(from_sig)
         to_param = self.make_param('args', VAR_POSITIONAL)
         to_sig = inspect.Signature([to_param])
 
@@ -350,7 +350,7 @@ class TestMapper:
         """
         from_param = self.make_param('a', from_kind)
         from_sig = inspect.Signature([from_param])
-        fsig = FSignature.from_signature(from_sig)
+        fsig = FSignature.from_native(from_sig)
         to_param = self.make_param('kwargs', VAR_KEYWORD)
         to_sig = inspect.Signature([to_param])
 
@@ -382,7 +382,7 @@ class TestMapper:
         """
         from_param = self.make_param('a', from_kind)
         from_sig = inspect.Signature([from_param])
-        fsig = FSignature.from_signature(from_sig)
+        fsig = FSignature.from_native(from_sig)
         to_sig = inspect.Signature()
 
         with pytest.raises(TypeError) as excinfo:
