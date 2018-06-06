@@ -9,10 +9,12 @@ from forge._marker import empty, void
 from forge._signature import (
     _TYPE_FINDITER_SELECTOR,
     FParameter,
+    FParameterSequence,
     FSignature,
     fsignature,
     finditer,
     _get_pk_string,
+    get_context_parameter,
     get_var_keyword_parameter,
     get_var_positional_parameter,
 )
@@ -43,6 +45,7 @@ class Mapper(immutable.Immutable):
     """
     __slots__ = (
         'callable',
+        'context_param',
         'fsignature',
         'parameter_map',
         'private_signature',
@@ -55,12 +58,15 @@ class Mapper(immutable.Immutable):
             callable: typing.Callable[..., typing.Any],
         ) -> None:
         # pylint: disable=W0622, redefined-builtin
+        # pylint: disable=W0621, redefined-outer-name
         private_signature = inspect.signature(callable)
         public_signature = fsignature.native
         parameter_map = self.map_parameters(fsignature, private_signature)
+        context_param = get_context_parameter(fsignature.parameters.values())
 
         super().__init__(
             callable=callable,
+            context_param=context_param,
             fsignature=fsignature,
             private_signature=private_signature,
             public_signature=public_signature,
@@ -149,8 +155,8 @@ class Mapper(immutable.Immutable):
         :return: the argument value for the context paramter (if it exists),
             otherwise ``None``.
         """
-        return arguments[self.fsignature.context.name] \
-            if self.fsignature.context \
+        return arguments[self.context_param.name] \
+            if self.context_param \
             else None
 
     @staticmethod
@@ -177,8 +183,8 @@ class Mapper(immutable.Immutable):
             are mapped.
         '''
         # pylint: disable=W0622, redefined-builtin
-        from_vpo_param = from_.var_positional
-        from_vkw_param = from_.var_keyword
+        from_vpo_param = get_var_positional_parameter(from_.parameters.values())
+        from_vkw_param = get_var_keyword_parameter(from_.parameters.values())
         from_param_index = {
             fparam.interface_name: fparam
             for fparam in from_.parameters.values()
@@ -314,6 +320,7 @@ class Revision:
             prev_ = FSignature.from_callable(callable)
 
         next_ = self.revise(prev_)
+        FParameterSequence.validate(*next_.parameters.values())
 
         # Previously revised; already wrapped
         if existing:
@@ -323,14 +330,18 @@ class Revision:
             return callable
 
         # Unrevised; not wrapped
-        @functools.wraps(callable)
-        def inner(*args, **kwargs):
-            # pylint: disable=E1102, not-callable
-            mapped = inner.__mapper__(*args, **kwargs)
-            return callable(*mapped.args, **mapped.kwargs)
-
-        if inspect.iscoroutinefunction(callable):
-            inner = asyncio.coroutine(inner)
+        if asyncio.iscoroutinefunction(callable):
+            @functools.wraps(callable)
+            async def inner(*args, **kwargs):
+                # pylint: disable=E1102, not-callable
+                mapped = inner.__mapper__(*args, **kwargs)
+                return await callable(*mapped.args, **mapped.kwargs)
+        else:
+            @functools.wraps(callable)  # type: ignore
+            def inner(*args, **kwargs):
+                # pylint: disable=E1102, not-callable
+                mapped = inner.__mapper__(*args, **kwargs)
+                return callable(*mapped.args, **mapped.kwargs)
 
         inner.__mapper__ = Mapper(next_, callable)  # type: ignore
         inner.__signature__ = inner.__mapper__.public_signature  # type: ignore
@@ -783,7 +794,7 @@ class insert(Revision):  # pylint: disable=C0103, invalid-name
 
         assert forge.repr_callable(func) == 'func(a, b, **kwargs)'
 
-    :param parameter: the parameter to insert into the signature
+    :param insertion: the parameter or iterable of parameters to insert
     :param index: the index to insert the parameter into the signature
     :param before: a string, iterable of strings, or a function that
         receives an instance of :class:`~forge.FParameter` and returns a
@@ -792,7 +803,14 @@ class insert(Revision):  # pylint: disable=C0103, invalid-name
         receives an instance of :class:`~forge.FParameter` and returns a
         truthy value whether to place the provided parameter before it.
     """
-    def __init__(self, parameter, *, index=None, before=None, after=None):
+    def __init__(
+            self,
+            insertion: typing.Union[FParameter, typing.Iterable[FParameter]],
+            *,
+            index: int = None,
+            before: _TYPE_FINDITER_SELECTOR = None,
+            after: _TYPE_FINDITER_SELECTOR = None,
+        ) -> None:
         provided = dict(filter(
             lambda i: i[1] is not None,
             {'index': index, 'before': before, 'after': after}.items(),
@@ -806,14 +824,16 @@ class insert(Revision):  # pylint: disable=C0103, invalid-name
                 "expected 'index', 'before' or 'after' received multiple"
             )
 
-        self.parameter = parameter
+        self.insertion = [insertion] \
+            if isinstance(insertion, FParameter) \
+            else list(insertion)
         self.index = index
         self.before = before
         self.after = after
 
     def revise(self, previous: FSignature) -> FSignature:
         """
-        Inserts the :paramref:`~forge.insert.parameter` into a signature.
+        Inserts the :paramref:`~forge.insert.insertion` into a signature.
 
         No validation is performed on the updated :class:`~forge.FSignature`,
         allowing it to be used as an intermediate revision in the context of
@@ -822,45 +842,40 @@ class insert(Revision):  # pylint: disable=C0103, invalid-name
         :param previous: the :class:`~forge.FSignature` to modify
         :return: a modified instance of :class:`~forge.FSignature`
         """
+        pparams = list(previous.parameters.values())
+        nparams = []
         if self.before:
             try:
-                match = next(finditer(
-                    previous.parameters.values(),
-                    self.before,
-                ))
+                match = next(finditer(pparams, self.before))
             except StopIteration:
                 raise ValueError(
                     "No parameter matched selector '{}'".format(self.before)
                 )
 
-            parameters = []
-            for param in previous.parameters.values():
+            for param in pparams:
                 if param is match:
-                    parameters.append(self.parameter)
-                parameters.append(param)
+                    nparams.extend(self.insertion)
+                nparams.append(param)
         elif self.after:
             try:
-                match = next(finditer(
-                    previous.parameters.values(),
-                    self.after,
-                ))
+                match = next(finditer(pparams, self.after))
             except StopIteration:
                 raise ValueError(
                     "No parameter matched selector '{}'".format(self.after)
                 )
 
-            parameters = []
             for param in previous.parameters.values():
-                parameters.append(param)
+                nparams.append(param)
                 if param is match:
-                    parameters.append(self.parameter)
+                    nparams.extend(self.insertion)
         else:
-            parameters = list(previous.parameters.values())
-            parameters.insert(self.index, self.parameter)
+            nparams = pparams[:self.index] + \
+                self.insertion + \
+                pparams[self.index:]
 
         # https://github.com/python/mypy/issues/5156
         return previous.replace(  # type: ignore
-            parameters=parameters,
+            parameters=nparams,
             __validate_parameters__=False,
         )
 

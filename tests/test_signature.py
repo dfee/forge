@@ -955,7 +955,7 @@ class TestFParameterSequence:
         """
         param = inspect.Parameter('x', POSITIONAL_ONLY)
         with pytest.raises(TypeError) as excinfo:
-            FParameterSequence([param])
+            FParameterSequence.validate(param)
         assert excinfo.value.args[0] == \
             "Received non-FParameter '{}'".format(param)
 
@@ -965,16 +965,22 @@ class TestFParameterSequence:
         """
         arg = forge.arg()
         with pytest.raises(ValueError) as excinfo:
-            FParameterSequence([arg])
+            FParameterSequence.validate(arg)
         assert excinfo.value.args[0] == \
             "Received unnamed parameter: '{}'".format(arg)
+
+    def test_validate_contextual(self):
+        """
+        Ensure that a contextual parameter doesn't raise (code coverage)
+        """
+        FParameterSequence.validate(forge.ctx('self'))
 
     def test_validate_late_contextual_fparam_raises(self):
         """
         Ensure that non-first fparams cannot be contextual
         """
         with pytest.raises(TypeError) as excinfo:
-            FParameterSequence([forge.arg('a'), forge.ctx('self')])
+            FParameterSequence.validate(forge.arg('a'), forge.ctx('self'))
         assert excinfo.value.args[0] == \
             'Only the first parameter can be contextual'
 
@@ -983,7 +989,10 @@ class TestFParameterSequence:
         Ensure that a ``interface_name`` between multiple fparams raises
         """
         with pytest.raises(ValueError) as excinfo:
-            FParameterSequence([forge.arg('a1', 'b'), forge.arg('a2', 'b')])
+            FParameterSequence.validate(
+                forge.arg('a1', 'b'),
+                forge.arg('a2', 'b'),
+            )
         assert excinfo.value.args[0] == \
             "Received multiple parameters with interface_name 'b'"
 
@@ -992,7 +1001,10 @@ class TestFParameterSequence:
         Ensure that a ``name`` between multiple fparams raises
         """
         with pytest.raises(ValueError) as excinfo:
-            FParameterSequence([forge.arg('a', 'b1'), forge.arg('a', 'b2')])
+            FParameterSequence.validate(
+                forge.arg('a', 'b1'),
+                forge.arg('a', 'b2'),
+            )
         assert excinfo.value.args[0] == \
             "Received multiple parameters with name 'a'"
 
@@ -1010,7 +1022,7 @@ class TestFParameterSequence:
             ) for i in range(2)
         ]
         with pytest.raises(TypeError) as excinfo:
-            FParameterSequence(params)
+            FParameterSequence.validate(*params)
         assert excinfo.value.args[0] == \
             'Received multiple variable-positional parameters'
 
@@ -1028,7 +1040,7 @@ class TestFParameterSequence:
             ) for i in range(2)
         ]
         with pytest.raises(TypeError) as excinfo:
-            FParameterSequence(params)
+            FParameterSequence.validate(*params)
         assert excinfo.value.args[0] == \
             'Received multiple variable-keyword parameters'
 
@@ -1039,10 +1051,10 @@ class TestFParameterSequence:
         kwarg_ = forge.kwarg('kwarg')
         arg_ = forge.arg('arg')
         with pytest.raises(SyntaxError) as excinfo:
-            FParameterSequence([kwarg_, arg_])
+            FParameterSequence.validate(kwarg_, arg_)
         assert excinfo.value.args[0] == (
-            "{arg_} of kind '{arg_kind}' follows "
-            "{kwarg_} of kind '{kwarg_kind}'".format(
+            "'{arg_}' of kind '{arg_kind}' follows "
+            "'{kwarg_}' of kind '{kwarg_kind}'".format(
                 arg_=arg_,
                 arg_kind=arg_.kind.name,
                 kwarg_=kwarg_,
@@ -1059,7 +1071,7 @@ class TestFParameterSequence:
         default = constructor('d', default=None)
         nondefault = constructor('nd')
         with pytest.raises(SyntaxError) as excinfo:
-            FParameterSequence([default, nondefault])
+            FParameterSequence.validate(default, nondefault)
         assert excinfo.value.args[0] == (
             'non-default parameter follows default parameter'
         )
@@ -1069,10 +1081,10 @@ class TestFParameterSequence:
         Ensure that ``keyword-only`` fparams with default values can come
         after fparams without default values (only true for ``keyword-only``!)
         """
-        FParameterSequence([
+        FParameterSequence.validate(
             forge.kwarg('a', default=None),
             forge.kwarg('b'),
-        ])
+        )
 
 
 class TestFSignature:
@@ -1149,33 +1161,6 @@ class TestFSignature:
             type=int,
         )
 
-    @pytest.mark.parametrize(('has_param',), [(True,), (False,)])
-    def test_var_positional(self, has_param):
-        """
-        Ensure that the ``var-positional`` fparam is returned (or None)
-        """
-        fparam = FParameter(VAR_POSITIONAL, 'args')
-        fsig = FSignature([fparam] if has_param else [])
-        assert fsig.var_positional == (fparam if has_param else None)
-
-    @pytest.mark.parametrize(('has_param',), [(True,), (False,)])
-    def test_var_keyword(self, has_param):
-        """
-        Ensure that the ``var-keyword`` fparam is returned (or None)
-        """
-        fparam = FParameter(VAR_KEYWORD, 'args')
-        fsig = FSignature([fparam] if has_param else [])
-        assert fsig.var_keyword == (fparam if has_param else None)
-
-    @pytest.mark.parametrize(('has_param',), [(True,), (False,)])
-    def test_context(self, has_param):
-        """
-        Ensure that the ``context`` fparam is returned (or None)
-        """
-        fparam = FParameter(POSITIONAL_OR_KEYWORD, 'args', contextual=True)
-        fsig = FSignature([fparam] if has_param else [])
-        assert fsig.context == (fparam if has_param else None)
-
     @pytest.mark.parametrize(('in_', 'kwargs', 'out_'), [
         pytest.param(
             FSignature(),
@@ -1242,6 +1227,7 @@ def test_finditer(kls, selector, expected_name):
     - iterable of strings
     - callable
     """
+    # TODO: finditer -> findparam
     params = OrderedDict([
         ('a', kls(name='a', kind=POSITIONAL_ONLY)),
         ('b', kls(name='b', kind=POSITIONAL_OR_KEYWORD)),

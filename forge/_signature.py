@@ -1060,8 +1060,8 @@ class FParameterSequence(collections.abc.Mapping):
 
             elif current.kind < last.kind:
                 raise SyntaxError(
-                    "{current} of kind '{current.kind.name}' follows "
-                    "{last} of kind '{last.kind.name}'".\
+                    "'{current}' of kind '{current.kind.name}' follows "
+                    "'{last}' of kind '{last.kind.name}'".\
                     format(current=current, last=last)
                 )
             elif current.kind is last.kind:
@@ -1124,12 +1124,7 @@ def finditer(
             lambda param: param.name in selector,  # type: ignore
             parameters,
         )
-    elif callable(selector):
-        return filter(selector, parameters)
-    else:
-        raise TypeError(
-            'selector must be a string, an iterable of strings or a callable'
-        )
+    return filter(selector, parameters) # else: callable(selector)
 
 
 def get_context_parameter(parameters: typing.Iterable[FParameter]):
@@ -1280,22 +1275,6 @@ class FSignature(immutable.Immutable):
             param.native for param in self.parameters.values()
             if not param.bound
         ], return_annotation=self.return_annotation)
-
-    # TODO: move to FParameterSequence
-    @property
-    def context(self) -> typing.Optional[FParameter]:
-        if not self.parameters:
-            return None
-        param0 = next(iter(self.parameters.values()))
-        return param0 if param0.contextual is True else None
-
-    @property
-    def var_positional(self) -> typing.Optional[FParameter]:
-        return get_var_positional_parameter(self.parameters.values())
-
-    @property
-    def var_keyword(self) -> typing.Optional[FParameter]:
-        return get_var_keyword_parameter(self.parameters.values())
 
     def replace(
             self,

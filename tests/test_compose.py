@@ -67,12 +67,13 @@ class TestMapper:
         """
         Ensure the mapper retrieves the context value from arguments
         """
-        fparam = forge.ctx('param') \
+        param = forge.ctx('param') \
             if has_context \
             else forge.arg('param')
-        fsig = FSignature([fparam])
+        fsig = FSignature([param])
         mapper = Mapper(fsig, lambda param: None)
 
+        assert mapper.context_param == (param if has_context else None)
         kwargs = {'param': object()}
         ctx = mapper.get_context(kwargs)
         assert ctx == (kwargs['param'] if has_context else None)
@@ -481,6 +482,19 @@ class TestRevision:
         in_ = FSignature()
         assert rev.revise(in_) is in_
 
+    def test__call__validates(self):
+        rev = Revision()
+        rev.revise = lambda prev: FSignature(
+            [forge.arg('b'), forge.pos('a')],
+            __validate_parameters__=False,
+        )
+        with pytest.raises(SyntaxError) as excinfo:
+            rev(lambda a, b: None)
+        assert excinfo.value.args[0] == (
+            "'a' of kind 'POSITIONAL_ONLY' follows 'b' of kind "
+            "'POSITIONAL_OR_KEYWORD'"
+        )
+
 
 ## Test Group Revisions
 class TestCompose:
@@ -850,11 +864,10 @@ class TestDelete:
 
 class TestInsert:
     @pytest.mark.parametrize(
-        ('parameter', 'index', 'before', 'after', 'in_', 'out_'),
+        ('index', 'before', 'after', 'in_', 'out_'),
         [
             # Index
             pytest.param(
-                forge.arg('a'),
                 0, None, None,
                 FSignature([forge.arg('b')]),
                 FSignature([forge.arg('a'), forge.arg('b')]),
@@ -863,69 +876,65 @@ class TestInsert:
 
             # Before
             pytest.param(
-                forge.arg('a'),
                 None, 'b', None,
-                FSignature([forge.arg('b')]),
-                FSignature([forge.arg('a'), forge.arg('b')]),
+                FSignature([forge.arg('b'), forge.arg('c')]),
+                FSignature([forge.arg('a'), forge.arg('b'), forge.arg('c')]),
                 id='before_str',
             ),
             pytest.param(
-                forge.arg('a'),
                 None, ('b', 'c'), None,
-                FSignature([forge.arg('b')]),
-                FSignature([forge.arg('a'), forge.arg('b')]),
+                FSignature([forge.arg('b'), forge.arg('c')]),
+                FSignature([forge.arg('a'), forge.arg('b'), forge.arg('c')]),
                 id='before_iter_str',
             ),
             pytest.param(
-                forge.arg('a'),
                 None, lambda param: param.name != 'c', None,
-                FSignature([forge.arg('b')]),
-                FSignature([forge.arg('a'), forge.arg('b')]),
+                FSignature([forge.arg('b'), forge.arg('c')]),
+                FSignature([forge.arg('a'), forge.arg('b'), forge.arg('c')]),
                 id='before_callable',
             ),
             pytest.param(
-                forge.arg('a'),
                 None, 'x', None,
-                FSignature([forge.arg('b')]),
+                FSignature([forge.arg('b'), forge.arg('c')]),
                 ValueError("No parameter matched selector 'x'"),
                 id='before_no_mach',
             ),
 
             # After
             pytest.param(
-                forge.arg('b'),
-                None, None, 'a',
-                FSignature([forge.arg('a')]),
-                FSignature([forge.arg('a'), forge.arg('b')]),
+                None, None, '_',
+                FSignature([forge.arg('__'), forge.arg('_')]),
+                FSignature([forge.arg('__'), forge.arg('_'), forge.arg('a')]),
                 id='after_str',
             ),
             pytest.param(
-                forge.arg('b'),
-                None, None, ('a', 'c'),
-                FSignature([forge.arg('a')]),
-                FSignature([forge.arg('a'), forge.arg('b')]),
+                None, None, ('_', 'c'),
+                FSignature([forge.arg('__'), forge.arg('_')]),
+                FSignature([forge.arg('__'), forge.arg('_'), forge.arg('a')]),
                 id='after_iter_str',
             ),
             pytest.param(
-                forge.arg('b'),
-                None, None, lambda param: param.name != 'c',
-                FSignature([forge.arg('a')]),
-                FSignature([forge.arg('a'), forge.arg('b')]),
+                None, None, lambda param: True,
+                FSignature([forge.arg('__'), forge.arg('_')]),
+                FSignature([forge.arg('__'), forge.arg('_'), forge.arg('a')]),
                 id='after_callable',
             ),
             pytest.param(
-                forge.arg('a'),
                 None, None, 'x',
-                FSignature([forge.arg('b')]),
+                FSignature([forge.arg('__'), forge.arg('_')]),
                 ValueError("No parameter matched selector 'x'"),
                 id='after_no_mach',
             ),
 
         ],
     )
-    def test_revise(self, parameter, index, before, after, in_, out_):
+    @pytest.mark.parametrize(('insertion',), [
+        pytest.param(forge.arg('a'), id='unit'),
+        pytest.param([forge.arg('a')], id='iterable'),
+    ])
+    def test_revise(self, insertion, index, before, after, in_, out_):
         # pylint: disable=R0913, too-many-arguments
-        rev = insert(parameter, index=index, before=before, after=after)
+        rev = insert(insertion, index=index, before=before, after=after)
         if isinstance(out_, Exception):
             with pytest.raises(type(out_)) as excinfo:
                 rev.revise(in_)
