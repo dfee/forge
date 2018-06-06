@@ -1,7 +1,5 @@
 import re
 
-import pytest
-
 import forge
 
 # pylint: disable=C0103, invalid-name
@@ -45,7 +43,7 @@ def test_namespace():
         'fsignature',
         'Factory',
         'FParameter',
-        'finditer',
+        'findparam',
         # variadic
         'VarKeyword', 'kwargs',
         'VarPositional', 'args',

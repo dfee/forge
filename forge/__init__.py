@@ -36,7 +36,7 @@ from ._signature import (
     FSignature,
     VarKeyword,
     VarPositional,
-    finditer,
+    findparam,
     fsignature,
     pos,
     arg,

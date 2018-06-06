@@ -1093,7 +1093,7 @@ _TYPE_FINDITER_SELECTOR = typing.Union[
 ]
 
 
-def finditer(
+def findparam(
         parameters: _TYPE_FINDITER_PARAMETERS,
         selector: _TYPE_FINDITER_SELECTOR
     ) -> typing.Iterator[_T_PARAM]:
@@ -1102,7 +1102,7 @@ def finditer(
     :class:`inspect.Parameter` or :class:`~forge.FParameter`) that are
     mached by the selector.
 
-    :paramref:`~forge.finditer.selector` is used differently based on what is
+    :paramref:`~forge.findparam.selector` is used differently based on what is
     supplied:
     - str: a parameter is found if its :attr:`name` attribute is contained
     - Iterable[str]: a parameter is found if its :attr:`name` attribute is
@@ -1137,7 +1137,7 @@ def get_context_parameter(parameters: typing.Iterable[FParameter]):
         else ``None``.
     """
     try:
-        return next(finditer(parameters, lambda p: p.contextual))
+        return next(findparam(parameters, lambda p: p.contextual))
     except StopIteration:
         return None
 
@@ -1154,7 +1154,7 @@ def get_var_keyword_parameter(parameters: _TYPE_FINDITER_PARAMETERS):
         else ``None``.
     """
     try:
-        return next(finditer(parameters, lambda p: p.kind is VAR_KEYWORD))
+        return next(findparam(parameters, lambda p: p.kind is VAR_KEYWORD))
     except StopIteration:
         return None
 
@@ -1171,7 +1171,7 @@ def get_var_positional_parameter(parameters: _TYPE_FINDITER_PARAMETERS):
         else ``None``.
     """
     try:
-        return next(finditer(parameters, lambda p: p.kind is VAR_POSITIONAL))
+        return next(findparam(parameters, lambda p: p.kind is VAR_POSITIONAL))
     except StopIteration:
         return None
 

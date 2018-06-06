@@ -22,7 +22,7 @@ from forge._signature import (
     FSignature,
     VarKeyword,
     VarPositional,
-    finditer,
+    findparam,
     fsignature,
     get_context_parameter,
     get_var_keyword_parameter,
@@ -306,6 +306,7 @@ class TestFParameter:
         """
         Ensure conversion works on an individual converter or iterable
         """
+        # pylint: disable=R0913, too-many-arguments
         fparam = FParameter(
             POSITIONAL_ONLY,
             name=name,
@@ -1219,20 +1220,19 @@ class TestSignatureConvenience:
     ),
 ])
 @pytest.mark.parametrize('kls', (inspect.Parameter, FParameter))
-def test_finditer(kls, selector, expected_name):
+def test_findparam(kls, selector, expected_name):
     """
-    Ensure that finditer matches the correct ``inspect.Parameter`` or
+    Ensure that findparam matches the correct ``inspect.Parameter`` or
     ``FParameter`` based on a selector of:
     - str
     - iterable of strings
     - callable
     """
-    # TODO: finditer -> findparam
     params = OrderedDict([
         ('a', kls(name='a', kind=POSITIONAL_ONLY)),
         ('b', kls(name='b', kind=POSITIONAL_OR_KEYWORD)),
     ])
-    result = finditer(params.values(), selector)
+    result = findparam(params.values(), selector)
     assert isinstance(result, typing.Iterator)
     if expected_name:
         assert list(result) == [params[expected_name]]

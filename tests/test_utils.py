@@ -11,6 +11,9 @@ from forge._signature import (
 )
 from forge._utils import CallArguments, callwith, repr_callable, sort_arguments
 
+# pylint: disable=C0103, invalid-name
+# pylint: disable=R0201, no-self-use
+
 
 class TestCallArguments:
     def test_from_bound_arguments(self):
@@ -112,8 +115,6 @@ class TestSortArguments:
         ),
     ])
     def test_sorting(self, kind, named, unnamed, expected):
-        """
-        """
         to_ = inspect.Signature([inspect.Parameter('param', kind)])
         result = sort_arguments(to_, named, unnamed)
         assert result == expected
@@ -133,8 +134,6 @@ class TestSortArguments:
         ),
     ])
     def test_sorting_with_defaults(self, kind, expected):
-        """
-        """
         to_ = inspect.Signature([inspect.Parameter('param', kind, default=1)])
         result = sort_arguments(to_)
         assert result == expected

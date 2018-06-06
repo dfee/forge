@@ -12,7 +12,7 @@ from forge._signature import (
     FParameterSequence,
     FSignature,
     fsignature,
-    finditer,
+    findparam,
     _get_pk_string,
     get_context_parameter,
     get_var_keyword_parameter,
@@ -443,11 +443,11 @@ class copy(Revision):  # pylint: disable=C0103, invalid-name
         """
         if self.include:
             return self.signature.replace(parameters=list(
-                finditer(self.signature.parameters.values(), self.include)
+                findparam(self.signature.parameters.values(), self.include)
             ))
         elif self.exclude:
             excluded = list(
-                finditer(self.signature.parameters.values(), self.exclude)
+                findparam(self.signature.parameters.values(), self.exclude)
             )
             return self.signature.replace(parameters=[
                 param for param in self.signature.parameters.values()
@@ -758,7 +758,7 @@ class delete(Revision):  # pylint: disable=C0103, invalid-name
         :param previous: the :class:`~forge.FSignature` to modify
         :return: a modified instance of :class:`~forge.FSignature`
         """
-        excluded = list(finditer(previous.parameters.values(), self.selector))
+        excluded = list(findparam(previous.parameters.values(), self.selector))
         if not excluded:
             if self.raising:
                 raise ValueError(
@@ -846,7 +846,7 @@ class insert(Revision):  # pylint: disable=C0103, invalid-name
         nparams = []
         if self.before:
             try:
-                match = next(finditer(pparams, self.before))
+                match = next(findparam(pparams, self.before))
             except StopIteration:
                 raise ValueError(
                     "No parameter matched selector '{}'".format(self.before)
@@ -858,7 +858,7 @@ class insert(Revision):  # pylint: disable=C0103, invalid-name
                 nparams.append(param)
         elif self.after:
             try:
-                match = next(finditer(pparams, self.after))
+                match = next(findparam(pparams, self.after))
             except StopIteration:
                 raise ValueError(
                     "No parameter matched selector '{}'".format(self.after)
@@ -964,7 +964,7 @@ class modify(Revision):  # pylint: disable=C0103, invalid-name
         :param previous: the :class:`~forge.FSignature` to modify
         :return: a modified instance of :class:`~forge.FSignature`
         """
-        matched = list(finditer(previous.parameters.values(), self.selector))
+        matched = list(findparam(previous.parameters.values(), self.selector))
         if not matched:
             if self.raising:
                 raise ValueError(
@@ -1026,7 +1026,7 @@ class replace(Revision):  # pylint: disable=C0103, invalid-name
         :return: a modified instance of :class:`~forge.FSignature`
         """
         try:
-            match = next(finditer(previous.parameters.values(), self.selector))
+            match = next(findparam(previous.parameters.values(), self.selector))
         except StopIteration:
             raise ValueError(
                 "No parameter matched selector '{}'".format(self.selector)
@@ -1100,7 +1100,7 @@ class translocate(Revision):  # pylint: disable=C0103, invalid-name
         :return: a modified instance of :class:`~forge.FSignature`
         """
         try:
-            selected = next(finditer(
+            selected = next(findparam(
                 previous.parameters.values(),
                 self.selector,
             ))
@@ -1111,7 +1111,7 @@ class translocate(Revision):  # pylint: disable=C0103, invalid-name
 
         if self.before:
             try:
-                before = next(finditer(
+                before = next(findparam(
                     previous.parameters.values(),
                     self.before,
                 ))
@@ -1127,7 +1127,7 @@ class translocate(Revision):  # pylint: disable=C0103, invalid-name
                 parameters.append(param)
         elif self.after:
             try:
-                after = next(finditer(
+                after = next(findparam(
                     previous.parameters.values(),
                     self.after,
                 ))
