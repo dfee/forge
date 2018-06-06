@@ -1,11 +1,7 @@
 import pytest
 
 from forge._exceptions import ImmutableInstanceError
-from forge._immutable import (
-    Immutable,
-    asdict,
-    replace,
-)
+from forge._immutable import Immutable, asdict, replace
 
 # pylint: disable=C0103, invalid-name
 # pylint: disable=R0201, no-self-use

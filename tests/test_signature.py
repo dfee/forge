@@ -1,12 +1,12 @@
-from collections import OrderedDict
 import inspect
 import types
+import typing
+from collections import OrderedDict
 from unittest.mock import Mock
 
 import pytest
 
 import forge
-from forge._exceptions import NoParameterError
 import forge._immutable as immutable
 import forge._signature
 from forge._marker import empty
@@ -14,23 +14,20 @@ from forge._signature import (
     KEYWORD_ONLY,
     POSITIONAL_ONLY,
     POSITIONAL_OR_KEYWORD,
-    VAR_POSITIONAL,
     VAR_KEYWORD,
-    CallArguments,
+    VAR_POSITIONAL,
     Factory,
     FParameter,
-    FParameterMap,
+    FParameterSequence,
     FSignature,
     VarKeyword,
     VarPositional,
-    callwith,
-    getparam,
+    finditer,
+    get_context_parameter,
     get_var_keyword_parameter,
     get_var_positional_parameter,
-    hasparam,
-    sort_arguments,
-    stringify_callable,
 )
+from forge._utils import CallArguments
 
 # pylint: disable=C0103, invalid-name
 # pylint: disable=R0201, no-self-use
@@ -829,7 +826,67 @@ class TestVarKeyword:
         assert list(vark) == [vark.name]
 
 
-class TestFParameterMap:
+class TestParameterConvenience:
+    @pytest.mark.parametrize(('name', 'obj'), [
+        ('pos', forge.FParameter.create_positional_only),
+        ('pok', forge.FParameter.create_positional_or_keyword),
+        ('arg', forge.FParameter.create_positional_or_keyword),
+        ('ctx', forge.FParameter.create_contextual),
+        ('vpo', forge.FParameter.create_var_positional),
+        ('kwo', forge.FParameter.create_keyword_only),
+        ('kwarg', forge.FParameter.create_keyword_only),
+        ('vkw', forge.FParameter.create_var_keyword),
+    ])
+    def test_constructors(self, name, obj):
+        """
+        Assert constructor nicknames are what we exect them to be.
+        """
+        assert getattr(forge, name) == obj
+
+    def test_self(self):
+        """
+        Assert ``forge.self`` is what we expect it to be.
+        """
+        assert forge.self == forge.FParameter(
+            forge.FParameter.POSITIONAL_OR_KEYWORD,
+            name='self',
+            interface_name='self',
+            contextual=True,
+        )
+
+    def test_cls(self):
+        """
+        Assert ``forge.cls`` is what we expect it to be.
+        """
+        assert forge.cls == forge.FParameter(
+            forge.FParameter.POSITIONAL_OR_KEYWORD,
+            name='cls',
+            interface_name='cls',
+            contextual=True,
+        )
+
+    def test_args(self):
+        """
+        Assert ``forge.args`` is what we expect it to be.
+        """
+        args = forge.args
+        assert isinstance(args, forge._signature.VarPositional)
+        assert args.name == 'args'
+        assert args.converter is None
+        assert args.validator is None
+
+    def test_kwargs(self):
+        """
+        Assert ``forge.kwargs`` is what we expect it to be.
+        """
+        kwargs = forge.kwargs
+        assert isinstance(kwargs, forge._signature.VarKeyword)
+        assert kwargs.name == 'kwargs'
+        assert kwargs.converter is None
+        assert kwargs.validator is None
+
+
+class TestFParameterSequence:
     def test_validate_non_fparameter_raises(self):
         """
         Ensure that non-fparams raise a TypeError by validating a
@@ -837,7 +894,7 @@ class TestFParameterMap:
         """
         param = inspect.Parameter('x', POSITIONAL_ONLY)
         with pytest.raises(TypeError) as excinfo:
-            FParameterMap([param])
+            FParameterSequence([param])
         assert excinfo.value.args[0] == \
             "Received non-FParameter '{}'".format(param)
 
@@ -847,7 +904,7 @@ class TestFParameterMap:
         """
         arg = forge.arg()
         with pytest.raises(ValueError) as excinfo:
-            FParameterMap([arg])
+            FParameterSequence([arg])
         assert excinfo.value.args[0] == \
             "Received unnamed parameter: '{}'".format(arg)
 
@@ -856,7 +913,7 @@ class TestFParameterMap:
         Ensure that non-first fparams cannot be contextual
         """
         with pytest.raises(TypeError) as excinfo:
-            FParameterMap([forge.arg('a'), forge.ctx('self')])
+            FParameterSequence([forge.arg('a'), forge.ctx('self')])
         assert excinfo.value.args[0] == \
             'Only the first parameter can be contextual'
 
@@ -865,7 +922,7 @@ class TestFParameterMap:
         Ensure that a ``interface_name`` between multiple fparams raises
         """
         with pytest.raises(ValueError) as excinfo:
-            FParameterMap([forge.arg('a1', 'b'), forge.arg('a2', 'b')])
+            FParameterSequence([forge.arg('a1', 'b'), forge.arg('a2', 'b')])
         assert excinfo.value.args[0] == \
             "Received multiple parameters with interface_name 'b'"
 
@@ -874,7 +931,7 @@ class TestFParameterMap:
         Ensure that a ``name`` between multiple fparams raises
         """
         with pytest.raises(ValueError) as excinfo:
-            FParameterMap([forge.arg('a', 'b1'), forge.arg('a', 'b2')])
+            FParameterSequence([forge.arg('a', 'b1'), forge.arg('a', 'b2')])
         assert excinfo.value.args[0] == \
             "Received multiple parameters with name 'a'"
 
@@ -892,7 +949,7 @@ class TestFParameterMap:
             ) for i in range(2)
         ]
         with pytest.raises(TypeError) as excinfo:
-            FParameterMap(params)
+            FParameterSequence(params)
         assert excinfo.value.args[0] == \
             'Received multiple variable-positional parameters'
 
@@ -910,7 +967,7 @@ class TestFParameterMap:
             ) for i in range(2)
         ]
         with pytest.raises(TypeError) as excinfo:
-            FParameterMap(params)
+            FParameterSequence(params)
         assert excinfo.value.args[0] == \
             'Received multiple variable-keyword parameters'
 
@@ -921,7 +978,7 @@ class TestFParameterMap:
         kwarg_ = forge.kwarg('kwarg')
         arg_ = forge.arg('arg')
         with pytest.raises(SyntaxError) as excinfo:
-            FParameterMap([kwarg_, arg_])
+            FParameterSequence([kwarg_, arg_])
         assert excinfo.value.args[0] == (
             "{arg_} of kind '{arg_kind}' follows "
             "{kwarg_} of kind '{kwarg_kind}'".format(
@@ -941,17 +998,17 @@ class TestFParameterMap:
         default = constructor('d', default=None)
         nondefault = constructor('nd')
         with pytest.raises(SyntaxError) as excinfo:
-            FParameterMap([default, nondefault])
+            FParameterSequence([default, nondefault])
         assert excinfo.value.args[0] == (
             'non-default parameter follows default parameter'
         )
 
     def test_validate_default_kw_only_follows_non_default_kw_only(self):
         """
-        Ensure that ``keyword-only`` fparams with default values can come after
-        fparams without default values (only true for ``keyword-only``!)
+        Ensure that ``keyword-only`` fparams with default values can come
+        after fparams without default values (only true for ``keyword-only``!)
         """
-        FParameterMap([
+        FParameterSequence([
             forge.kwarg('a', default=None),
             forge.kwarg('b'),
         ])
@@ -963,8 +1020,8 @@ class TestFParameterMap:
         (an abstract collections.abc.Mapping method)
         """
         fparam = forge.arg('a')
-        fpmap = FParameterMap([fparam])
-        assert fpmap['a'] is fparam
+        fpseq = FParameterSequence([fparam])
+        assert fpseq['a'] is fparam
 
     @pytest.mark.parametrize(('start', 'end', 'expected'), [
         pytest.param('c', None, 'cd', id='start'),
@@ -979,15 +1036,15 @@ class TestFParameterMap:
         Ensure that ``__getitem__`` retrives from slice.start forward
         """
         fparams = OrderedDict([(name, forge.arg(name)) for name in 'abcd'])
-        fpmap = FParameterMap(list(fparams.values()))
-        assert fpmap[start:end] == [fparams[e] for e in expected]
+        fpseq = FParameterSequence(list(fparams.values()))
+        assert fpseq[start:end] == [fparams[e] for e in expected]
 
     def test__len__(self):
         """
         Ensure that ``__len__`` retrieves a count of the fparams
         (an abstract collections.abc.Mapping method)
         """
-        assert len(FParameterMap([forge.arg('a')])) == 1
+        assert len(FParameterSequence([forge.arg('a')])) == 1
 
     def test__iter__(self):
         """
@@ -995,8 +1052,8 @@ class TestFParameterMap:
         (an abstract collections.abc.Mapping method)
         """
         fparam = forge.arg('a')
-        fpmap = FParameterMap([fparam])
-        assert dict(fpmap) == {fparam.name: fparam}
+        fpseq = FParameterSequence([fparam])
+        assert dict(fpseq) == {fparam.name: fparam}
     # End collections.abc.Mapping Tests
 
 
@@ -1098,291 +1155,138 @@ class TestFSignature:
         fsig = FSignature([fparam] if has_param else [])
         assert fsig.context == (fparam if has_param else None)
 
-
-class TestCallArguments:
-    def test_from_bound_arguments(self):
-        """
-        Ensure that ``inspect.BoundArguments`` ``args`` and ``kwargs`` are
-        properly mapped to a new ``CallArguments`` instance.
-        """
-        # pylint: disable=W0613, unused-argument
-        def func(a, *, b):
-            pass
-        bound = inspect.signature(func).bind(a=1, b=2)
-        # pylint: disable=E1101, no-member
-        assert CallArguments.from_bound_arguments(bound) == \
-            CallArguments(1, b=2)
-
-    @pytest.mark.parametrize(('partial',), [(True,), (False,)])
-    @pytest.mark.parametrize(('call_args', 'incomplete'), [
-        pytest.param(CallArguments(1, b=2), False, id='complete'),
-        pytest.param(CallArguments(), True, id='incomplete'),
+    @pytest.mark.parametrize(('in_', 'kwargs', 'out_'), [
+        pytest.param(
+            FSignature(),
+            dict(parameters=[forge.arg('arg')]),
+            FSignature([forge.arg('arg')]),
+            id='parameters',
+        ),
+        pytest.param(
+            FSignature(),
+            dict(
+                parameters=[forge.arg('arg'), forge.pos('pos')],
+                __validate_parameters__=False,
+            ),
+            FSignature([forge.arg('arg'), forge.pos('pos')]),
+            id='parameters_invalid',
+        ),
+        pytest.param(
+            FSignature(),
+            dict(return_annotation=int),
+            FSignature(return_annotation=int),
+            id='return_annotation'
+        ),
     ])
-    def test_to_bound_arguments(self, call_args, partial, incomplete):
-        """
-        Ensure that ``CallArguments`` ``args`` and ``kwargs`` are
-        properly mapped to a new ``inspect.BoundArguments`` instance.
-        """
-        # pylint: disable=W0613, unused-argument
-        def func(a, *, b):
-            pass
-        sig = inspect.signature(func)
-        if not partial and incomplete:
-            with pytest.raises(TypeError) as excinfo:
-                call_args.to_bound_arguments(sig, partial=partial)
-            assert excinfo.value.args[0] == \
-                "missing a required argument: 'a'"
-            return
-        assert call_args.to_bound_arguments(sig, partial=partial) == \
-            sig.bind_partial(*call_args.args, **call_args.kwargs)
+    def test_replace(self, in_, kwargs, out_):
+        assert in_.replace(**kwargs) == out_
 
-    @pytest.mark.parametrize(('args', 'kwargs', 'expected'), [
-        pytest.param((0,), {}, '0', id='args_only'),
-        pytest.param((), {'a': 1}, 'a=1', id='kwargs_only'),
-        pytest.param((0,), {'a': 1}, '0, a=1', id='args_and_kwargs'),
-        pytest.param((), {}, '', id='neither_args_nor_kwargs'),
+
+class TestSignatureConvenience:
+    @pytest.mark.parametrize(('name', 'obj'), [
+        ('fsignature', forge.FSignature.from_callable),
     ])
-    def test__repr__(self, args, kwargs, expected):
+    def test_constructors(self, name, obj):
         """
-        Ensure that ``CallArguments.__repr__`` is a pretty print of ``args``
-        and ``kwargs``.
+        Assert constructor nicknames are what we exect them to be.
         """
-        assert repr(CallArguments(*args, **kwargs)) == \
-            '<CallArguments ({})>'.format(expected)
+        assert getattr(forge, name) == obj
 
 
-class TestHasParam:
-    @pytest.mark.parametrize(('has_param',), [(True,), (False,)])
-    def test_callable(self, has_param):
-        """
-        Ensure ``hasparam`` returns an appropriately truthy value when used
-        properly
-        """
-        funcs = {
-            True: lambda myparam: None,
-            False: lambda: None,
-        }
-        assert hasparam(funcs[has_param], 'myparam') == has_param
-
-    def test_noncallable_raises(self):
-        """
-        Ensure ``hasparam`` raises a TypeError when a non-callable is passed
-        """
-        with pytest.raises(TypeError) as excinfo:
-            hasparam(1, 'param')
-        assert excinfo.value.args[0] == '1 is not callable'
-
-
-class TestGetParam:
-    @pytest.mark.parametrize(('has_param', 'has_default'), [
-        (True, False),
-        (False, True),
-        (False, False),
+@pytest.mark.parametrize(('selector', 'expected_name'), [
+    # str
+    pytest.param('b', 'b', id='find_by_str'),
+    pytest.param('c', None, id='find_by_str_DNE'),
+    # iter str
+    pytest.param(('b', 'c'), 'b', id='find_by_iter_str'),
+    pytest.param(('c', 'd'), None, id='find_by_iter_str_DNE'),
+    # callable
+    pytest.param(
+        lambda param: param.kind is POSITIONAL_OR_KEYWORD,
+        'b',
+        id='find_by_callable',
+    ),
+    pytest.param(
+        lambda param: param.kind is VAR_KEYWORD,
+        None,
+        id='find_by_callable_DNE',
+    ),
+])
+@pytest.mark.parametrize('kls', (inspect.Parameter, FParameter))
+def test_finditer(kls, selector, expected_name):
+    """
+    Ensure that finditer matches the correct ``inspect.Parameter`` or
+    ``FParameter`` based on a selector of:
+    - str
+    - iterable of strings
+    - callable
+    """
+    params = OrderedDict([
+        ('a', kls(name='a', kind=POSITIONAL_ONLY)),
+        ('b', kls(name='b', kind=POSITIONAL_OR_KEYWORD)),
     ])
-    def test_callable(self, has_param, has_default):
-        """
-        Ensure ``getparam`` returns the param or the default value
-        """
-        func = (lambda myparam: None) \
-            if has_param \
-            else (lambda: None)
+    result = finditer(params.values(), selector)
+    assert isinstance(result, typing.Iterator)
+    if expected_name:
+        assert list(result) == [params[expected_name]]
+    else:
+        assert not list(result)
 
-        if has_param:
-            assert getparam(func, 'myparam') == \
-                inspect.signature(func).parameters['myparam']
-        elif has_default:
-            assert getparam(func, 'myparam', 'DEFAULT') == 'DEFAULT'
-        else:
-            with pytest.raises(NoParameterError) as excinfo:
-                getparam(func, 'myparam')
-            assert excinfo.value.args[0] == \
-                "'{}' has no parameter 'myparam'".format(func.__name__)
-
-    def test_noncallable_raises(self):
-        """
-        Ensure ``getparam`` raises a TypeError when a non-callable is passed
-        """
-        with pytest.raises(TypeError) as excinfo:
-            getparam(1, 'param')
-        assert excinfo.value.args[0] == '1 is not callable'
-
-
-natural_pos = inspect.Parameter('pos', POSITIONAL_ONLY)
-natural_arg = inspect.Parameter('arg', POSITIONAL_OR_KEYWORD)
-natural_args = inspect.Parameter('args', VAR_POSITIONAL)
-natural_kwarg = inspect.Parameter('kwarg', KEYWORD_ONLY)
-natural_kwargs = inspect.Parameter('kwargs', VAR_KEYWORD)
-natural_params = [
-    natural_arg,
-    natural_args,
-    natural_kwarg,
-    natural_kwargs,
-]
-
-pt_pos = forge.pos('pos')
-pt_pok = forge.arg('arg')
-pt_vpo = list(forge.args)[0]
-pt_kwo = forge.kwarg('kwarg')
-pt_vkw = forge.kwargs[forge.kwargs.name]
-pt_params = [
-    pt_pos,
-    pt_pok,
-    pt_vpo,
-    pt_kwo,
-    pt_vkw,
-]
 
 @pytest.mark.parametrize(('params', 'expected'), [
-    (natural_params, natural_args),
-    (pt_params, pt_vpo),
+    ((forge.ctx('a'),), forge.ctx('a')),
+    ((forge.arg('a'),), None),
+])
+def test_get_context_parameter(params, expected):
+    """
+    Ensure the ``contextual`` param (or None) is returned
+    """
+    assert get_context_parameter(params) == expected
+
+
+IPARAMS = OrderedDict([
+    (param.name, param) for param in [
+        inspect.Parameter('pos', POSITIONAL_ONLY),
+        inspect.Parameter('arg', POSITIONAL_OR_KEYWORD),
+        inspect.Parameter('args', VAR_POSITIONAL),
+        inspect.Parameter('kwarg', KEYWORD_ONLY),
+        inspect.Parameter('kwargs', VAR_KEYWORD),
+    ]
+])
+FPARAMS = OrderedDict([
+    (param.name, param) for param in [
+        forge.pos('pos'),
+        forge.arg('arg'),
+        forge.vpo('args'),
+        forge.kwarg('kwarg'),
+        forge.vkw('kwargs'),
+    ]
+])
+
+
+@pytest.mark.parametrize(('params', 'expected'), [
+    (list(IPARAMS.values()), IPARAMS['args']),
+    (list(FPARAMS.values()), FPARAMS['args']),
     ((), None),
 ])
 def test_get_var_positional_parameter(params, expected):
     """
     Ensure the ``var-positional`` param (or None) is returned for:
-    - ``inspect.Signature``
-    - ``forge.FSignature``
+    - ``inspect.Parameter``
+    - ``forge.FParameter``
     """
-    assert get_var_positional_parameter(*params) is expected
+    assert get_var_positional_parameter(params) is expected
 
 
 @pytest.mark.parametrize(('params', 'expected'), [
-    (natural_params, natural_kwargs),
-    (pt_params, pt_vkw),
+    (list(IPARAMS.values()), IPARAMS['kwargs']),
+    (list(FPARAMS.values()), FPARAMS['kwargs']),
     ((), None),
 ])
 def test_get_var_keyword_parameter(params, expected):
     """
     Ensure the ``var-keyword`` param (or None) is returned for:
-    - ``inspect.Signature``
-    - ``forge.FSignature``
+    - ``inspect.Parameter``
+    - ``forge.FParameter``
     """
-    assert get_var_keyword_parameter(*params) is expected
-
-
-@pytest.mark.parametrize(('strategy',), [('class_callable',), ('function',)])
-def test_stringify_callable(strategy):
-    """
-    Ensure that callables are stringified with:
-    - func.__name__ OR repr(func) if class callable
-    - parameters
-    - return type annotation
-    """
-    # pylint: disable=W0622, redefined-builtin
-    class Dummy:
-        def __init__(self, value: int = 0) -> None:
-            self.value = value
-        def __call__(self, value: int = 1) -> int:
-            return value
-
-    if strategy == 'class_callable':
-        ins = Dummy()
-        assert stringify_callable(ins) == '{}(value:int=1) -> int'.format(ins)
-    elif strategy == 'function':
-        assert stringify_callable(Dummy) == 'Dummy(value:int=0) -> None'
-    else:
-        raise TypeError('Unknown strategy {}'.format(strategy))
-
-
-class TestSortArguments:
-    @pytest.mark.parametrize(('kind', 'named', 'unnamed', 'expected'), [
-        pytest.param(  # func(param, /)
-            POSITIONAL_ONLY, dict(param=1), None, CallArguments(1),
-            id='positional-only',
-        ),
-        pytest.param(  # func(param)
-            POSITIONAL_OR_KEYWORD, dict(param=1), None, CallArguments(1),
-            id='positional-or-keyword',
-        ),
-        pytest.param(  # func(*param)
-            VAR_POSITIONAL, None, (1,), CallArguments(1),
-            id='var-positional',
-        ),
-        pytest.param(  # func(*, param)
-            KEYWORD_ONLY, dict(param=1), None, CallArguments(param=1),
-            id='keyword-only',
-        ),
-        pytest.param( # func(**param)
-            VAR_KEYWORD, dict(param=1), None, CallArguments(param=1),
-            id='var-keyword',
-        ),
-    ])
-    def test_sorting(self, kind, named, unnamed, expected):
-        """
-        """
-        to_ = inspect.Signature([inspect.Parameter('param', kind)])
-        result = sort_arguments(to_, named, unnamed)
-        assert result == expected
-
-    @pytest.mark.parametrize(('kind', 'expected'), [
-        pytest.param(  # func(param=1, /)
-            POSITIONAL_ONLY, CallArguments(1),
-            id='positional-only',
-        ),
-        pytest.param(  # func(param=1)
-            POSITIONAL_OR_KEYWORD, CallArguments(1),
-            id='positional-or-keyword',
-        ),
-        pytest.param(  # func(*, param=1)
-            KEYWORD_ONLY, CallArguments(param=1),
-            id='keyword-only',
-        ),
-    ])
-    def test_sorting_with_defaults(self, kind, expected):
-        """
-        """
-        to_ = inspect.Signature([inspect.Parameter('param', kind, default=1)])
-        result = sort_arguments(to_)
-        assert result == expected
-
-    @pytest.mark.parametrize(('kind',), [
-        pytest.param(POSITIONAL_ONLY, id='positional-only'),
-        pytest.param(POSITIONAL_OR_KEYWORD, id='positional-or-keyword'),
-        pytest.param(KEYWORD_ONLY, id='keyword-only'),
-    ])
-    def test_no_argument_for_non_default_param_raises(self, kind):
-        """
-        Ensure that a non-default parameter must have an argument passed
-        """
-        sig = inspect.Signature([inspect.Parameter('a', kind)])
-        with pytest.raises(ValueError) as excinfo:
-            sort_arguments(sig)
-        assert excinfo.value.args[0] == \
-            "Non-default parameter 'a' has no argument value"
-
-    def test_extra_to_sig_without_vko_raises(self):
-        """
-        Ensure a signature without a var-keyword parameter raises when extra
-        arguments are supplied
-        """
-        sig = inspect.Signature()
-        with pytest.raises(TypeError) as excinfo:
-            sort_arguments(sig, {'a': 1})
-        assert excinfo.value.args[0] == 'Cannot sort arguments (a)'
-
-    def test_unnamaed_to_sig_without_vpo_raises(self):
-        """
-        Ensure a signature without a var-positional parameter raises when a
-        var-positional argument is supplied
-        """
-        sig = inspect.Signature()
-        with pytest.raises(TypeError) as excinfo:
-            sort_arguments(sig, unnamed=(1,))
-        assert excinfo.value.args[0] == 'Cannot sort var-positional arguments'
-
-    def test_callable(self):
-        """
-        Ensure that callable's are viable arguments for ``to_``
-        """
-        func = lambda a, b=2, *args, c, d=4, **kwargs: None
-        assert sort_arguments(func, dict(a=1, c=3, e=5), ('args1',)) == \
-            CallArguments(1, 2, 'args1', c=3, d=4, e=5)
-
-
-def test_callwith():
-    """
-    Ensure that ``callwith`` works as expected
-    """
-    func = lambda a, b=2, *args, c, d=4, **kwargs: (a, b, args, c, d, kwargs)
-    assert callwith(func, dict(a=1, c=3, e=5), ('args1',)) == \
-        (1, 2, ('args1',), 3, 4, {'e': 5})
+    assert get_var_keyword_parameter(params) is expected

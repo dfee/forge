@@ -1,19 +1,21 @@
 from ._compose import (
     Mapper,
-    BaseRevision,
-    BatchRevision as batch,
+    Revision,
     # Unit
-    DeleteRevision as delete,
-    IdentityRevision as identity,
-    InsertRevision as insert,
-    ManageRevision as manage,
-    ModifyRevision as modify,
-    TranslocateRevision as translocate,
+    delete,
+    insert,
+    manage,
+    modify,
+    move,
+    translocate,
     # Group
-    CopyRevision as copy,
-    ReplaceRevision as replace,
-    returns, # todo make revision
-    SynthesizeRevision as synthesize,
+    compose,
+    copy,
+    replace,
+    returns,
+    sign,
+    sort,
+    synthesize,
 )
 from ._config import (
     get_run_validators,
@@ -22,7 +24,6 @@ from ._config import (
 from ._exceptions import (
     ForgeError,
     ImmutableInstanceError,
-    NoParameterError,
     RevisionError,
 )
 from ._marker import (
@@ -30,36 +31,27 @@ from ._marker import (
     void,
 )
 from ._signature import (
-    CallArguments,
     Factory,
     FParameter,
     FSignature,
     VarKeyword,
     VarPositional,
-    callwith,
-    getparam,
-    hasparam,
-    stringify_callable,
+    finditer,
+    fsignature,
+    pos,
+    arg,
+    pok,
+    kwarg,
+    kwo,
+    ctx,
+    vpo,
+    vkw,
+    args,
+    kwargs,
+    self_ as self,
+    cls_ as cls,
 )
-
-# pylint: disable=C0103, invalid-name
-
-# Compose
-move = translocate
-sign = synthesize
-
-# Signature
-fsignature = FSignature.from_callable
-
-# Parameters
-pos = FParameter.create_positional_only
-arg = pok = FParameter.create_positional_or_keyword
-kwarg = kwo = FParameter.create_keyword_only
-ctx = FParameter.create_contextual
-vpo = FParameter.create_var_positional
-vkw = FParameter.create_var_keyword
-
-args = VarPositional()
-kwargs = VarKeyword()
-self = ctx('self')
-cls = ctx('cls')
+from ._utils import (
+    callwith,
+    repr_callable,
+)

@@ -39,7 +39,7 @@ With this pattern, the caller has no ability to override ``default`` values, mak
         )
 
     # notice that `execute_api_request` now has only one parameter, `endpoint`
-    assert forge.stringify_callable(execute_api_request) == \
+    assert forge.repr_callable(execute_api_request) == \
         'execute_api_request(endpoint)'
 
     # the argument value for `token` is a bound constant, and
@@ -74,11 +74,11 @@ This is a useful alternative to provided a generic :term:`var-keyword` and *whit
     patch = forge.sign(*common)(requests.patch)
 
     # `requests.request` looks like this:
-    assert forge.stringify_callable(requests.request) == \
+    assert forge.repr_callable(requests.request) == \
         'request(method, url, **kwargs)'
 
     # our `request` looks like this:
-    assert forge.stringify_callable(request) == (
+    assert forge.repr_callable(request) == (
         'request('
             'method, url, params=None, data=None, headers=None, cookies=None, '
             'files=None, auth=None, timeout=None, allow_redirects=True, '
@@ -133,7 +133,7 @@ This pattern is especially helpful you are passing object-ids, as for example wi
 
 
     # Notice that `user_id` is converted into a `user` object
-    assert forge.stringify_callable(update_name) == \
+    assert forge.repr_callable(update_name) == \
         'update_name(user_id, name)'
 
     user_id = create_user('John London', 'john@email.com')
@@ -191,7 +191,7 @@ This code makes use of :class:`forge.void`.
                 if v is not forge.void:
                     setattr(book, k, v)
 
-    assert forge.stringify_callable(Book.update) == \
+    assert forge.repr_callable(Book.update) == \
         'update(book_id, *, title=<void>, author=<void>, publication_date=<void>)'
 
     book_id = Book.create(
@@ -232,19 +232,19 @@ This could be useful for auto-discovered dependency injection.
         return kwargs
 
     # Initial use
-    assert forge.stringify_callable(chameleon) == 'chameleon(*remove, **kwargs)'
+    assert forge.repr_callable(chameleon) == 'chameleon(*remove, **kwargs)'
 
     # Empty call preserves signature
     assert chameleon() == {}
-    assert forge.stringify_callable(chameleon) == 'chameleon(*remove, **kwargs)'
+    assert forge.repr_callable(chameleon) == 'chameleon(*remove, **kwargs)'
 
     # Var-keyword arguments add keyword-only parameters
     assert chameleon(a=1) == dict(a=1)
-    assert forge.stringify_callable(chameleon) == 'chameleon(*remove, a=1, **kwargs)'
+    assert forge.repr_callable(chameleon) == 'chameleon(*remove, a=1, **kwargs)'
 
     # Empty call preserves signature
     assert chameleon() == dict(a=1)
 
     # Var-positional arguments remove keyword-only parameters
     assert chameleon('a') == dict(a=1)
-    assert forge.stringify_callable(chameleon) == 'chameleon(*remove, **kwargs)'
+    assert forge.repr_callable(chameleon) == 'chameleon(*remove, **kwargs)'

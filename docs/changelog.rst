@@ -18,7 +18,7 @@ Versions follow `CalVer`_ with a strict backwards compatibility policy. The thir
 - Added slice notation support for :class:`~forge.FSignature` objects.
 - Exposed :class:`~forge.CallArguments`
 - Removed ``get_return_type`` and ``set_return_type`` as :attr:`~forge.FSignature.return_annotation` is now a first-class attribute
-- Renamed stringify_callable -> repr_callable
+- Renamed repr_callable -> repr_callable
 
 .. _changelog_2018-5-0:
 

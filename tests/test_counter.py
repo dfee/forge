@@ -1,7 +1,4 @@
-from forge._counter import (
-    Counter,
-    CreationOrderMeta,
-)
+from forge._counter import Counter, CreationOrderMeta
 
 
 def test_counter():

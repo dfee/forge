@@ -3,11 +3,7 @@ from unittest.mock import Mock
 import pytest
 
 import forge._config
-from forge._config import (
-    get_run_validators,
-    set_run_validators,
-)
-
+from forge._config import get_run_validators, set_run_validators
 
 # pylint: disable=C0103, invalid-name
 # pylint: disable=R0201, no-self-use

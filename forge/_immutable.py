@@ -1,6 +1,6 @@
 import typing
 
-from ._exceptions import ImmutableInstanceError
+from forge._exceptions import ImmutableInstanceError
 
 
 def asdict(obj) -> typing.Dict:

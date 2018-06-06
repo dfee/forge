@@ -2,11 +2,7 @@ import inspect
 
 import pytest
 
-from forge._marker import (
-    MarkerMeta,
-    empty,
-    void,
-)
+from forge._marker import MarkerMeta, empty, void
 
 # pylint: disable=R0201, no-self-use
 # pylint: disable=W0212, protected-access

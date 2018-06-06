@@ -1,26 +1,25 @@
 import asyncio
-from unittest.mock import Mock
 import inspect
+from unittest.mock import Mock
 
 import pytest
 
 import forge
 from forge._compose import (
     Mapper,
-    BaseRevision,
-    BatchRevision,
-    CopyRevision,
-    IdentityRevision,
-    InsertRevision,
-    DeleteRevision,
-    ManageRevision,
-    ModifyRevision,
-    ReplaceRevision,
-    SynthesizeRevision,
-    TranslocateRevision,
+    Revision,
+    compose,
+    copy,
+    insert,
+    delete,
+    manage,
+    modify,
+    replace,
+    synthesize,
+    translocate,
     returns,
+    sort
 )
-from forge._exceptions import RevisionError
 from forge._marker import empty
 from forge._signature import (
     KEYWORD_ONLY,
@@ -28,536 +27,16 @@ from forge._signature import (
     POSITIONAL_OR_KEYWORD,
     VAR_KEYWORD,
     VAR_POSITIONAL,
-    CallArguments,
     FParameter,
     FSignature,
+    fsignature,
     _get_pk_string,
 )
+from forge._utils import CallArguments
 
-
+# pylint: disable=C0103, invalid-name
 # pylint: disable=R0201, no-self-use
 # pylint: disable=W0621, redefined-outer-name
-
-
-def assert_params(func, *names):
-    assert list(func.__signature__.parameters) == list(names)
-
-
-@pytest.fixture
-def _func():
-    return lambda b, c=0, **kwargs: None
-
-
-@pytest.fixture(params=[True, False])
-def func(request, _func):
-    """
-    Determines wheter _func is @forge.sign'd
-    """
-    # TODO: remove
-    return _func \
-        if not request.param \
-        else forge.copy(_func)(_func)
-
-
-# class TestReturns:
-#     def test_no__signature__(self):
-#         """
-#         Ensure we can set the ``return type`` annotation on a function without
-#         a ``__signature__``
-#         """
-#         @returns(int)
-#         def myfunc():
-#             pass
-#         assert myfunc.__annotations__.get('return') == int
-
-#     def test__signature__(self):
-#         """
-#         Ensure we can set the ``return type`` annotation on a function with
-#         a ``__signature__``
-#         """
-#         def myfunc():
-#             pass
-#         myfunc.__signature__ = inspect.Signature()
-
-#         myfunc = returns(int)(myfunc)
-#         assert myfunc.__signature__.return_annotation == int
-
-
-class BaseTestRevision:
-    def run_strategy(self, strategy, revision, func):
-        fsig = forge.fsignature(func)
-        if strategy == 'revise':
-            return list(revision.revise(*fsig.values()))
-        elif strategy == '__call__':
-            func2 = revision(func)
-            return forge.fsignature(func2)[:]
-        else:
-            raise TypeError('unknown strategy {}'.format(strategy))
-
-
-class TestRevision:
-    @pytest.mark.parametrize(('as_coroutine',), [(True,), (False,)])
-    def test__call__not_existing(self, loop, as_coroutine):
-        """
-        Ensure ``sign`` wrapper appropriately builds and sets ``__mapper__``,
-        and that a call to the wrapped func traverses ``Mapper.__call__`` and
-        the wrapped function.
-        """
-        # pylint: disable=W0108, unnecessary-lambda
-        rev = BaseRevision()
-        rev.revise = lambda sig: sig
-        func = lambda *args, **kwargs: CallArguments(*args, **kwargs)
-        if as_coroutine:
-            func = asyncio.coroutine(func)
-
-        func2 = rev(func)
-        assert isinstance(func2.__mapper__, Mapper)
-        assert isinstance(func2.__signature__, inspect.Signature)
-
-        mapper = func2.__mapper__
-        assert mapper.callable == func2.__wrapped__
-        assert mapper.fsignature == FSignature([
-            forge.vpo('args'),
-            forge.vkw('kwargs'),
-        ])
-        assert mapper == Mapper(mapper.fsignature, func2.__wrapped__)
-
-        func2.__mapper__ = Mock(side_effect=func2.__mapper__)
-        call_args = CallArguments(0, a=1)
-
-        result = func2(*call_args.args, **call_args.kwargs)
-        if as_coroutine:
-            result = loop.run_until_complete(result)
-
-        assert result == call_args
-        func2.__mapper__.assert_called_once_with(
-            *call_args.args,
-            **call_args.kwargs,
-        )
-
-    def test__call__existing(self):
-        """
-        Ensure ``__call__`` replaces the ``__mapper__``, and that a call to the
-        wrapped func traverses only the new ``Mapper.__call__`` and the
-        wrapped function; i.e. no double wrapping.
-        """
-        rev = BaseRevision()
-        rev.revise = lambda sig: sig
-        # pylint: disable=W0108, unnecessary-lambda
-        func = lambda **kwargs: CallArguments(**kwargs)
-
-        func2 = rev(func)
-        mapper1 = func2.__mapper__
-        func3 = rev(func2)
-        mapper2 = func3.__mapper__
-
-        assert func3 is func2
-        assert isinstance(mapper2, Mapper)
-        assert mapper2 is not mapper1
-        assert mapper2.fsignature == mapper1.fsignature
-
-        call_args = CallArguments(b=1)
-        func3.__mapper__ = Mock(side_effect=mapper2)
-        assert func3(*call_args.args, **call_args.kwargs) == call_args
-        func3.__mapper__.assert_called_once_with(**call_args.kwargs)
-
-
-def test_identity_revision():
-    rev = IdentityRevision()
-    in_ = (forge.arg('a'),)
-    assert rev.revise(*in_) == in_
-
-
-# class TestSynthesizeRevision:
-#     def test_args_order_preserved(self):
-#         """
-#         Ensure that the var-positional arguments *aren't* re-ordered
-#         """
-#         param_a = forge.arg('a')
-#         param_b = forge.arg('b')
-#         rev = SynthesizeRevision(param_b, param_a)
-#         assert rev.fparameters == [param_b, param_a]
-
-#     def test_kwargs_reordered(self):
-#         """
-#         Ensure that the var-keyword arguments *are* re-ordered
-#         """
-#         param_a = forge.arg('a')
-#         param_b = forge.arg('b')
-#         rev = SynthesizeRevision(b=param_b, a=param_a)
-#         assert rev.fparameters == [param_a, param_b]
-
-#     def test_args_precede_kwargs(self):
-#         """
-#         Ensure that var-postional arguments precede var-keyword arguments
-#         """
-#         param_a = forge.arg('a')
-#         param_b = forge.arg('b')
-#         rev = SynthesizeRevision(param_b, a=param_a)
-#         assert rev.fparameters == [param_b, param_a]
-
-
-# class TestBatchRevision(BaseTestRevision):
-#     @pytest.mark.parametrize(('strategy',), [('revise',), ('__call__',)])
-#     @pytest.mark.parametrize(('revisions', 'expected'), [
-#         # Empty
-#         pytest.param(
-#             [
-#                 InsertRevision(forge.arg('a'), index=-1),
-#                 TranslocateRevision('a', index=0),
-#             ],
-#             ('a', 'b', 'c', 'kwargs'),
-#             id='multiple',
-#         ),
-
-#         # None
-#         pytest.param(
-#             [],
-#             ('b', 'c', 'kwargs'),
-#             id='none',
-#         ),
-
-#     ])
-#     def test_revision(self, strategy, revisions, expected):
-#         revision = BatchRevision(*revisions)
-#         func = lambda b, c=0, **kwargs: None
-
-#         possible = {
-#             param.name: param for param in [
-#                 forge.arg('a'),
-#                 forge.arg('b'),
-#                 forge.arg('c', default=0),
-#                 forge.vkw('kwargs'),
-#             ]
-#         }
-
-#         assert self.run_strategy(strategy, revision, func) == \
-#             [possible[e] for e in expected]
-
-
-#     def test_non_revision_raises(self):
-#         with pytest.raises(TypeError) as excinfo:
-#             BatchRevision(1)
-#         assert excinfo.value.args[0] == "received non-revision '1'"
-
-
-# class TestDeleteRevision(BaseTestRevision):
-#     @pytest.mark.parametrize(('strategy',), [('revise',), ('__call__',)])
-#     @pytest.mark.parametrize(('selector', 'expected'), [
-#         pytest.param(
-#             'c',
-#             ('a', 'b'),
-#             id='string',
-#         ),
-#         pytest.param(
-#             lambda param: param.name == 'c',
-#             ('a', 'b'),
-#             id='callable',
-#         ),
-#         pytest.param(
-#             lambda param: False,
-#             RevisionError('cannot delete parameter: not found'),
-#             id='param_not_found',
-#         )
-#     ])
-#     def test_revision(self, strategy, selector, expected):
-#         revision = DeleteRevision(selector)
-#         func = lambda a, b, c=0: None
-
-#         if isinstance(expected, RevisionError):
-#             with pytest.raises(type(expected)) as excinfo:
-#                 self.run_strategy(strategy, revision, func)
-#             assert excinfo.value.args[0] == expected.args[0]
-#             return
-
-#         possible = {
-#             param.name: param for param in [
-#                 forge.arg('a'),
-#                 forge.arg('b'),
-#                 forge.arg('c', default=0),
-#             ]
-#         }
-
-#         assert self.run_strategy(strategy, revision, func) == \
-#             [possible[e] for e in expected]
-
-
-# class TestInsertRevision(BaseTestRevision):
-#     @pytest.mark.parametrize(('strategy',), [('revise',), ('__call__',)])
-#     @pytest.mark.parametrize(('kwargs', 'expected'), [
-#         # index
-#         pytest.param(
-#             dict(index=0),
-#             ('a', 'b', 'c', 'kwargs'),
-#             id='index',
-#         ),
-
-#         # before
-#         pytest.param(
-#             dict(before='b'),
-#             ('a', 'b', 'c', 'kwargs'),
-#             id='before_string',
-#         ),
-#         pytest.param(
-#             dict(before=lambda param: param.name == 'b'),
-#             ('a', 'b', 'c', 'kwargs'),
-#             id='before_callable',
-#         ),
-#         pytest.param(
-#             dict(before=lambda param: True),
-#             ('a', 'b', 'c', 'kwargs'),
-#             id='before_multi_match',
-#         ),
-#         pytest.param(
-#             dict(before=lambda param: False),
-#             RevisionError(
-#                 'cannot insert {fp} before selector; selector not found'
-#             ),
-#             id='before_not_found_raises',
-#         ),
-
-#         # after
-#         pytest.param(
-#             dict(after='b'),
-#             ('b', 'a', 'c', 'kwargs'),
-#             id='after_string',
-#         ),
-#         pytest.param(
-#             dict(after=lambda param: param.name == 'b'),
-#             ('b', 'a', 'c', 'kwargs'),
-#             id='after_callable',
-#         ),
-#         pytest.param(
-#             dict(after=lambda param: True),
-#             ('b', 'a', 'c', 'kwargs'),
-#             id='after_multi_match',
-#         ),
-#         pytest.param(
-#             dict(after=lambda param: False),
-#             RevisionError(
-#                 'cannot insert {fp} after selector; selector not found'
-#             ),
-#             id='after_not_found_raises',
-#         ),
-
-#     ])
-#     def test_revision(self, strategy, kwargs, expected):
-#         fparam = forge.arg('a')
-#         revision = InsertRevision(fparam, **kwargs)
-#         func = lambda b, c=0, **kwargs: None
-
-#         possible = {
-#             param.name: param for param in [
-#                 forge.arg('a'),
-#                 forge.arg('b'),
-#                 forge.arg('c', default=0),
-#                 forge.vkw('kwargs'),
-#             ]
-#         }
-
-#         if isinstance(expected, Exception):
-#             with pytest.raises(type(expected)) as excinfo:
-#                 self.run_strategy(strategy, revision, func)
-#             assert excinfo.value.args[0] == expected.args[0].format(fp=fparam)
-#             return
-
-#         assert self.run_strategy(strategy, revision, func) == \
-#             [possible[e] for e in expected]
-
-#     @pytest.mark.parametrize(('kwargs'), [
-#         pytest.param(dict(index=0, before='a'), id='index_and_before'),
-#         pytest.param(dict(index=0, after='a'), id='index_and_after'),
-#         pytest.param(dict(before='a', after='b'), id='before_and_after'),
-#     ])
-#     def test_combo_raises(self, kwargs):
-#         with pytest.raises(TypeError) as excinfo:
-#             InsertRevision(forge.arg('x'), **kwargs)
-#         assert excinfo.value.args[0] == \
-#             "expected 'index', 'before' or 'after' received multiple"
-
-#     def test_no_position_raises(self):
-#         with pytest.raises(TypeError) as excinfo:
-#             InsertRevision(forge.arg('x'))
-#         assert excinfo.value.args[0] == \
-#             "expected keyword argument 'index', 'before', or 'after'"
-
-
-# class TestModifyRevision:
-#     def test__init__params(self):
-#         """
-#         ``ModifyRevision`` should share the same params as
-#         ``FParameter.replace`` (except the additional `selector` arg on the
-#         former)
-#         """
-#         sig1 = forge.fsignature(ModifyRevision)
-#         sig2 = forge.fsignature(forge.FParameter.replace)
-#         assert sig1[:][1:] == sig2[:][1:]
-
-#     @pytest.mark.parametrize(('selector',), [
-#         pytest.param(lambda param: param.name == 'b', id='callable'),
-#         pytest.param('b', id='string'),
-#     ])
-#     def test_revision(self, func, selector):
-#         func2 = ModifyRevision(selector, name='x')(func)
-#         assert_params(func2, 'x', 'c', 'kwargs')
-
-
-# class TestTranslocateRevision:
-#     @pytest.fixture
-#     def _func(self):
-#         return lambda a, b, c: None
-
-#     @pytest.mark.parametrize(('selector',), [
-#         pytest.param(lambda param: param.name == 'b', id='callable'),
-#         pytest.param('b', id='string'),
-#     ])
-#     def test_index(self, func, selector):
-#         func2 = TranslocateRevision(selector, index=0)(func)
-#         assert_params(func2, 'b', 'a', 'c')
-
-#     @pytest.mark.parametrize(('selector',), [
-#         pytest.param(lambda param: param.name == 'a', id='callable'),
-#         pytest.param('a', id='string'),
-#     ])
-#     @pytest.mark.parametrize(('before',), [
-#         pytest.param(lambda param: param.name == 'c', id='callable'),
-#         pytest.param('c', id='string'),
-#     ])
-#     def test_before(self, func, selector, before):
-#         func2 = TranslocateRevision(selector, before=before)(func)
-#         assert_params(func2, 'b', 'a', 'c')
-
-#     @pytest.mark.parametrize(('selector',), [
-#         pytest.param(lambda param: param.name == 'a', id='callable'),
-#         pytest.param('a', id='string'),
-#     ])
-#     @pytest.mark.parametrize(('after',), [
-#         pytest.param(lambda param: param.name == 'b', id='callable'),
-#         pytest.param('b', id='string'),
-#     ])
-#     def test_after(self, func, selector, after):
-#         func2 = TranslocateRevision(selector, after=after)(func)
-#         assert_params(func2, 'b', 'a', 'c')
-
-
-# class TestCopyRevision:
-#     @pytest.mark.parametrize(('strategy',), [('revise',), ('__call__',)])
-#     @pytest.mark.parametrize(('include', 'exclude', 'expected'), [
-#         # Neither
-#         pytest.param(None, None, ('a', 'b', 'c'), id='no_include_no_exclude'),
-
-#         # Include
-#         pytest.param(
-#             lambda param: param.name in ['a', 'b'],
-#             None,
-#             ('a', 'b'),
-#             id='include_callable',
-#         ),
-#         pytest.param(
-#             ['a', 'b'],
-#             None,
-#             ('a', 'b'),
-#             id='include_iterable',
-#         ),
-
-#         # Exclude
-#         pytest.param(
-#             None,
-#             lambda param: param.name == 'c',
-#             ('a', 'b'),
-#             id='exclude_callable',
-#         ),
-#         pytest.param(
-#             None,
-#             ['c'],
-#             ('a', 'b'),
-#             id='exclude_iterable',
-#         ),
-
-#         # Both
-#         pytest.param(
-#             ['a'],
-#             ['b'],
-#             TypeError("expected 'include' or 'exclude', but received both"),
-#             id='include_and_exclude',
-#         ),
-#     ])
-#     def test_revise(self, strategy, include, exclude, expected):
-#         """
-#         Ensure usage without ``include`` or ``exclude``
-#         """
-#         fromfunc = lambda a, b, c=0: None
-#         func = lambda **kwargs: None
-
-#         fsig_prev = forge.fsignature(func)
-#         if isinstance(expected, Exception):
-#             with pytest.raises(type(expected)) as excinfo:
-#                 CopyRevision(fromfunc, include=include, exclude=exclude)
-#             assert excinfo.value.args[0] == expected.args[0]
-#             return
-
-#         rev = CopyRevision(fromfunc, include=include, exclude=exclude)
-#         if strategy == 'revise':
-#             fparams_prev = list(fsig_prev.values())
-#             fparams_next = rev.revise(*fparams_prev)
-#             fsig_next = forge.FSignature(fparams_next)
-#         elif strategy == '__call__':
-#             func2 = rev(func)
-#             fsig_next = forge.fsignature(func2)
-#         else:
-#             raise TypeError('unknown strategy {}'.format(strategy))
-
-#         assert fsig_next == forge.FSignature([
-#             fparam for fparam in [
-#                 forge.arg('a'),
-#                 forge.arg('b'),
-#                 forge.arg('c', default=0),
-#             ] if fparam.name in expected
-#         ])
-
-
-
-# class TestReplaceRevision:
-#     @pytest.fixture
-#     def _func(self):
-#         return lambda a, b, **kwargs: None
-
-#     @pytest.mark.parametrize(('selector',), [
-#         pytest.param(lambda param: param.name == 'kwargs', id='callable'),
-#         pytest.param('kwargs', id='string'),
-#     ])
-#     def test_revise(self, func, selector):
-#         fparam = forge.arg('c')
-#         fsig = forge.fsignature(func)
-#         next_ = ReplaceRevision(selector, fparam).revise(*fsig.values())
-#         assert next_ == [*fsig['a':'b'], fparam]
-
-#     @pytest.mark.parametrize(('selector',), [
-#         pytest.param(lambda param: param.name == 'kwargs', id='callable'),
-#         pytest.param('kwargs', id='string'),
-#     ])
-#     def test__call__(self, func, selector):
-#         fparam = forge.arg('c')
-#         func2 = ReplaceRevision(selector, fparam)(func)
-#         assert_params(func2, 'a', 'b', 'c')
-
-
-# def test_manage_revision():
-#     """
-#     Assert that manage revision utilizes the custom callable
-#     """
-#     called_with = None
-#     def reverse(*previous):
-#         nonlocal called_with
-#         called_with = previous
-#         return previous[::-1]
-
-#     func = lambda a, b, c: None
-#     rev = ManageRevision(reverse)
-
-#     fparams = list(forge.fsignature(func).values())
-#     assert [fp.name for fp in rev.revise(*fparams)] == ['c', 'b', 'a']
-#     assert called_with == tuple(fparams)
 
 
 class TestMapper:
@@ -931,3 +410,752 @@ class TestMapper:
         to_sig = inspect.Signature([to_param])
 
         assert Mapper.map_parameters(fsig, to_sig) == {}
+
+
+class TestRevision:
+    @pytest.mark.parametrize(('as_coroutine',), [(True,), (False,)])
+    def test__call__not_existing(self, loop, as_coroutine):
+        """
+        Ensure ``sign`` wrapper appropriately builds and sets ``__mapper__``,
+        and that a call to the wrapped func traverses ``Mapper.__call__`` and
+        the wrapped function.
+        """
+        # pylint: disable=W0108, unnecessary-lambda
+        rev = Revision()
+        func = lambda *args, **kwargs: CallArguments(*args, **kwargs)
+        if as_coroutine:
+            func = asyncio.coroutine(func)
+
+        func2 = rev(func)
+        assert isinstance(func2.__mapper__, Mapper)
+        assert isinstance(func2.__signature__, inspect.Signature)
+
+        mapper = func2.__mapper__
+        assert mapper.callable == func2.__wrapped__
+        assert mapper.fsignature == FSignature([
+            forge.vpo('args'),
+            forge.vkw('kwargs'),
+        ])
+        assert mapper == Mapper(mapper.fsignature, func2.__wrapped__)
+
+        func2.__mapper__ = Mock(side_effect=func2.__mapper__)
+        call_args = CallArguments(0, a=1)
+
+        result = func2(*call_args.args, **call_args.kwargs)
+        if as_coroutine:
+            result = loop.run_until_complete(result)
+
+        assert result == call_args
+        func2.__mapper__.assert_called_once_with(
+            *call_args.args,
+            **call_args.kwargs,
+        )
+
+    def test__call__existing(self):
+        """
+        Ensure ``__call__`` replaces the ``__mapper__``, and that a call to the
+        wrapped func traverses only the new ``Mapper.__call__`` and the
+        wrapped function; i.e. no double wrapping.
+        """
+        rev = Revision()
+        # pylint: disable=W0108, unnecessary-lambda
+        func = lambda **kwargs: CallArguments(**kwargs)
+
+        func2 = rev(func)
+        mapper1 = func2.__mapper__
+        func3 = rev(func2)
+        mapper2 = func3.__mapper__
+
+        assert func3 is func2
+        assert isinstance(mapper2, Mapper)
+        assert mapper2 is not mapper1
+        assert mapper2.fsignature == mapper1.fsignature
+
+        call_args = CallArguments(b=1)
+        func3.__mapper__ = Mock(side_effect=mapper2)
+        assert func3(*call_args.args, **call_args.kwargs) == call_args
+        func3.__mapper__.assert_called_once_with(**call_args.kwargs)
+
+    def test_revise(self):
+        rev = Revision()
+        in_ = FSignature()
+        assert rev.revise(in_) is in_
+
+
+## Test Group Revisions
+class TestCompose:
+    def test_revise(self):
+        fsig1 = FSignature()
+        mock1 = Mock(
+            spec=Revision,
+            revise=Mock(side_effect=lambda prev: fsig1),
+        )
+
+        fsig2 = FSignature()
+        mock2 = Mock(
+            spec=Revision,
+            revise=Mock(side_effect=lambda prev: fsig2),
+        )
+
+        rev = compose(mock1, mock2)
+        in_ = FSignature([forge.arg('a')])
+
+        assert rev.revise(in_) is fsig2
+        mock1.revise.assert_called_once_with(in_)
+        mock2.revise.assert_called_once_with(fsig1)
+
+    def test_revise_none(self):
+        fsig = FSignature()
+        rev = compose()
+        assert rev.revise(fsig) is fsig
+
+    def test_non_revision_raises(self):
+        with pytest.raises(TypeError) as excinfo:
+            compose(1)
+        assert excinfo.value.args[0] == "received non-revision '1'"
+
+
+class TestCopy:
+    @pytest.mark.parametrize(('include', 'exclude', 'expected'), [
+        # Neither
+        pytest.param(
+            None,
+            None,
+            FSignature([forge.arg('a'), forge.arg('b'), forge.arg('c')]),
+            id='no_include_no_exclude',
+        ),
+
+        # Include
+        pytest.param(
+            'a',
+            None,
+            forge.FSignature([forge.arg('a')]),
+            id='include_str',
+        ),
+        pytest.param(
+            ('a', 'b'),
+            None,
+            forge.FSignature([forge.arg('a'), forge.arg('b')]),
+            id='include_iter_str',
+        ),
+        pytest.param(
+            lambda param: param.name != 'a',
+            None,
+            forge.FSignature([forge.arg('b'), forge.arg('c')]),
+            id='include_callable',
+        ),
+
+        # Exclude
+        pytest.param(
+            None,
+            'a',
+            forge.FSignature([forge.arg('b'), forge.arg('c')]),
+            id='exclude_str',
+        ),
+        pytest.param(
+            None,
+            ('a', 'b'),
+            forge.FSignature([forge.arg('c')]),
+            id='exclude_iter_str',
+        ),
+        pytest.param(
+            None,
+            lambda param: param.name == 'a',
+            forge.FSignature([forge.arg('b'), forge.arg('c')]),
+            id='include_callable',
+        ),
+
+        # Both
+        pytest.param(
+            'a',
+            'b',
+            TypeError(
+                "expected 'include', 'exclude', or neither, but received both"
+            ),
+            id='include_and_exclude',
+        ),
+
+    ])
+    def test_revise(self, include, exclude, expected):
+        func = lambda a, b, c: None
+        if isinstance(expected, Exception):
+            with pytest.raises(type(expected)) as excinfo:
+                copy(func, include=include, exclude=exclude)
+            assert excinfo.value.args[0] == expected.args[0]
+            return
+
+        rev = copy(func, include=include, exclude=exclude)
+        assert rev.revise(FSignature()) == expected
+
+
+class TestManage:
+    def test_revise(self):
+        """
+        Assert that manage revision utilizes the custom callable
+        """
+        fsig = fsignature(lambda a, b, c: None)
+        reverse = Mock(
+            side_effect=lambda prev: prev.replace(
+                parameters=list(prev.parameters.values())[::-1]
+            )
+        )
+        rev = manage(reverse)
+
+        assert rev.revise(fsig) == \
+            FSignature([forge.arg('c'), forge.arg('b'), forge.arg('a')])
+
+
+class TestReturns:
+    def test_revise(self):
+        """
+        Ensure we set the ``return type`` annotation on an fsignature
+        """
+        rev = returns(int)
+        assert rev.revise(FSignature()).return_annotation == int
+
+    @pytest.mark.parametrize(('strategy',), [
+        ('annotations',),
+        ('signature',),
+        ('mapper',),
+    ])
+    def test__call__(self, strategy):
+        """
+        Ensure we set the ``return type`` annotation following the strategy:
+
+        - annotations: (no __mapper__, no __signature__), set __annotations__
+        - signature: (no __mapper__), set __signature__
+        - mapper: update __mapper__
+        """
+        rev = returns(int)
+        def func():
+            pass
+
+        if strategy == 'annotations':
+            pass
+        elif strategy == 'signature':
+            func.__signature__ = inspect.Signature()
+        elif strategy == 'mapper':
+            identity_rev = Revision()
+            identity_rev.revise = lambda prev: prev
+            func = identity_rev(func)
+        else:
+            raise TypeError('Unknown strategy {}'.format(strategy))
+
+        assert rev(func) is func
+
+        if strategy == 'annotations':
+            assert not hasattr(func, '__signature__')
+            assert func.__annotations__['return'] is int
+        elif strategy == 'signature':
+            assert not func.__annotations__
+            assert hasattr(func, '__signature__')
+            assert func.__signature__.return_annotation is int
+        elif strategy == 'mapper':
+            assert func.__signature__.return_annotation is int
+            assert func.__mapper__.fsignature.return_annotation is int
+
+    def test_revise_no_validation(self):
+        """
+        Ensure no validation is performed on the revision
+        """
+        rev = returns(int)
+        fsig = FSignature(
+            [forge.arg('b'), forge.pos('a')],
+            __validate_parameters__=False,
+        )
+        assert rev.revise(fsig).parameters == fsig.parameters
+
+
+class TestSynthesize:
+    def test_sign(self):
+        """
+        Ensure that the nickname ``sign`` is the class ``synthesize``
+        """
+        assert forge.sign is synthesize
+
+    def test_revise_args_order_preserved(self):
+        """
+        Ensure that the var-positional arguments *aren't* re-ordered
+        """
+        param_a = forge.arg('a')
+        param_b = forge.arg('b')
+        rev = synthesize(param_b, param_a)
+        assert rev.revise(FSignature()) == FSignature([param_b, param_a])
+
+    def test_revise_kwargs_reordered(self):
+        """
+        Ensure that the var-keyword arguments *are* re-ordered
+        """
+        param_a = forge.arg('a')
+        param_b = forge.arg('b')
+        rev = synthesize(b=param_b, a=param_a)
+        assert rev.revise(FSignature()) == FSignature([param_a, param_b])
+
+    def test_revise_args_precede_kwargs(self):
+        """
+        Ensure that var-postional arguments precede var-keyword arguments
+        """
+        param_a = forge.arg('a')
+        param_b = forge.arg('b')
+        rev = synthesize(param_b, a=param_a)
+        assert rev.revise(FSignature()) == FSignature([param_b, param_a])
+
+    def test_revise_no_validation(self):
+        """
+        Ensure no validation is performed on the revision
+        """
+        rev = synthesize(forge.arg('b'), forge.pos('a'))
+        assert rev.revise(FSignature()) == FSignature(
+            [forge.arg('b'), forge.pos('a')],
+            __validate_parameters__=False,
+        )
+
+
+class TestSort:
+    @pytest.mark.parametrize(('in_', 'sortkey', 'expected'), [
+        pytest.param(
+            [forge.arg('b'), forge.arg('a')],
+            None,
+            [forge.arg('a'), forge.arg('b')],
+            id='lexicographical',
+        ),
+        pytest.param(
+            [forge.arg('a', default=None), forge.arg('b')],
+            None,
+            [forge.arg('b'), forge.arg('a', default=None)],
+            id='default',
+        ),
+        pytest.param(
+            [
+                forge.vkw('e'),
+                forge.kwo('d'),
+                forge.vpo('c'),
+                forge.pok('b'),
+                forge.pos('a'),
+            ],
+            None,
+            [
+                forge.pos('a'),
+                forge.pok('b'),
+                forge.vpo('c'),
+                forge.kwo('d'),
+                forge.vkw('e'),
+            ],
+            id='kind',
+        ),
+        pytest.param(
+            [forge.arg('x', 'b'), forge.arg('y', 'a')],
+            lambda param: param.interface_name,
+            [forge.arg('y', 'a'), forge.arg('x', 'b')],
+            id='sortkey_interface_name',
+        ),
+        pytest.param(
+            [forge.vpo('a'), forge.vpo('b')],
+            None,
+            [forge.vpo('a'), forge.vpo('b')],
+            id='novalidate',
+        ),
+    ])
+    def test_revise(self, in_, sortkey, expected):
+        rev = sort(sortkey)
+        in_ = FSignature(in_, __validate_parameters__=False)
+        expected = FSignature(expected, __validate_parameters__=False)
+        assert rev.revise(in_) == expected
+
+
+## Test Unit Revisions
+class TestDelete:
+    @pytest.mark.parametrize(
+        ('selector', 'multiple', 'raising', 'in_', 'out_'),
+        [
+            pytest.param(
+                'a',
+                False,
+                True,
+                FSignature([forge.arg('a'), forge.arg('b'), forge.arg('c')]),
+                FSignature([forge.arg('b'), forge.arg('c')]),
+                id='selector_str',
+            ),
+
+            pytest.param(
+                ('a', 'b'),
+                False,
+                True,
+                FSignature([forge.arg('a'), forge.arg('b'), forge.arg('c')]),
+                FSignature([forge.arg('b'), forge.arg('c')]),
+                id='selector_iter_str',
+            ),
+
+            pytest.param(
+                lambda param: param.name not in ('a', 'b'),
+                False,
+                True,
+                FSignature([forge.arg('a'), forge.arg('b'), forge.arg('c')]),
+                FSignature([forge.arg('a'), forge.arg('b')]),
+                id='selector_iter_str',
+            ),
+
+            pytest.param(
+                ('a', 'b'),
+                True,
+                True,
+                FSignature([forge.arg('a'), forge.arg('b'), forge.arg('c')]),
+                FSignature([forge.arg('c')]),
+                id='selector_multiple',
+            ),
+
+            pytest.param(
+                'z',
+                False,
+                True,
+                FSignature([forge.arg('a'), forge.arg('b'), forge.arg('c')]),
+                ValueError("No parameter matched selector 'z'"),
+                id='selector_no_match_raises',
+            ),
+
+            pytest.param(
+                'z',
+                False,
+                False,
+                FSignature([forge.arg('a'), forge.arg('b'), forge.arg('c')]),
+                None,
+                id='selector_no_match_not_raising',
+            ),
+
+        ]
+    )
+    def test_revision(self, selector, multiple, raising, in_, out_):
+        # pylint: disable=R0913, too-many-arguments
+        rev = delete(selector, multiple, raising)
+        if isinstance(out_, Exception):
+            with pytest.raises(type(out_)) as excinfo:
+                rev.revise(in_)
+            assert excinfo.value.args[0] == out_.args[0]
+        elif out_:
+            assert rev.revise(in_) == out_
+        else:
+            assert rev.revise(in_) is in_
+
+    def test_revise_no_validation(self):
+        """
+        Ensure no validation is performed on the revision
+        """
+        rev = delete('x', raising=False)
+        fsig = FSignature(
+            [forge.arg('b'), forge.pos('a')],
+            __validate_parameters__=False,
+        )
+        assert rev.revise(fsig) is fsig
+
+
+class TestInsert:
+    @pytest.mark.parametrize(
+        ('parameter', 'index', 'before', 'after', 'in_', 'out_'),
+        [
+            # Index
+            pytest.param(
+                forge.arg('a'),
+                0, None, None,
+                FSignature([forge.arg('b')]),
+                FSignature([forge.arg('a'), forge.arg('b')]),
+                id='index',
+            ),
+
+            # Before
+            pytest.param(
+                forge.arg('a'),
+                None, 'b', None,
+                FSignature([forge.arg('b')]),
+                FSignature([forge.arg('a'), forge.arg('b')]),
+                id='before_str',
+            ),
+            pytest.param(
+                forge.arg('a'),
+                None, ('b', 'c'), None,
+                FSignature([forge.arg('b')]),
+                FSignature([forge.arg('a'), forge.arg('b')]),
+                id='before_iter_str',
+            ),
+            pytest.param(
+                forge.arg('a'),
+                None, lambda param: param.name != 'c', None,
+                FSignature([forge.arg('b')]),
+                FSignature([forge.arg('a'), forge.arg('b')]),
+                id='before_callable',
+            ),
+            pytest.param(
+                forge.arg('a'),
+                None, 'x', None,
+                FSignature([forge.arg('b')]),
+                ValueError("No parameter matched selector 'x'"),
+                id='before_no_mach',
+            ),
+
+            # After
+            pytest.param(
+                forge.arg('b'),
+                None, None, 'a',
+                FSignature([forge.arg('a')]),
+                FSignature([forge.arg('a'), forge.arg('b')]),
+                id='after_str',
+            ),
+            pytest.param(
+                forge.arg('b'),
+                None, None, ('a', 'c'),
+                FSignature([forge.arg('a')]),
+                FSignature([forge.arg('a'), forge.arg('b')]),
+                id='after_iter_str',
+            ),
+            pytest.param(
+                forge.arg('b'),
+                None, None, lambda param: param.name != 'c',
+                FSignature([forge.arg('a')]),
+                FSignature([forge.arg('a'), forge.arg('b')]),
+                id='after_callable',
+            ),
+            pytest.param(
+                forge.arg('a'),
+                None, None, 'x',
+                FSignature([forge.arg('b')]),
+                ValueError("No parameter matched selector 'x'"),
+                id='after_no_mach',
+            ),
+
+        ],
+    )
+    def test_revise(self, parameter, index, before, after, in_, out_):
+        # pylint: disable=R0913, too-many-arguments
+        rev = insert(parameter, index=index, before=before, after=after)
+        if isinstance(out_, Exception):
+            with pytest.raises(type(out_)) as excinfo:
+                rev.revise(in_)
+            assert excinfo.value.args[0] == out_.args[0]
+            return
+        assert rev.revise(in_) == out_
+
+    @pytest.mark.parametrize(('kwargs'), [
+        pytest.param(dict(index=0, before='a'), id='index_and_before'),
+        pytest.param(dict(index=0, after='a'), id='index_and_after'),
+        pytest.param(dict(before='a', after='b'), id='before_and_after'),
+    ])
+    def test_combo_raises(self, kwargs):
+        with pytest.raises(TypeError) as excinfo:
+            insert(forge.arg('x'), **kwargs)
+        assert excinfo.value.args[0] == \
+            "expected 'index', 'before' or 'after' received multiple"
+
+    def test_no_position_raises(self):
+        with pytest.raises(TypeError) as excinfo:
+            insert(forge.arg('x'))
+        assert excinfo.value.args[0] == \
+            "expected keyword argument 'index', 'before', or 'after'"
+
+    def test_revise_no_validation(self):
+        """
+        Ensure no validation is performed on the revision
+        """
+        rev = insert(forge.arg('b'), index=0)
+        fsig = FSignature([forge.pos('a')], __validate_parameters__=False)
+        assert rev.revise(fsig) == FSignature(
+            [forge.arg('b'), forge.pos('a')],
+            __validate_parameters__=False,
+        )
+
+
+class TestModify:
+    @pytest.mark.parametrize(('revision',), [
+        pytest.param(dict(kind=POSITIONAL_OR_KEYWORD), id='kind'),
+        pytest.param(dict(name='b'), id='name'),
+        pytest.param(dict(interface_name='b'), id='interface_name'),
+        pytest.param(dict(default=None), id='default'),
+        pytest.param(dict(factory=lambda: None), id='factory'),
+        pytest.param(dict(type=int), id='type'),
+        pytest.param(dict(converter=lambda *_: None), id='converter'),
+        pytest.param(dict(validator=lambda *_: None), id='validator'),
+        pytest.param(dict(bound=True, default=None), id='bound'),
+        pytest.param(dict(contextual=True), id='contextual'),
+        pytest.param(dict(metadata={'a': 1}), id='metadata'),
+    ])
+    def test_revise(self, revision):
+        in_param = forge.pos('a')
+        out_param = in_param.replace(**revision)
+        assert in_param != out_param # ensure we've got a good test setup
+
+        rev = modify('a', **revision)
+        assert rev.revise(FSignature([in_param])) == FSignature([out_param])
+
+    @pytest.mark.parametrize(('multiple',), [(True,), (False,)])
+    def test_revise_multiple(self, multiple):
+        in_ = FSignature([forge.arg('a'), forge.arg('b')])
+        rev = modify(('a', 'b'), multiple=multiple, kind=POSITIONAL_ONLY)
+        out_ = rev.revise(in_)
+
+        kinds = [param.kind for param in out_.parameters.values()]
+        if multiple:
+            assert kinds == [POSITIONAL_ONLY, POSITIONAL_ONLY]
+        else:
+            assert kinds == [POSITIONAL_ONLY, POSITIONAL_OR_KEYWORD]
+
+    @pytest.mark.parametrize(('raising',), [(True,), (False,)])
+    def test_revise_no_match(self, raising):
+        in_ = FSignature([forge.arg('a')])
+        rev = modify('x', raising=raising, kind=POSITIONAL_ONLY)
+
+        if raising:
+            with pytest.raises(ValueError) as excinfo:
+                rev.revise(in_)
+            assert excinfo.value.args[0] == "No parameter matched selector 'x'"
+            return
+
+        assert rev.revise(in_) is in_
+
+    def test_revise_no_validation(self):
+        """
+        Ensure no validation is performed on the revision
+        """
+        rev = modify('b', kind=POSITIONAL_ONLY)
+        in_ = FSignature([forge.arg('a'), forge.arg('b')])
+        out_ = FSignature(
+            [forge.arg('a'), forge.pos('b')],
+            __validate_parameters__=False,
+        )
+        assert rev.revise(in_) == out_
+
+    def test_accepted_params(self):
+        assert fsignature(modify).parameters['name':] == \
+            fsignature(FParameter.replace).parameters['name':]
+
+
+class TestReplace:
+    @pytest.mark.parametrize(('selector',), [
+        pytest.param('old', id='selector_str'),
+        pytest.param(('old', 'other'), id='selector_iter_str'),
+        pytest.param(
+            lambda param: param.name != 'other',
+            id='selector_callable',
+        ),
+    ])
+    def test_revise(self, selector):
+        new_param = forge.arg('new')
+        old_param = forge.arg('old')
+        in_ = FSignature([old_param])
+        out_ = FSignature([new_param])
+
+        rev = replace(selector, new_param)
+        assert rev.revise(in_) == out_
+
+    def test_no_match_raises(self):
+        rev = replace('i', forge.arg('a'))
+        with pytest.raises(ValueError) as excinfo:
+            rev.revise(FSignature())
+        assert excinfo.value.args[0] == \
+            "No parameter matched selector 'i'"
+
+    def test_revise_no_validation(self):
+        """
+        Ensure no validation is performed on the revision
+        """
+        rev = replace('b', forge.pos('b'))
+        in_ = FSignature([forge.arg('a'), forge.arg('b')])
+        out_ = FSignature(
+            [forge.arg('a'), forge.pos('b')],
+            __validate_parameters__=False,
+        )
+        assert rev.revise(in_) == out_
+
+
+class TestTranslocate:
+    def test_move(self):
+        assert forge.move is translocate
+
+    @pytest.mark.parametrize(('index', 'before', 'after'), [
+        # Index
+        pytest.param(1, None, None, id='index'),
+
+        # Before
+        pytest.param(None, 'c', None, id='before_str'),
+        pytest.param(None, ('c', 'x'), None, id='before_iter_str'),
+        pytest.param(
+            None,
+            lambda param: param.name == 'c',
+            None,
+            id='before_callable',
+        ),
+
+        # After
+        pytest.param(None, None, 'a', id='after_str'),
+        pytest.param(None, None, ('a', 'x'), id='after_iter_str'),
+        pytest.param(
+            None,
+            None,
+            lambda param: param.name == 'a',
+            id='after_callable',
+        ),
+    ])
+    @pytest.mark.parametrize(('selector',), [
+        pytest.param('b', id='selector_str'),
+        pytest.param(('b', 'x'), id='selector_iter_str'),
+        pytest.param(lambda param: param.name == 'b', id='selector_callable'),
+    ])
+    def test_revise(self, selector, index, before, after):
+        # pylint: disable=R0913, too-many-arguments
+        rev = translocate(selector, index=index, before=before, after=after)
+        in_ = FSignature([forge.arg('a'), forge.arg('c'), forge.arg('b')])
+        out_ = FSignature([forge.arg('a'), forge.arg('b'), forge.arg('c')])
+
+        if isinstance(out_, Exception):
+            with pytest.raises(type(out_)) as excinfo:
+                rev.revise(in_)
+            assert excinfo.value.args[0] == out_.args[0]
+            return
+        assert rev.revise(in_) == out_
+
+    def test_revise_selector_no_match_raises(self):
+        rev = translocate('x', index=0)
+        with pytest.raises(ValueError) as excinfo:
+            rev.revise(fsignature(lambda a: None))
+        assert excinfo.value.args[0] == \
+            "No parameter matched selector 'x'"
+
+    def test_revise_before_no_match_raises(self):
+        rev = translocate('a', before='x')
+        with pytest.raises(ValueError) as excinfo:
+            rev.revise(fsignature(lambda a: None))
+        assert excinfo.value.args[0] == \
+            "No parameter matched selector 'x'"
+
+    def test_revise_after_no_match_raises(self):
+        rev = translocate('a', after='x')
+        with pytest.raises(ValueError) as excinfo:
+            rev.revise(fsignature(lambda a: None))
+        assert excinfo.value.args[0] == \
+            "No parameter matched selector 'x'"
+
+    @pytest.mark.parametrize(('kwargs'), [
+        pytest.param(dict(index=0, before='a'), id='index_and_before'),
+        pytest.param(dict(index=0, after='a'), id='index_and_after'),
+        pytest.param(dict(before='a', after='b'), id='before_and_after'),
+    ])
+    def test_combo_raises(self, kwargs):
+        with pytest.raises(TypeError) as excinfo:
+            translocate(forge.arg('x'), **kwargs)
+        assert excinfo.value.args[0] == \
+            "expected 'index', 'before' or 'after' received multiple"
+
+    def test_no_position_raises(self):
+        with pytest.raises(TypeError) as excinfo:
+            translocate(forge.arg('x'))
+        assert excinfo.value.args[0] == \
+            "expected keyword argument 'index', 'before', or 'after'"
+
+    def test_revise_no_validation(self):
+        """
+        Ensure no validation is performed on the revision
+        """
+        rev = translocate('b', index=0)
+        in_ = FSignature([forge.pos('a'), forge.arg('b')])
+        out_ = FSignature(
+            [forge.arg('b'), forge.pos('a')],
+            __validate_parameters__=False,
+        )
+        assert rev.revise(in_) == out_

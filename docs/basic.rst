@@ -20,7 +20,7 @@ The minimal example is to wrap a function that takes no arguments (has no parame
     def func():
         pass
 
-    assert forge.stringify_callable(func) == 'func()'
+    assert forge.repr_callable(func) == 'func()'
 
 Forging a signature works as expected with ``staticmethod``, ``classmethod``, the instance ``method``, as well as ``property`` and ``__call__``.
 The following example is a bit tedious, but its relevance is that it demonstrates that :func:`forge.sign` is transparent to underlying code.
@@ -67,10 +67,10 @@ The following example is a bit tedious, but its relevance is that it demonstrate
     klass = Klass()
 
     # Check signatures
-    assert forge.stringify_callable(Klass.srandom) == 'srandom()'
-    assert forge.stringify_callable(Klass.crandom) == 'crandom()'
-    assert forge.stringify_callable(klass.irandom) == 'irandom()'
-    assert forge.stringify_callable(klass) == '{}()'.format(klass)
+    assert forge.repr_callable(Klass.srandom) == 'srandom()'
+    assert forge.repr_callable(Klass.crandom) == 'crandom()'
+    assert forge.repr_callable(klass.irandom) == 'irandom()'
+    assert forge.repr_callable(klass) == '{}()'.format(klass)
 
     assert smin <= Klass.srandom() <= smax
     assert Klass.cmin <= Klass.crandom() <= Klass.cmax
@@ -130,8 +130,8 @@ This is exciting because while we've been able to dynamically create ``class`` o
         def func2(**kwargs):
             pass
 
-        assert forge.stringify_callable(func1) == 'func1(b, a)'
-        assert forge.stringify_callable(func2) == 'func2(a, b)'
+        assert forge.repr_callable(func1) == 'func1(b, a)'
+        assert forge.repr_callable(func2) == 'func2(a, b)'
 
 
 .. _basic-usage_reflecting-a-signature:
@@ -170,7 +170,7 @@ This can be simplified with :func:`~forge.reflect`, a convenience for applying t
         logging.warning('{}'.format(dict(args=args, kwargs=kwargs)))
         return forge.callwith(func, vpo=args, vkw=kwargs)
 
-    assert forge.stringify_callable(log_and_func) == "log_and_func(a, b, c, *args, **kwargs)"
+    assert forge.repr_callable(log_and_func) == "log_and_func(a, b, c, *args, **kwargs)"
     assert log_and_func(1, 2, 3, 4, d=5) == (1, 2, 3, (4,), {'d': 5})
 
 :func:`~forge.reflect` also supports :paramref:`~forge.reflect.include` and :paramref:`~forge.reflect.exclude`, which are iterables of parameter names to include or exclude, respectively.
@@ -188,7 +188,7 @@ This can be simplified with :func:`~forge.reflect`, a convenience for applying t
         logging.warning('{}'.format(kwargs))
         return forge.callwith(func, vkw=kwargs)
 
-    assert forge.stringify_callable(log_and_func) == "log_and_func(a, b, c, **kwargs)"
+    assert forge.repr_callable(log_and_func) == "log_and_func(a, b, c, **kwargs)"
     assert log_and_func(1, 2, 3, d=5) == (1, 2, 3, (), {'d': 5})
 
 
@@ -210,7 +210,7 @@ Users may add `postiional-only`, `positional-or-keyword` or `keyword-only` argum
     def func(**kwargs):
         return kwargs['myparam']
 
-    assert forge.stringify_callable(func) == 'func(myparam=0)'
+    assert forge.repr_callable(func) == 'func(myparam=0)'
 
     assert func() == 0
     assert func(myparam=1) == 1
@@ -244,7 +244,7 @@ For example, if a function has a parameter with a default:
     def func(myparam=0):
         return myparam
 
-    assert forge.stringify_callable(func) == 'func()'
+    assert forge.repr_callable(func) == 'func()'
     assert func() == 0
 
 And removing a variadic parameter:
@@ -257,7 +257,7 @@ And removing a variadic parameter:
     def func(*args):
         return args
 
-    assert forge.stringify_callable(func) == 'func()'
+    assert forge.repr_callable(func) == 'func()'
     assert func() == ()
 
 If a callable's parameter doesn't have a default value, you can still remove it, but you must set the parameter's default and ``bind`` the argument value:
@@ -270,7 +270,7 @@ If a callable's parameter doesn't have a default value, you can still remove it,
     def func(myparam):
         return myparam
 
-    assert forge.stringify_callable(func) == 'func()'
+    assert forge.repr_callable(func) == 'func()'
     assert func() == 0
 
 
@@ -304,7 +304,7 @@ To rename a ``non-variadic`` parameter, :class:`~forge.FParameter` takes a secon
     def func(value, other_value):
         return value + other_value
 
-    assert forge.stringify_callable(func) == 'func(value, increment_by)'
+    assert forge.repr_callable(func) == 'func(value, increment_by)'
     assert func(3, increment_by=5) == 8
 
 ``Variadic`` parameter helpers :data:`forge.args` and :data:`forge.kwargs` (and their constructor counterparts :func:`forge.vpo` and :func:`forge.vkw` don't take an ``interface_name`` parameter, as functions can only have one :term:`var-positional` and one :term:`var-keyword` parameter.
@@ -317,7 +317,7 @@ To rename a ``non-variadic`` parameter, :class:`~forge.FParameter` takes a secon
     def func(*myargs, **mykwargs):
         return myargs, mykwargs
 
-    assert forge.stringify_callable(func) == 'func(*args, **kwargs)'
+    assert forge.repr_callable(func) == 'func(*args, **kwargs)'
     assert func(0, a=1, b=2, c=3) == ((0,), {'a': 1, 'b': 2, 'c': 3})
 
 Supported by:
@@ -344,7 +344,7 @@ Type annotation
     def func(myparam):
         return myparam
 
-    assert forge.stringify_callable(func) == 'func(myparam:int)'
+    assert forge.repr_callable(func) == 'func(myparam:int)'
 
 ``forge`` doesn't do anything with these type-hints, but there are a number of third party frameworks and packages out there that perform validation.
 
@@ -366,7 +366,7 @@ To provide a return-type annotation for a callable, use :func:`~forge.returns`:
     def func():
         return 42
 
-    assert forge.stringify_callable(func) == 'func() -> int'
+    assert forge.repr_callable(func) == 'func() -> int'
 
 Callables wrapped with :func:`forge.sign` or :func:`forge.resign` preserve the underlying return-type annotation if it's provided:
 
@@ -379,7 +379,7 @@ Callables wrapped with :func:`forge.sign` or :func:`forge.resign` preserve the u
         # signature remains the same: func() -> int
         return 42
 
-    assert forge.stringify_callable(func) == 'func() -> int'
+    assert forge.repr_callable(func) == 'func() -> int'
 
 
 .. _basic-usage_argument-defaults:
@@ -397,7 +397,7 @@ Argument defaults
     def func(myparam):
         return myparam
 
-    assert forge.stringify_callable(func) == 'func(myparam=5)'
+    assert forge.repr_callable(func) == 'func(myparam=5)'
     assert func() == 5
 
 To **generate** default values using a function, rather than providing a constant value, provide a ``factory`` keyword-argument to :class:`~forge.FParameter`:
@@ -411,7 +411,7 @@ To **generate** default values using a function, rather than providing a constan
     def func(when):
         return when
 
-    assert forge.stringify_callable(func) == 'func(when=<Factory datetime.now>)'
+    assert forge.repr_callable(func) == 'func(when=<Factory datetime.now>)'
     func_ts = func()
     assert (datetime.now() - func_ts).seconds < 1
 

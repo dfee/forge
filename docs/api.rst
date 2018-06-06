@@ -143,8 +143,4 @@ Marker
 Utils
 =====
 
-.. autofunction:: forge.getparam
-
-.. autofunction:: forge.hasparam
-
-.. autofunction:: forge.stringify_callable
+.. autofunction:: forge.repr_callable

@@ -1,19 +1,12 @@
-import builtins
-from collections import OrderedDict
-import collections.abc
+import collections
 import functools
 import inspect
 import types
 import typing
 
-from forge._counter import CreationOrderMeta
-from forge._exceptions import NoParameterError
 import forge._immutable as immutable
-from forge._marker import (
-    empty,
-    void,
-)
-
+from forge._counter import CreationOrderMeta
+from forge._marker import empty, void
 
 ## Parameter
 POSITIONAL_ONLY = inspect.Parameter.POSITIONAL_ONLY
@@ -626,6 +619,16 @@ class FParameter(immutable.Immutable, metaclass=CreationOrderMeta):
             metadata=metadata,
         )
 
+# Convenience
+pos = FParameter.create_positional_only
+arg = pok = FParameter.create_positional_or_keyword
+kwarg = kwo = FParameter.create_keyword_only
+ctx = FParameter.create_contextual
+vpo = FParameter.create_var_positional
+vkw = FParameter.create_var_keyword
+self_ = ctx('self')
+cls_ = ctx('cls')
+
 
 class VarPositional(collections.abc.Iterable):
     """
@@ -730,6 +733,9 @@ class VarPositional(collections.abc.Iterable):
             validator=validator,
             metadata=metadata,
         )
+
+# Convenience
+args = VarPositional()
 
 
 class VarKeyword(collections.abc.Mapping):
@@ -863,8 +869,11 @@ class VarKeyword(collections.abc.Mapping):
             metadata=metadata,
         )
 
+# Convenience
+kwargs = VarKeyword()
 
-# Common type hints for FParameterMap
+
+# Common type hints for FParameterSequence
 _TYPE_FPM_PARAMETERS = typing.Optional[
     typing.Union[
         typing.List[FParameter],
@@ -874,7 +883,7 @@ _TYPE_FPM_PARAMETERS = typing.Optional[
 _TYPE_FPM_VALIDATE = bool  # pylint: disable=C0103, invalid-name
 
 
-class FParameterMap(collections.abc.Mapping):
+class FParameterSequence(collections.abc.Mapping):
     # TODO: document
     # TODO: move to parameters
     def __init__(
@@ -885,7 +894,9 @@ class FParameterMap(collections.abc.Mapping):
         parameters = parameters or []
         if validate:
             self.validate(*parameters)
-        self._data = OrderedDict([(param.name, param) for param in parameters])
+        self._data = collections.OrderedDict([
+            (param.name, param) for param in parameters
+        ])
 
     def __getitem__(
             self,
@@ -1017,89 +1028,69 @@ class FParameterMap(collections.abc.Mapping):
                     )
 
 
-def getparam(
-        callable: typing.Callable[..., typing.Any],
-        name: str,
-        default: typing.Any = empty,
-    ) -> inspect.Parameter:
-    """
-    Gets a parameter object (either a :class.`inspect.Parameter` or a
-    :class:`~forge.FParameter`) by name from its respective
-    :class:`inspect.Signature` or :class:`~forge.FSignature`
+_T_PARAM = typing.TypeVar('_T_PARAM', inspect.Parameter, FParameter)
+_TYPE_FINDITER_PARAMETERS = typing.Iterable[_T_PARAM]
+_TYPE_FINDITER_SELECTOR = typing.Union[
+    str,
+    typing.Iterable[str],
+    typing.Callable[[_T_PARAM], bool],
+]
 
-    :param callable: the callable whose signature will be inspected
-    :param name: the name of the parameter to retrieve from the
-        :paramref:`.getparam.callable` signature
-    :param default: a default value to return if :paramref:`.getparam.name` is
-        not found in the signature of :paramref:`.getparam.callable`.
-    :raises TypeError: if :paramref:`.getparam.name` not found
-    :return: the :class:`inspect.Parameter` or :class:`~forge.FParameter` object
-        with :paramref:`.getparam.name` from :paramref:`.getparam.callable`, or
-        :paramref:`.getparam.default` if not found.
-    """
-    # pylint: disable=W0622, redefined-builtin
-    if not builtins.callable(callable):
-        raise TypeError('{} is not callable'.format(callable))
 
-    params = inspect.signature(callable).parameters
-    if default is not empty:
-        return params.get(name, default)
-    try:
-        return params[name]
-    except KeyError:
-        raise NoParameterError(
-            "'{callable_name}' has no parameter '{param_name}'".format(
-                callable_name=callable.__name__,
-                param_name=name,
-            )
+def finditer(
+        parameters: _TYPE_FINDITER_PARAMETERS,
+        selector: _TYPE_FINDITER_SELECTOR
+    ) -> typing.Iterator[_T_PARAM]:
+    """
+    Return an iterator yielding those parameters (of type
+    :class:`inspect.Parameter` or :class:`~forge.FParameter`) that are
+    mached by the selector.
+
+    :paramref:`~forge.finditer.selector` is used differently based on what is
+    supplied:
+    - str: a parameter is found if its :attr:`name` attribute is contained
+    - Iterable[str]: a parameter is found if its :attr:`name` attribute is
+        contained
+    - callable: a parameter is found if the callable (which receives the
+        parameter), returns a truthy value.
+
+    :param parameters: an iterable of :class:`inspect.Parameter` or
+        :class:`~forge.FParameter`
+    :param selector: an identifier which is used to determine whether a
+        parameter matches.
+    :return: an iterator yield parameters
+    """
+    if isinstance(selector, str):
+        return filter(lambda param: param.name == selector, parameters)
+    elif isinstance(selector, typing.Iterable):
+        return filter(lambda param: param.name in selector, parameters)
+    elif callable(selector):
+        return filter(selector, parameters)
+    else:
+        raise TypeError(
+            'selector must be a string, an iterable of strings or a callable'
         )
 
 
-def hasparam(callable: typing.Callable[..., typing.Any], name: str) -> bool:
+def get_context_parameter(parameters: typing.Iterable[FParameter]):
     """
-    Checks (by name) whether a parameter is taken by a callable.
+    Get the first context parameter from the provided parameters.
 
-    :param callable: a callable whose signature will be inspected
-    :param name: the name of the paramter to identify in the
-        :paramref:`.hasparam.callable` signature
-    :return: True if :paramref:`hasparam.callable` has
-        :paramref:`.hasparam.name` in its signature.
-    """
-    # pylint: disable=W0622, redefined-builtin
-    if not builtins.callable(callable):
-        raise TypeError('{} is not callable'.format(callable))
-    return name in inspect.signature(callable).parameters
-
-
-def get_var_positional_parameter(
-        *parameters: typing.Union[inspect.Parameter, FParameter],
-    ) -> typing.Optional[typing.Union[inspect.Parameter, FParameter]]:
-    """
-    Get the :term:`var-positional` :term:`parameter kind`
-    :class:`inspect.Parameter` of :class:`~forge.FParameter`.
-    If multiple :term:`var-positional` parameters are provided, only the first
-    is returned.
-
-    :param parameters: parameters to search for :term:`var-positional`
-        :term:`parameter kind`.
-    :return: the first :term:`var-positional` parameter from
-        :paramref:`get_var_positional_paramters.parameters` if it exists,
+    :param parameters: parameters to search for a ``contextual`` parameter
+    :return: the first :term:`var-keyword` parameter from
+        :paramref:`get_var_keyword_paramters.parameters` if it exists,
         else ``None``.
     """
-    for param in parameters:
-        if param.kind == inspect.Parameter.VAR_POSITIONAL:
-            return param
-    return None
+    try:
+        return next(finditer(parameters, lambda p: p.contextual))
+    except StopIteration:
+        return None
 
 
-def get_var_keyword_parameter(
-        *parameters: typing.Union[inspect.Parameter, FParameter],
-    ) -> typing.Optional[typing.Union[inspect.Parameter, FParameter]]:
+def get_var_keyword_parameter(parameters: _TYPE_FINDITER_PARAMETERS):
     """
-    Get the :term:`var-keyword` :term:`parameter kind`
-    :class:`inspect.Parameter` of :class:`~forge.FParameter`.
-    If multiple :term:`var-keyword` parameters are provided, only the first
-    is returned.
+    Get the first :term:`var-keyword` :term:`parameter kind` from the provided
+    parameters.
 
     :param parameters: parameters to search for :term:`var-keyword`
         :term:`parameter kind`.
@@ -1107,10 +1098,36 @@ def get_var_keyword_parameter(
         :paramref:`get_var_keyword_paramters.parameters` if it exists,
         else ``None``.
     """
-    for param in parameters:
-        if param.kind == inspect.Parameter.VAR_KEYWORD:
-            return param
-    return None
+    try:
+        return next(finditer(parameters, lambda p: p.kind is VAR_KEYWORD))
+    except StopIteration:
+        return None
+
+
+def get_var_positional_parameter(parameters: _TYPE_FINDITER_PARAMETERS):
+    """
+    Get the first :term:`var-positional` :term:`parameter kind` from the
+    provided parameters.
+
+    :param parameters: parameters to search for :term:`var-positional`
+        :term:`parameter kind`.
+    :return: the first :term:`var-positional` parameter from
+        :paramref:`get_var_positional_paramters.parameters` if it exists,
+        else ``None``.
+    """
+    try:
+        return next(finditer(parameters, lambda p: p.kind is VAR_POSITIONAL))
+    except StopIteration:
+        return None
+
+
+
+# Common type hints for FSignature
+_TYPE_FS_PARAMETERS = _TYPE_FPM_PARAMETERS
+_TYPE_FS_RETURN_ANNOTATION = typing.Any
+# pylint: disable=C0103, invalid-name
+_TYPE_FS__VALIDATE_PARAMETERS__ = _TYPE_FPM_VALIDATE
+# pylint: enable=C0103, invalid-name
 
 
 class FSignature(immutable.Immutable):
@@ -1173,67 +1190,31 @@ class FSignature(immutable.Immutable):
 
     def __init__(
             self,
-            parameters: typing.Optional[
-                typing.Union[
-                    typing.List[FParameter],
-                    typing.Tuple[FParameter, ...],
-                ]
-            ]=None,
+            parameters: _TYPE_FS_PARAMETERS = None,
             *,
-            return_annotation: typing.Any = empty.native,
-            __validate_parameter__: bool = False
+            return_annotation: _TYPE_FS_RETURN_ANNOTATION = empty.native,
+            __validate_parameters__: _TYPE_FS__VALIDATE_PARAMETERS__ = False
         ) -> None:
         # TODO: add return_annotation to docs
         # TODO: add __validate_parameter__ to docs
         super().__init__(
-            _data=FParameterMap(parameters),
+            parameters=FParameterSequence(
+                parameters,
+                validate=__validate_parameters__,
+            ),
             return_annotation=return_annotation
         )
 
-    @property
-    def context(self):
-        if not self.parameters:
-            return None
-        param0 = next(iter(self.parameters.values()))
-        return param0 if param0.contextual is True else None
-
-    @property
-    def var_positional(self):
-        return get_var_positional_parameter(*self.parameters.values())
-
-    @property
-    def var_keyword(self):
-        return get_var_keyword_parameter(*self.parameters.values())
-
-    def __str__(self):
-        sig = inspect.Signature(
+    def __str__(self) -> str:
+        sig = inspect.Signature(  # type: ignore
             [fp.native for fp in self.parameters.values()],
             return_annotation=self.return_annotation,
             __validate_parameters__=False,
         )
         return str(sig)
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return '<{} {}>'.format(type(self).__name__, self)
-
-    @property
-    def native(self):
-        """
-        Provides a representation of this :class:`~forge.FSignature` as an
-        instance of :class:`inspect.Signature`
-        """
-        return inspect.Signature([
-            param.native for param in self.parameters.values()
-            if not param.bound
-        ], return_annotation=self.return_annotation)
-
-    @property
-    def parameters(self):
-        """
-        Provides read-only mapping access to the underlying parameters
-        (instances of :class:`~forge.FParameter`)
-        """
-        return types.MappingProxyType(self._data)
 
     @classmethod
     def from_signature(cls, signature: inspect.Signature) -> 'FSignature':
@@ -1276,215 +1257,60 @@ class FSignature(immutable.Immutable):
         # pylint: disable=W0622, redefined-builtin
         return cls.from_signature(inspect.signature(callable))
 
+    @property
+    def native(self) -> inspect.Signature:
+        """
+        Provides a representation of this :class:`~forge.FSignature` as an
+        instance of :class:`inspect.Signature`
+        """
+        return inspect.Signature([
+            param.native for param in self.parameters.values()
+            if not param.bound
+        ], return_annotation=self.return_annotation)
 
-class CallArguments(immutable.Immutable):
-    """
-    An immutable container for call arguments, i.e. term:`var-positional`
-    (e.g. ``*args``) and :term:`var-keyword` (e.g. ``**kwargs``).
+    # TODO: move to FParameterSequence
+    @property
+    def context(self) -> typing.Optional[FParameter]:
+        if not self.parameters:
+            return None
+        param0 = next(iter(self.parameters.values()))
+        return param0 if param0.contextual is True else None
 
-    :param args: positional arguments used in a call
-    :param kwargs: keyword arguments used in a call
-    """
-    __slots__ = ('args', 'kwargs')
+    @property
+    def var_positional(self) -> typing.Optional[FParameter]:
+        return get_var_positional_parameter(self.parameters.values())
 
-    def __init__(
+    @property
+    def var_keyword(self) -> typing.Optional[FParameter]:
+        return get_var_keyword_parameter(self.parameters.values())
+
+    def replace(
             self,
-            *args: typing.Any,
-            **kwargs: typing.Any
-        ) -> None:
-        super().__init__(args=args, kwargs=types.MappingProxyType(kwargs))
-
-    def __repr__(self) -> str:
-        arguments = ', '.join([
-            *[repr(arg) for arg in self.args],
-            *['{}={}'.format(k, v) for k, v in self.kwargs.items()],
-        ])
-        return '<{} ({})>'.format(type(self).__name__, arguments)
-
-    @classmethod
-    def from_bound_arguments(
-            cls,
-            bound: inspect.BoundArguments,
-        ) -> 'CallArguments':
+            *,
+            parameters: typing.Union[_TYPE_FS_PARAMETERS, void] = void,
+            return_annotation: _TYPE_FS_RETURN_ANNOTATION = void,
+            __validate_parameters__: _TYPE_FS__VALIDATE_PARAMETERS__ = True
+        ) -> 'FSignature':
         """
-        A factory method that creates an instance of
-        :class:`~forge._signature.CallArguments` from an instance of
-        :class:`instance.BoundArguments` generated from
-        :meth:`inspect.Signature.bind` or :meth:`inspect.Signature.bind_partial`
+        Returns a copy of this :class:`~forge.FSignature` with replaced
+        attributes.
 
-        :param bound: an instance of :class:`inspect.BoundArguments`
-        :return: an unpacked version of :class:`inspect.BoundArguments`
+        :param parameters: see :paramref:`~forge.FSignature.parameters`
+        :param return_annotation: see
+            :paramref:`~forge.FSignature.return_annotation`
+        :param __validate_parameters__: see
+            :paramref:`~forge.FSignature.__validate_parameters__`
+        :return: a new copy of :class:`~forge.FSignature` revised with
+            replacements
         """
-        return cls(*bound.args, **bound.kwargs)  # type: ignore
+        return type(self)(  # type: ignore
+            parameters=parameters \
+                if parameters is not void \
+                else list(self.parameters.values()),
+            return_annotation=return_annotation \
+                if return_annotation is not void \
+                else self.return_annotation,
+            __validate_parameters__=__validate_parameters__,
+        )
 
-    def to_bound_arguments(
-            self,
-            signature: inspect.Signature,
-            partial: bool = False,
-        ) -> inspect.BoundArguments:
-        """
-        Generates an instance of :class:inspect.BoundArguments` for a given
-        :class:`inspect.Signature`.
-        Does not raise if invalid or incomplete arguments are provided, as the
-        underlying implementation uses :meth:`inspect.Signature.bind_partial`.
-
-        :param signature: an instance of :class:`inspect.Signature` to which
-            :paramref:`.CallArguments.args` and
-            :paramref:`.CallArguments.kwargs` will be bound.
-        :param partial: does not raise if invalid or incomplete arguments are
-            provided, as the underlying implementation uses
-            :meth:`inspect.Signature.bind_partial`
-        :return: an instance of :class:`inspect.BoundArguments` to which
-            :paramref:`.CallArguments.args` and
-            :paramref:`.CallArguments.kwargs` are bound.
-        """
-        return signature.bind_partial(*self.args, **self.kwargs) \
-            if partial \
-            else signature.bind(*self.args, **self.kwargs)
-
-
-def sort_arguments(
-        to_: typing.Union[typing.Callable[..., typing.Any], inspect.Signature],
-        named: typing.Optional[typing.Dict[str, typing.Any]] = None,
-        unnamed: typing.Optional[typing.Iterable] = None,
-    ) -> CallArguments:
-    """
-    Iterates over the :paramref:`~forge.sort_arguments.named` arguments and
-    assinging the values to the parameters with the key as a name.
-    :paramref:`~forge.sort_arguments.unnamed` arguments are assigned to the
-    :term:`var-positional` parameter.
-
-    Usage:
-
-    .. testcode::
-
-        import forge
-
-        def func(a, b=2, *args, c, d=5, **kwargs):
-            return (a, b, args, c, d, kwargs)
-
-        assert forge.callwith(
-            func,
-            named=dict(a=1, c=4, e=6),
-            unnamed=(3,),
-        ) == forge.CallArguments(1, 2, 3, c=4, d=5, e=6)
-
-    .. versionadded:: v18.5.1
-
-    :param to_: a callable to call with the named and unnamed parameters
-    :param named: a mapping of parameter names to argument values.
-        Appropriate values are all :term:`positional-only`,
-        :term:`positional-or-keyword`, and :term:`keyword-only` arguments,
-        as well as additional :term:`var-keyword` mapped arguments which will
-        be used to construct the :term:`var-positional` argument on
-        :paramref:`~forge.callwith.to_` (if it has such an argument).
-        Parameters on :paramref:`~forge.callwith.to_` with default values can
-        be ommitted (as expected).
-    :param unnamed: an iterable to be passed as the :term:`var-positional`
-        parameter. Requires :paramref:`~forge.callwith.to_` to accept
-        :term:`var-positional` arguments.
-    """
-    if not isinstance(to_, inspect.Signature):
-        to_ = inspect.signature(to_)
-    to_ba = to_.bind_partial()
-    to_ba.apply_defaults()
-
-    arguments = named.copy() if named else {}
-
-    vpo_param = get_var_positional_parameter(*to_.parameters.values())
-    vkw_param = get_var_keyword_parameter(*to_.parameters.values())
-
-    for name, param in to_.parameters.items():
-        if param in (vpo_param, vkw_param):
-            continue
-
-        elif name in arguments:
-            to_ba.arguments[name] = arguments.pop(name)
-            continue
-
-        elif param.default is empty.native:
-            raise ValueError(
-                "Non-default parameter '{}' has no argument value".format(name)
-            )
-
-    if arguments:
-        if not vkw_param:
-            raise TypeError('Cannot sort arguments ({})'.\
-            format(', '.join(arguments.keys())))
-        to_ba.arguments[vkw_param.name].update(arguments)
-
-    if unnamed:
-        if not vpo_param:
-            raise TypeError("Cannot sort var-positional arguments")
-        to_ba.arguments[vpo_param.name] = tuple(unnamed)
-
-    return CallArguments.from_bound_arguments(to_ba)
-
-
-def callwith(
-        to_: typing.Callable[..., typing.Any],
-        named: typing.Optional[typing.Dict[str, typing.Any]] = None,
-        unnamed: typing.Optional[typing.Iterable] = None,
-    ) -> typing.Any:
-    """
-    Calls and returns the result of :paramref:`~forge.callwith.to_` with the
-    supplied ``named`` and ``unnamed`` arguments.
-
-    The arguments and their order as supplied to
-    :paramref:`~forge.callwith.to_` is determined by
-    iterating over the :paramref:`~forge.callwith.named` arguments and
-    assinging the values to the parameters with the key as a name.
-    :paramref:`~forge.callwith.unnamed` arguments are assigned to the
-    :term:`var-positional` parameter.
-
-    Usage:
-
-    .. testcode::
-
-        import forge
-
-        def func(a, b=2, *args, c, d=5, **kwargs):
-            return (a, b, args, c, d, kwargs)
-
-        assert forge.callwith(
-            func,
-            named=dict(a=1, c=4, e=6),
-            unnamed=(3,),
-        ) == (1, 2, (3,), 4, 5, {'e': 6})
-
-    .. versionadded:: v18.5.1
-
-    :param to_: a callable to call with the named and unnamed parameters
-    :param named: a mapping of parameter names to argument values.
-        Appropriate values are all :term:`positional-only`,
-        :term:`positional-or-keyword`, and :term:`keyword-only` arguments,
-        as well as additional :term:`var-keyword` mapped arguments which will
-        be used to construct the :term:`var-positional` argument on
-        :paramref:`~forge.callwith.to_` (if it has such an argument).
-        Parameters on :paramref:`~forge.callwith.to_` with default values can
-        be ommitted (as expected).
-    :param unnamed: an iterable to be passed as the :term:`var-positional`
-        parameter. Requires :paramref:`~forge.callwith.to_` to accept
-        :term:`var-positional` arguments.
-    """
-    call_args = sort_arguments(to_, named, unnamed)
-    return to_(*call_args.args, **call_args.kwargs)
-
-
-def stringify_callable(callable: typing.Callable) -> str:
-    """
-    Build a string representation of a callable, including the callable's
-    :attr:``__name__``, its :class:`inspect.Parameter`s and its ``return type``
-
-    usage::
-
-        >>> stringify_callable(stringify_callable)
-        'stringify_callable(callable: Callable) -> str'
-
-    :param callable: a Python callable to build a string representation of
-    :return: the string representation of the function
-    """
-    # pylint: disable=W0622, redefined-builtin
-    sig = inspect.signature(callable)
-    name = getattr(callable, '__name__', str(callable))
-    return '{}{}'.format(name, sig)
+fsignature = FSignature.from_callable  # Convenience

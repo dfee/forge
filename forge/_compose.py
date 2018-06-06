@@ -1,33 +1,22 @@
-from abc import abstractmethod
 import asyncio
-import builtins
 import functools
 import inspect
 import types
 import typing
 
-from forge._exceptions import RevisionError
 import forge._immutable as immutable
-from forge._marker import (
-    empty,
-    void,
-)
+from forge._marker import empty, void
 from forge._signature import (
-    CallArguments,
+    _TYPE_FINDITER_SELECTOR,
     FParameter,
     FSignature,
+    fsignature,
+    finditer,
     _get_pk_string,
     get_var_keyword_parameter,
     get_var_positional_parameter,
 )
-
-# TODO: SortRevision
-
-# TODO: remove
-_revise_return_type = typing.Union[
-    typing.List[FParameter],
-    typing.Tuple[FParameter, ...],
-]
+from forge._utils import CallArguments
 
 
 class Mapper(immutable.Immutable):
@@ -154,19 +143,25 @@ class Mapper(immutable.Immutable):
         return '<{} {} => {}>'.format(type(self).__name__, pubstr, privstr)
 
     def get_context(self, arguments: typing.Mapping) -> typing.Any:
+        """
+        Retrieves the context arguments value (if a context parameter exists)
+        :param arguments: a mapping of parameter names to argument values
+        :return: the argument value for the context paramter (if it exists),
+            otherwise ``None``.
+        """
         return arguments[self.fsignature.context.name] \
             if self.fsignature.context \
             else None
 
     @staticmethod
     def map_parameters(
-            fsignature: FSignature,
-            signature: inspect.Signature,
+            from_: FSignature,
+            to_: inspect.Signature,
         ) -> types.MappingProxyType:
         '''
         Build a mapping of parameters from the
-        :paramref:`.Mapper.map_parameters.fsignature` to the
-        :paramref:`.Mapper.map_parameters.signature`.
+        :paramref:`.Mapper.map_parameters.from_` to the
+        :paramref:`.Mapper.map_parameters.to_`.
 
         Strategy rules:
         #. every *to_* :term:`positional-only` must be mapped to
@@ -176,38 +171,37 @@ class Mapper(immutable.Immutable):
         #. *from_* :term:`var-positional` requires *to_* :term:`var-positional`
         #. *from_* :term:`var-keyword` requires *to_* :term:`var-keyword`
 
-        :param fsignature: the :class:`~forge.FSignature` to map from
-        :param signature: the :class:`inspect.Signature` to map to
+        :param from_: the :class:`~forge.FSignature` to map from
+        :param to_: the :class:`inspect.Signature` to map to
         :return: a :class:`types.MappingProxyType` that shows how arguments
             are mapped.
         '''
         # pylint: disable=W0622, redefined-builtin
-        # TODO: fsignature / signature -> from_ / to_
-        fparam_vpo = fsignature.var_positional
-        fparam_vkw = fsignature.var_keyword
-        fparam_idx = {
+        from_vpo_param = from_.var_positional
+        from_vkw_param = from_.var_keyword
+        from_param_index = {
             fparam.interface_name: fparam
-            for fparam in fsignature.parameters.values()
-            if fparam not in (fparam_vpo, fparam_vkw)
+            for fparam in from_.parameters.values()
+            if fparam not in (from_vpo_param, from_vkw_param)
         }
 
-        param_vpo = get_var_positional_parameter(
-            *signature.parameters.values()
+        to_vpo_param = get_var_positional_parameter(
+            to_.parameters.values()
         )
-        param_vkw = get_var_keyword_parameter(
-            *signature.parameters.values()
+        to_vkw_param = get_var_keyword_parameter(
+            to_.parameters.values()
         )
-        param_idx = {
+        to_param_index = {
             param.name: param
-            for param in signature.parameters.values()
-            if param not in (param_vpo, param_vkw)
+            for param in to_.parameters.values()
+            if param not in (to_vpo_param, to_vkw_param)
         }
 
         mapping = {}
-        for name in list(param_idx):
-            param = param_idx.pop(name)
+        for name in list(to_param_index):
+            param = to_param_index.pop(name)
             try:
-                param_t = fparam_idx.pop(name)
+                param_t = from_param_index.pop(name)
             except KeyError:
                 # masked mapping, e.g. f() -> g(a=1)
                 if param.default is not empty.native:
@@ -223,84 +217,78 @@ class Mapper(immutable.Immutable):
             else:
                 mapping[param_t.name] = name
 
-        if fparam_vpo:
+        if from_vpo_param:
             # invalid mapping, e.g. f(*args) -> g()
-            if not param_vpo:
+            if not to_vpo_param:
                 kind_repr = _get_pk_string(FParameter.VAR_POSITIONAL)
                 raise TypeError(
                     "Missing requisite mapping from {kind_repr} parameter "
-                    "'{fparam_vpo.name}'".\
-                    format(kind_repr=kind_repr, fparam_vpo=fparam_vpo)
+                    "'{from_vpo_param.name}'".\
+                    format(kind_repr=kind_repr, from_vpo_param=from_vpo_param)
                 )
             # var-positional mapping, e.g. f(*args) -> g(*args)
-            mapping[fparam_vpo.name] = param_vpo.name
+            mapping[from_vpo_param.name] = to_vpo_param.name
 
-        if fparam_vkw:
+        if from_vkw_param:
             # invalid mapping, e.g. f(**kwargs) -> g()
-            if not param_vkw:
+            if not to_vkw_param:
                 kind_repr = _get_pk_string(FParameter.VAR_KEYWORD)
                 raise TypeError(
                     "Missing requisite mapping from {kind_repr} parameter "
-                    "'{fparam_vkw.name}'".\
-                    format(kind_repr=kind_repr, fparam_vkw=fparam_vkw)
+                    "'{from_vkw_param.name}'".\
+                    format(kind_repr=kind_repr, from_vkw_param=from_vkw_param)
                 )
             # var-keyword mapping, e.g. f(**kwargs) -> g(**kwargs)
-            mapping[fparam_vkw.name] = param_vkw.name
+            mapping[from_vkw_param.name] = to_vkw_param.name
 
-        if fparam_idx:
+        if from_param_index:
             # invalid mapping, e.g. f(a) -> g()
-            if not param_vkw:
+            if not to_vkw_param:
                 raise TypeError(
-                    "Missing requisite mapping from parameters ({})".\
-                    format(', '.join([pt.name for pt in fparam_idx.values()]))
+                    "Missing requisite mapping from parameters ({})".format(
+                        ', '.join([pt.name for pt in from_param_index.values()])
+                    )
                 )
             # to-var-keyword mapping, e.g. f(a) -> g(**kwargs)
-            for param_t in fparam_idx.values():
-                mapping[param_t.name] = param_vkw.name
+            for param_t in from_param_index.values():
+                mapping[param_t.name] = to_vkw_param.name
 
         return types.MappingProxyType(mapping)
 
 
-class FParameterSelector:
+class Revision:
     """
-    Takes a selector (a string, an iterable of strings, or a callable that
-    receives an instance of :class:`~forge.FParameter` and returns a boolean
-    reflecting whether a match was made.
+    This is a base class for other revisions.
+    It implements two methods of primary importance:
+    :meth:`~forge.Revision.revise` and :meth:`~forge.Revision.__call__`.
 
-    :param selector: a string, iterable of strings, or a callable to match
-        an instance of :class:`~forge.FParameter` against. If the value is a
-        string than it's matched against :paramref:`~forge.FParameter.name`.
-    :return: a boolean if the :class:`~forge.FParameter` matched
+    Revisions can act as decorators, in which case the callable is wrapped in
+    a function that translates the supplied arguments to the parameters the
+    underlying callable expects::
+
+        import forge
+
+        @forge.Revision()
+        def myfunc():
+            pass
+
+    Revisions can also operate on :class:`~forge.FSignature` instances
+    directly by providing an ``FSignature`` to :meth:`~forge.Revision.revise`::
+
+        import forge
+
+        in_ = forge.FSignature()
+        out_ = forge.Revision().revise(in_)
+        assert in_ == out_
+
+    The :meth:`~forge.Revision.revise` method is expected to return an instance
+    of :class:`~forge.FSignature` that **is not validated**. This can be
+    achieved by supplying ``__validate_attributes__=False`` to either
+    :class:`~forge.FSignature` or :meth:`~forge.FSignature.replace`.
+
+    Instances of :class:`~forge.Revision` don't have any initialization
+    parameters or public attributes, but subclasses instances often do.
     """
-    def __init__(
-            self,
-            selector: typing.Union[
-                str,
-                typing.Iterable[str],
-                typing.Callable[[FParameter], bool],
-            ],
-        ) -> None:
-        self.selector = selector
-
-    def __call__(self, parameter: FParameter) -> bool:
-        if isinstance(self.selector, str):
-            return self.selector == parameter.name
-        elif isinstance(self.selector, typing.Iterable):
-            return parameter.name in self.selector
-        return self.selector(parameter) # self.selector is a callable
-
-    def __repr__(self) -> str:
-        return '<{} {}>'.format(type(self).__name__, self.selector)
-
-
-class BaseRevision:
-    """
-    Functions as an identity revision
-    """
-    @abstractmethod
-    def revise(self, previous: FSignature) -> FSignature:
-        raise NotImplementedError()
-
     def __call__(
             self,
             callable: typing.Callable[..., typing.Any]
@@ -315,7 +303,7 @@ class BaseRevision:
 
         :param callable: a :term:`callable` whose signature to revise
         :return: a function with the revised signature that calls into the
-            provided :paramref:`~forge.BaseRevision.__call__.callable`
+            provided :paramref:`~forge.Revision.__call__.callable`
         """
         # pylint: disable=W0622, redefined-builtin
         if hasattr(callable, '__mapper__'):
@@ -348,34 +336,236 @@ class BaseRevision:
         inner.__signature__ = inner.__mapper__.public_signature  # type: ignore
         return inner
 
+    def revise(self, previous: FSignature) -> FSignature:
+        """
+        Applies the identity revision: ``previous`` is returned unmodified.
 
-class BatchRevision(BaseRevision):
+        No validation is performed on the updated :class:`~forge.FSignature`,
+        allowing it to be used as an intermediate revision in the context of
+        :class:`~forge.compose`.
+
+        :param previous: the :class:`~forge.FSignature` to modify
+        :return: a modified instance of :class:`~forge.FSignature`
+        """
+        # pylint: disable=R0201, no-self-use
+        return previous
+
+
+## Group Revisions
+class compose(Revision):  # pylint: disable=C0103, invalid-name
+    """
+    Batch revision that takes :class:`~forge.Revision` instances and applies
+    their :meth:`~forge.Revision.revise` using :func:`functools.reduce`.
+
+    :param revisions: instances of :class:`~forge.Revision`, used to revise
+        the :class:`~forge.FSignature`.
+    """
     def __init__(self, *revisions):
         for rev in revisions:
-            if not isinstance(rev, BaseRevision):
+            if not isinstance(rev, Revision):
                 raise TypeError("received non-revision '{}'".format(rev))
         self.revisions = revisions
 
-    def revise(
-            self,
-            *previous: FParameter
-        ) -> _revise_return_type:
+    def revise(self, previous: FSignature) -> FSignature:
+        """
+        Applies :paramref:`~forge.compose.revisions`
+
+        No validation is explicitly performed on the updated
+        :class:`~forge.FSignature`, allowing it to be used as an intermediate
+        revision in the context of (another) :class:`~forge.compose`.
+
+        :param previous: the :class:`~forge.FSignature` to modify
+        :return: a modified instance of :class:`~forge.FSignature`
+        """
         return functools.reduce(
-            lambda previous, revision: revision.revise(*previous),
+            lambda previous, revision: revision.revise(previous),
             self.revisions,
             previous,
         )
 
 
-class IdentityRevision(BaseRevision):
-    def revise(
+class copy(Revision):  # pylint: disable=C0103, invalid-name
+    """
+    The ``copy`` revision takes a :term:`callable` and optionally parameters to
+    include or exclude, and applies the resultant signature.
+
+    :param callable: a callable whose signature is copied
+    :param include: a string, iterable of strings, or a function that receives
+        an instance of :class:`~forge.FParameter` and returns a truthy value
+        whether to include it.
+    :param exclude: a string, iterable of strings, or a function that receives
+        an instance of :class:`~forge.FParameter` and returns a truthy value
+        whether to exclude it.
+    :raises TypeError: if ``include`` and ``exclude`` are provided
+    """
+    def __init__(
             self,
-            *previous: FParameter
-        ) -> _revise_return_type:
-        return previous
+            callable: typing.Callable[..., typing.Any],
+            *,
+            include: typing.Optional[_TYPE_FINDITER_SELECTOR] = None,
+            exclude: typing.Optional[_TYPE_FINDITER_SELECTOR] = None,
+        ) -> None:
+        # pylint: disable=W0622, redefined-builtin
+        if include is not None and exclude is not None:
+            raise TypeError(
+                "expected 'include', 'exclude', or neither, but received both"
+            )
+
+        self.signature = fsignature(callable)
+        self.include = include
+        self.exclude = exclude
+
+    def revise(self, previous: FSignature) -> FSignature:
+        """
+        Copies the signature of :paramref:`~forge.copy.callable`.
+        If provided, only a subset of parameters are copied, as determiend by
+        :paramref:`~forge.copy.include` and :paramref:`~forge.copy.exclude`.
+
+        Unlike most subclasses of :class:`~forge.Revision`, validation is
+        performed on the updated :class:`~forge.FSignature`.
+        This is because :class:`~forge.copy` takes a :term:`callable` which
+        is required by Python to have a valid signature, so it's impossible
+        to return an invalid signature.
+
+        :param previous: the :class:`~forge.FSignature` to modify
+        :return: a modified instance of :class:`~forge.FSignature`
+        """
+        if self.include:
+            return self.signature.replace(parameters=list(
+                finditer(self.signature.parameters.values(), self.include)
+            ))
+        elif self.exclude:
+            excluded = list(
+                finditer(self.signature.parameters.values(), self.exclude)
+            )
+            return self.signature.replace(parameters=[
+                param for param in self.signature.parameters.values()
+                if param not in excluded
+            ])
+        return self.signature
 
 
-class SynthesizeRevision(BaseRevision):
+class manage(Revision):  # pylint: disable=C0103, invalid-name
+    """
+    Revision that revises a :class:`~forge.FSignature` with a user-supplied
+    revision function.
+
+    .. testcode::
+
+        import forge
+
+        def reverse(previous):
+            return previous.replace(
+                parameters=list(previous.parameters.values())[::-1],
+                __validate_parameters__=False,
+            )
+
+        @forge.manage(reverse)
+        def func(a, b, c):
+            pass
+
+        assert forge.repr_callable(func) == 'func(c, b, a)'
+
+    :param callable: a callable that alters the previous signature
+    """
+    def __init__(
+            self,
+            callable: typing.Callable[[FSignature], FSignature]
+        ) -> None:
+        # pylint: disable=W0622, redefined-builtin
+        self.callable = callable
+
+    def revise(self, previous: FSignature) -> FSignature:
+        """
+        Passes the signature to :paramref:`~forge.manage.callable` for
+        revision.
+
+        .. warning::
+
+            No validation is typically performed in the :attr:`revise` method.
+            Consider providing `False` as an argument value to
+            :paramref:`~forge.FSignature.__validate_parameters__`, so that this
+            revision can be used within the context of a
+            :class:`~forge.compose` revision.
+
+        :param previous: the :class:`~forge.FSignature` to modify
+        :return: a modified instance of :class:`~forge.FSignature`
+        """
+        return self.callable(previous)
+
+
+class returns(Revision): # pylint: disable=invalid-name
+    """
+    The ``returns`` revision updates a signature's ``return-type`` annotation.
+
+    .. testcode::
+
+        import forge
+
+        @forge.returns(int)
+        def x():
+            pass
+
+        assert forge.repr_callable(x) == "x() -> int"
+
+    :param type: the ``return type`` for the factory
+    :ivar return_annotation: the ``return type`` used for revising signatures
+    """
+
+    def __init__(self, type: typing.Any = empty) -> None:
+        # pylint: disable=W0622, redefined-builtin
+        self.return_annotation = type
+
+    def __call__(
+            self,
+            callable: typing.Callable[..., typing.Any]
+        ) -> typing.Callable[..., typing.Any]:
+        """
+        Changes the return value of the supplied callable.
+        If the callable is already revised (has an
+        :attr:`__mapper__` attribute), then the ``return type`` annoation is
+        set without wrapping the function.
+        Otherwise, the :attr:`__mapper__` and :attr:`__signature__` are updated
+
+        :param callable: see :paramref:`~forge.Revision.__call__.callable`
+        :return: either the input callable with an updated return type
+            annotation, or a wrapping function with the appropriate return type
+            annotation as determined by the strategy described above.
+        """
+        # pylint: disable=W0622, redefined-builtin
+        if hasattr(callable, '__mapper__'):
+            return super().__call__(callable)
+
+        elif hasattr(callable, '__signature__'):
+            sig = callable.__signature__  # type: ignore
+            callable.__signature__ = sig.replace(  # type: ignore
+                return_annotation=self.return_annotation
+            )
+
+        else:
+            callable.__annotations__['return'] = self.return_annotation
+
+        return callable
+
+    def revise(self, previous: FSignature) -> FSignature:
+        """
+        Applies the return type annotation,
+        :paramref:`~forge.returns.return_annotation`, to the input signature.
+
+        No validation is performed on the updated :class:`~forge.FSignature`,
+        allowing it to be used as an intermediate revision in the context of
+        :class:`~forge.compose`.
+
+        :param previous: the :class:`~forge.FSignature` to modify
+        :return: a modified instance of :class:`~forge.FSignature`
+        """
+        return FSignature(
+            list(previous.parameters.values()),
+            return_annotation=self.return_annotation,
+        )
+
+
+class synthesize(Revision):  # pylint: disable=C0103, invalid-name
     """
     Revision that builds a new signature from instances of
     :class:`~forge.FParameter`
@@ -414,8 +604,8 @@ class SynthesizeRevision(BaseRevision):
             def func2(**kwargs):
                 pass
 
-            assert forge.stringify_callable(func1) == 'func1(b, a)'
-            assert forge.stringify_callable(func2) == 'func2(a, b)'
+            assert forge.repr_callable(func1) == 'func1(b, a)'
+            assert forge.repr_callable(func2) == 'func2(a, b)'
 
     :param parameters: :class:`~forge.FParameter` instances to be ordered
     :param named_parameters: :class:`~forge.FParameter` instances to be
@@ -443,33 +633,165 @@ class SynthesizeRevision(BaseRevision):
         """
         Produces a signature with the parameters provided at initialization.
 
-        :param previous: previous signature
-        :return: updated signature
+        No validation is performed on the updated :class:`~forge.FSignature`,
+        allowing it to be used as an intermediate revision in the context of
+        :class:`~forge.compose`.
+
+        :param previous: the :class:`~forge.FSignature` to modify
+        :return: a modified instance of :class:`~forge.FSignature`
         """
-        return previous.replace(parameters=self.parameters)
+        return previous.replace(  # type: ignore
+            parameters=self.parameters,
+            __validate_parameters__=False,
+        )
+
+# Convenience name
+sign = synthesize  # pylint: disable=C0103, invalid-name
 
 
-class DeleteRevision(BaseRevision):
-    def __init__(self, selector):
-        self.selector = FParameterSelector(selector)
+class sort(Revision): # pylint: disable=C0103, invalid-name
+    """
+    Revision that orders parameters. The default orders parameters ina common-
+    sense way:
 
-    def revise(
+    #. :term:`parameter kind`, then
+    #. parameters having a default value
+    #. parameter name lexicographically
+
+    .. testcode::
+
+        import forge
+
+        @forge.sort()
+        def func(c, b, a):
+            pass
+
+        assert forge.repr_callable(func) == 'func(a, b, c)'
+
+    :param sortkey: a function provided to the builtin :func:`sorted`.
+        Receives instances of :class:`~forge.FParameter`, and should return a
+        key to sort on.
+    """
+    @staticmethod
+    def _sortkey(param):
+        """
+        Default sortkey for :meth:`~forge.sort.revise` that orders by:
+
+        #. :term:`parameter kind`, then
+        #. parameters having a default value
+        #. parameter name lexicographically
+
+        :return: tuple to sort by
+        """
+        return (param.kind, param.default is not empty, param.name or '')
+
+    def __init__(
             self,
-            *previous: FParameter
-        ) -> _revise_return_type:
-        next_, selected = [], None
-        for prev in previous:
-            if self.selector(prev):
-                selected = prev
-                continue
-            next_.append(prev)
+            sortkey: typing.Optional[
+                typing.Callable[[FParameter], typing.Any]
+            ]=None
+        ) -> None:
+        self.sortkey = sortkey or self._sortkey
 
-        if not selected:
-            raise RevisionError('cannot delete parameter: not found')
-        return next_
+    def revise(self, previous: FSignature) -> FSignature:
+        """
+        Applies the sorting :paramref:`~forge.returns.return_annotation`, to
+        the input signature.
+
+        No validation is performed on the updated :class:`~forge.FSignature`,
+        allowing it to be used as an intermediate revision in the context of
+        :class:`~forge.compose`.
+
+        :param previous: the :class:`~forge.FSignature` to modify
+        :return: a modified instance of :class:`~forge.FSignature`
+        """
+        return previous.replace(  # type: ignore
+            parameters=sorted(previous.parameters.values(), key=self.sortkey),
+            __validate_parameters__=False,
+        )
 
 
-class InsertRevision(BaseRevision):
+## Unit Revisions
+class delete(Revision):  # pylint: disable=C0103, invalid-name
+    """
+    Revision that deletes one (or more) parameters from an
+    :class:`~forge.FSignature`.
+
+    :param selector: a string, iterable of strings, or a function that
+        receives an instance of :class:`~forge.FParameter` and returns a
+        truthy value whether to exclude it.
+    :param multiple: whether to delete all parameters that match the
+        ``selector``
+    :param raising: whether to raise an exception if the ``selector`` matches
+        no parameters
+    """
+    def __init__(
+            self,
+            selector: _TYPE_FINDITER_SELECTOR,
+            multiple: bool = False,
+            raising: bool = True
+        ) -> None:
+        self.selector = selector
+        self.multiple = multiple
+        self.raising = raising
+
+    def revise(self, previous: FSignature) -> FSignature:
+        """
+        Deletes one or more parameters from ``previous`` based on instance
+        attributes.
+
+        No validation is performed on the updated :class:`~forge.FSignature`,
+        allowing it to be used as an intermediate revision in the context of
+        :class:`~forge.compose`.
+
+        :param previous: the :class:`~forge.FSignature` to modify
+        :return: a modified instance of :class:`~forge.FSignature`
+        """
+        excluded = list(finditer(previous.parameters.values(), self.selector))
+        if not excluded:
+            if self.raising:
+                raise ValueError(
+                    "No parameter matched selector '{}'".format(self.selector)
+                )
+            return previous
+
+        if not self.multiple:
+            del excluded[1:]
+
+        # https://github.com/python/mypy/issues/5156
+        return previous.replace(  # type: ignore
+            parameters=[
+                param for param in previous.parameters.values()
+                if param not in excluded
+            ],
+            __validate_parameters__=False,
+        )
+
+
+class insert(Revision):  # pylint: disable=C0103, invalid-name
+    """
+    Revision that inserts a new parameter into a signature at an index,
+    before a selector, or after a selector.
+
+    .. testcode::
+
+        import forge
+
+        @forge.insert(forge.arg('a'), index=0)
+        def func(b, **kwargs):
+            pass
+
+        assert forge.repr_callable(func) == 'func(a, b, **kwargs)'
+
+    :param parameter: the parameter to insert into the signature
+    :param index: the index to insert the parameter into the signature
+    :param before: a string, iterable of strings, or a function that
+        receives an instance of :class:`~forge.FParameter` and returns a
+        truthy value whether to place the provided parameter before it.
+    :param after: a string, iterable of strings, or a function that
+        receives an instance of :class:`~forge.FParameter` and returns a
+        truthy value whether to place the provided parameter before it.
+    """
     def __init__(self, parameter, *, index=None, before=None, after=None):
         provided = dict(filter(
             lambda i: i[1] is not None,
@@ -486,50 +808,101 @@ class InsertRevision(BaseRevision):
 
         self.parameter = parameter
         self.index = index
-        self.before = FParameterSelector(before) if before else None
-        self.after = FParameterSelector(after) if after else None
+        self.before = before
+        self.after = after
 
-    def revise(
-            self,
-            *previous: FParameter
-        ) -> _revise_return_type:
+    def revise(self, previous: FSignature) -> FSignature:
+        """
+        Inserts the :paramref:`~forge.insert.parameter` into a signature.
+
+        No validation is performed on the updated :class:`~forge.FSignature`,
+        allowing it to be used as an intermediate revision in the context of
+        :class:`~forge.compose`.
+
+        :param previous: the :class:`~forge.FSignature` to modify
+        :return: a modified instance of :class:`~forge.FSignature`
+        """
         if self.before:
-            next_, visited = [], False
-            for prev in previous:
-                if not visited and self.before(prev):
-                    visited = True
-                    next_.append(self.parameter)
-                next_.append(prev)
-            if not visited:
-                raise RevisionError(
-                    'cannot insert {fp} before selector; selector not found'.\
-                    format(fp=self.parameter)
+            try:
+                match = next(finditer(
+                    previous.parameters.values(),
+                    self.before,
+                ))
+            except StopIteration:
+                raise ValueError(
+                    "No parameter matched selector '{}'".format(self.before)
                 )
 
+            parameters = []
+            for param in previous.parameters.values():
+                if param is match:
+                    parameters.append(self.parameter)
+                parameters.append(param)
         elif self.after:
-            next_, visited = [], False
-            for prev in previous:
-                next_.append(prev)
-                if not visited and self.after(prev):
-                    visited = True
-                    next_.append(self.parameter)
-            if not visited:
-                raise RevisionError(
-                    'cannot insert {fp} after selector; selector not found'.\
-                    format(fp=self.parameter)
+            try:
+                match = next(finditer(
+                    previous.parameters.values(),
+                    self.after,
+                ))
+            except StopIteration:
+                raise ValueError(
+                    "No parameter matched selector '{}'".format(self.after)
                 )
 
+            parameters = []
+            for param in previous.parameters.values():
+                parameters.append(param)
+                if param is match:
+                    parameters.append(self.parameter)
         else:
-            next_ = list(previous)
-            next_.insert(self.index, self.parameter)
+            parameters = list(previous.parameters.values())
+            parameters.insert(self.index, self.parameter)
 
-        return next_
+        # https://github.com/python/mypy/issues/5156
+        return previous.replace(  # type: ignore
+            parameters=parameters,
+            __validate_parameters__=False,
+        )
 
 
-class ModifyRevision(BaseRevision):
+class modify(Revision):  # pylint: disable=C0103, invalid-name
+    """
+    Revision that modifies one or more parameters.
+
+    .. testcode::
+
+        import forge
+
+        @forge.modify('a', kind=forge.FParameter.POSITIONAL_ONLY)
+        def func(a):
+            pass
+
+        assert forge.repr_callable(func) == 'func(a, /)'
+
+    :param selector: a string, iterable of strings, or a function that
+        receives an instance of :class:`~forge.FParameter` and returns a
+        truthy value whether to place the provided parameter before it.
+    :param multiple: whether to delete all parameters that match the
+        ``selector``
+    :param raising: whether to raise an exception if the ``selector`` matches
+        no parameters
+    :param kind: see :paramref:`~forge.FParameter.kind`
+    :param name: see :paramref:`~forge.FParameter.name`
+    :param interface_name: see :paramref:`~forge.FParameter.interface_name`
+    :param default: see :paramref:`~forge.FParameter.default`
+    :param factory: see :paramref:`~forge.FParameter.factory`
+    :param type: see :paramref:`~forge.FParameter.type`
+    :param converter: see :paramref:`~forge.FParameter.converter`
+    :param validator: see :paramref:`~forge.FParameter.validator`
+    :param bound: see :paramref:`~forge.FParameter.bound`
+    :param contextual: see :paramref:`~forge.FParameter.contextual`
+    :param metadata: see :paramref:`~forge.FParameter.metadata`
+    """
     def __init__(
             self,
-            selector,
+            selector: _TYPE_FINDITER_SELECTOR,
+            multiple: bool = False,
+            raising: bool = True,
             *,
             kind=void,
             name=void,
@@ -542,9 +915,12 @@ class ModifyRevision(BaseRevision):
             bound=void,
             contextual=void,
             metadata=void
-        ):
+        ) -> None:
         # pylint: disable=W0622, redefined-builtin
+        # pylint: disable=R0914, too-many-locals
         self.selector = selector
+        self.multiple = multiple
+        self.raising = raising
         self.updates = {
             k: v for k, v in {
                 'kind': kind,
@@ -561,26 +937,122 @@ class ModifyRevision(BaseRevision):
             }.items() if v is not void
         }
 
-    def revise(
+    def revise(self, previous: FSignature) -> FSignature:
+        """
+        Revises one or more parameters that matches
+        :paramref:`~forge.modify.selector`.
+
+        No validation is performed on the updated :class:`~forge.FSignature`,
+        allowing it to be used as an intermediate revision in the context of
+        :class:`~forge.compose`.
+
+        :param previous: the :class:`~forge.FSignature` to modify
+        :return: a modified instance of :class:`~forge.FSignature`
+        """
+        matched = list(finditer(previous.parameters.values(), self.selector))
+        if not matched:
+            if self.raising:
+                raise ValueError(
+                    "No parameter matched selector '{}'".format(self.selector)
+                )
+            return previous
+
+        if not self.multiple:
+            del matched[1:]
+
+        # https://github.com/python/mypy/issues/5156
+        return previous.replace(  # type: ignore
+            parameters=[
+                param.replace(**self.updates) if param in matched else param
+                for param in previous.parameters.values()
+            ],
+            __validate_parameters__=False,
+        )
+
+
+class replace(Revision):  # pylint: disable=C0103, invalid-name
+    """
+    Revision that replaces a parameter.
+
+    .. testcode::
+
+        import forge
+
+        @forge.replace('a', forge.kwo('b', 'a'))
+        def func(a):
+            pass
+
+        assert forge.repr_callable(func) == 'func(*, b)'
+
+    :param selector: a string, iterable of strings, or a function that
+        receives an instance of :class:`~forge.FParameter` and returns a
+        truthy value whether to place the provided parameter before it.
+    :param parameter: an instance of :class:`~forge.FParameter` to replace
+        the selected parameter with.
+    """
+    def __init__(
             self,
-            *previous: FParameter
-        ) -> _revise_return_type:
-        if callable(self.selector):
-            return [
-                prev.replace(**self.updates) \
-                    if self.selector(prev) \
-                    else prev
-                for prev in previous
-            ]
-        return [
-            prev.replace(**self.updates) \
-                if prev.name == self.selector \
-                else prev
-            for prev in previous
-        ]
+            selector: _TYPE_FINDITER_SELECTOR,
+            parameter: FParameter
+        ) -> None:
+        self.selector = selector
+        self.parameter = parameter
+
+    def revise(self, previous: FSignature) -> FSignature:
+        """
+        Replaces a parameter that matches
+        :paramref:`~forge.replace.selector`.
+
+        No validation is performed on the updated :class:`~forge.FSignature`,
+        allowing it to be used as an intermediate revision in the context of
+        :class:`~forge.compose`.
+
+        :param previous: the :class:`~forge.FSignature` to modify
+        :return: a modified instance of :class:`~forge.FSignature`
+        """
+        try:
+            match = next(finditer(previous.parameters.values(), self.selector))
+        except StopIteration:
+            raise ValueError(
+                "No parameter matched selector '{}'".format(self.selector)
+            )
+
+        # https://github.com/python/mypy/issues/5156
+        return previous.replace(  # type: ignore
+            parameters=[
+                self.parameter if param is match else param
+                for param in previous.parameters.values()
+            ],
+            __validate_parameters__=False,
+        )
 
 
-class TranslocateRevision(BaseRevision):
+class translocate(Revision):  # pylint: disable=C0103, invalid-name
+    """
+    Revision that translocates (moves) a parameter to a new position in a
+    signature.
+
+    .. testcode::
+
+        import forge
+
+        @forge.translocate('a', index=1)
+        def func(a, b):
+            pass
+
+        assert forge.repr_callable(func) == 'func(b, a)'
+
+    :param selector: a string, iterable of strings, or a function that
+        receives an instance of :class:`~forge.FParameter` and returns a
+        truthy value whether to place the provided parameter before it.
+    :param index: the index to insert the parameter into the signature
+    :param before: a string, iterable of strings, or a function that
+        receives an instance of :class:`~forge.FParameter` and returns a
+        truthy value whether to place the provided parameter before it.
+    :param after: a string, iterable of strings, or a function that
+        receives an instance of :class:`~forge.FParameter` and returns a
+        truthy value whether to place the provided parameter before it.
+    """
     def __init__(self, selector, *, index=None, before=None, after=None):
         provided = dict(filter(
             lambda i: i[1] is not None,
@@ -588,185 +1060,85 @@ class TranslocateRevision(BaseRevision):
         ))
         if not provided:
             raise TypeError(
-                'expected keyword argument `index`, `before`, or `after`'
+                "expected keyword argument 'index', 'before', or 'after'"
             )
         elif len(provided) > 1:
             raise TypeError(
-                'expected `index`, `before` or `after` received multiple'
+                "expected 'index', 'before' or 'after' received multiple"
             )
 
-        self.selector = FParameterSelector(selector)
+        self.selector = selector
         self.index = index
-        self.before = FParameterSelector(before) if before else None
-        self.after = FParameterSelector(after) if after else None
+        self.before = before
+        self.after = after
 
-    def revise(
-            self,
-            *previous: FParameter
-        ) -> _revise_return_type:
-        if self.before:
-            next_, selected, idx = [], None, None
-            for i, prev in enumerate(previous):
-                if not selected and self.selector(prev):
-                    selected = prev
-                    continue
-                if idx is None and self.before(prev):
-                    idx = i if not selected else i - 1
-                next_.append(prev)
-            if not selected:
-                raise TypeError(
-                    "Cannot move as 'selector' failed to match parameter"
-                )
-            elif not idx:
-                raise TypeError(
-                    "Cannot move as 'before' failed to match parameter"
-                )
-            next_.insert(idx, selected)
-
-        elif self.after:
-            next_, selected, idx = [], None, None
-            for i, prev in enumerate(previous):
-                if not selected and self.selector(prev):
-                    selected = prev
-                    continue
-                if idx is None and self.after(prev):
-                    idx = i + 1 if not selected else i
-                next_.append(prev)
-            if not selected:
-                raise TypeError(
-                    "Cannot move as 'selector' failed to match parameter"
-                )
-            elif not idx:
-                raise TypeError(
-                    "Cannot move as 'after' failed to match parameter"
-                )
-            next_.insert(idx, selected)
-
-        else:
-            next_, selected = [], None
-            for prev in previous:
-                if not selected and self.selector(prev):
-                    selected = prev
-                    continue
-                next_.append(prev)
-            if not selected:
-                raise TypeError(
-                    "Cannot translocate as 'selector' failed to match "
-                    "parameter"
-                )
-            next_.insert(self.index, selected)
-
-        return next_
-
-
-class ManageRevision(BaseRevision):
-    """
-    Revision that takes a function for parameter processing. Example:
-
-    .. testcode::
-
-        import forge
-
-        def reverse(*previous):
-            return previous[::-1]
-
-        @forge.manage(reverse)
-        def func(a, b, c):
-            pass
-
-        assert forge.stringify_callable(func) == 'func(c, b, a)'
-
-    :param callable: a user supplied callable for enhanaced processing of the
-        fparameters. Should have the signature: ()
-    """
-    def __init__(
-            self,
-            callable: typing.Callable[..., _revise_return_type]
-        ) -> None:
-        # pylint: disable=W0622, redefined-builtin
-        self.callable = callable
-
-    def revise(
-            self,
-            *previous: FParameter
-        ) -> _revise_return_type:
+    def revise(self, previous: FSignature) -> FSignature:
         """
-        Returns with a call to the user supplied :term:`callable`,
-        :paramref:`~forge._compose.ManageRevision.callable`
+        Translocates (moves) the :paramref:`~forge.insert.parameter` into a
+        new position in the signature.
 
-        :param previous: previous :class:`~forge.FParameter` instances
-        :return: :class:`~forge.FParameter` instances for building a new
-            :class:`~forge.FSignature`
+        No validation is performed on the updated :class:`~forge.FSignature`,
+        allowing it to be used as an intermediate revision in the context of
+        :class:`~forge.compose`.
+
+        :param previous: the :class:`~forge.FSignature` to modify
+        :return: a modified instance of :class:`~forge.FSignature`
         """
-        return self.callable(*previous)
-
-
-class CopyRevision(BaseRevision):
-    def __init__(self, callable, *, include=None, exclude=None):
-        # pylint: disable=W0622, redefined-builtin
-        if include is not None and exclude is not None:
-            raise TypeError(
-                "expected 'include' or 'exclude', but received both"
+        try:
+            selected = next(finditer(
+                previous.parameters.values(),
+                self.selector,
+            ))
+        except StopIteration:
+            raise ValueError(
+                "No parameter matched selector '{}'".format(self.selector)
             )
 
-        self.callable = callable
-        if include is not None:
-            self.include = include \
-                if builtins.callable(include) \
-                else lambda param: param.name in include
-            self.exclude = None
-        elif exclude is not None:
-            self.exclude = exclude \
-                if builtins.callable(exclude) \
-                else lambda param: param.name in exclude
-            self.include = None
+        if self.before:
+            try:
+                before = next(finditer(
+                    previous.parameters.values(),
+                    self.before,
+                ))
+            except StopIteration:
+                raise ValueError(
+                    "No parameter matched selector '{}'".format(self.before)
+                )
+
+            parameters = []
+            for param in previous.parameters.values():
+                if param is before:
+                    parameters.append(selected)
+                parameters.append(param)
+        elif self.after:
+            try:
+                after = next(finditer(
+                    previous.parameters.values(),
+                    self.after,
+                ))
+            except StopIteration:
+                raise ValueError(
+                    "No parameter matched selector '{}'".format(self.after)
+                )
+
+            parameters = []
+            for param in previous.parameters.values():
+                parameters.append(param)
+                if param is after:
+                    parameters.append(selected)
         else:
-            self.include = None
-            self.exclude = None
+            parameters = [
+                param for param in previous.parameters.values()
+                if param is not selected
+            ]
+            parameters.insert(self.index, selected)
+
+        # https://github.com/python/mypy/issues/5156
+        return previous.replace(  # type: ignore
+            parameters=parameters,
+            __validate_parameters__=False,
+        )
 
 
-    def revise(
-            self,
-            *previous: FParameter
-        ) -> _revise_return_type:
-        fsig = FSignature.from_callable(self.callable)
-        if self.include:
-            return [fp for fp in fsig.values() if self.include(fp)]
-        elif self.exclude:
-            return [fp for fp in fsig.values() if not self.exclude(fp)]
-        return list(fsig.values())
-
-
-class ReplaceRevision(BaseRevision):
-    def __init__(self, selector, parameter):
-        self.selector = FParameterSelector(selector)
-        self.parameter = parameter
-
-    def revise(
-            self,
-            *previous: FParameter
-        ) -> _revise_return_type:
-        return [
-            self.parameter if self.selector(prev) else prev
-            for prev in previous
-        ]
-
-
-def returns(
-        type: typing.Any = empty
-    ) -> typing.Callable[[typing.Callable[..., typing.Any]], typing.Any]:
-    """
-    Produces a factory that updates callables' signatures to reflect a  new
-    ``return-type`` annotation
-
-    :param type: the ``return-type`` for the factory
-    :return: a factory that takes a callable and updates it to reflect
-        the ``return-type`` as provided to :paramref:`.returns.type`
-    """
-    # TODO: revise impl after update "Revision"
-    # pylint: disable=W0622, redefined-builtin
-    def inner(callable):
-        # pylint: disable=W0622, redefined-builtin
-        set_return_type(callable, empty.ccoerce_native(type))
-        return callable
-    return inner
+# Convenience name
+move = translocate  # pylint: disable=C0103, invalid-name

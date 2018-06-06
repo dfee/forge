@@ -69,7 +69,7 @@ The primary purpose of forge is to alter the public signature of functions:
     def myfunc(*args, **kwargs):
         return (args, kwargs)
 
-    assert forge.stringify_callable(myfunc) == \
+    assert forge.repr_callable(myfunc) == \
         'myfunc(positional, /, argument, *args, keyword, **kwargs)'
 
     args, kwargs = myfunc(1, 2, 3, 4, 5, keyword='abc', extra='xyz')
@@ -93,7 +93,7 @@ You can re-map a parameter to a different ParameterKind (e.g. positional-only to
     def myfunc(colour):
         return colour
 
-    assert forge.stringify_callable(myfunc) == "myfunc(*, color='blue')"
+    assert forge.repr_callable(myfunc) == "myfunc(*, color='blue')"
     assert myfunc() == 'blue'
 
 
@@ -108,7 +108,7 @@ You can also supply type annotations for usage with linters like mypy:
     def to_str(number):
         return str(number)
 
-    assert forge.stringify_callable(to_str) == 'to_str(number:int) -> str'
+    assert forge.repr_callable(to_str) == 'to_str(number:int) -> str'
     assert to_str(3) == '3'
 
 
@@ -134,7 +134,7 @@ You can validate arguments by either passing a validator or an iterable (such as
     def send_presents(count):
         return [Present() for i in range(count)]
 
-    assert forge.stringify_callable(send_presents) == 'send_presents(count)'
+    assert forge.repr_callable(send_presents) == 'send_presents(count)'
 
     try:
         send_presents(3)

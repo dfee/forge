@@ -156,7 +156,7 @@ Looking back on the code for :func:`logging.debug`, let's try and improve upon t
     critical = make_explicit(logging.critical)
     exception = make_explicit(logging.exception)
 
-    assert forge.stringify_callable(debug) == \
+    assert forge.repr_callable(debug) == \
         'debug(msg, *args, exc_info=None, extra=None, stack_info=False)'
 
 We've aided our intuition about how to use these functions.
