@@ -8,112 +8,292 @@ Forging signatures
 ==================
 
 ``forge``'s primary function is to allow users to revise and refine callable signatures.
-This functionality is achieved on builtins, functions, and class instances with the special `__call__` dunder method by wrapping a callable with the special wrapping factory :func:`forge.sign`.
+Builtins, functions, and class instance callables (classes with the special `__call__` dunder method) are all supported.
 
-The minimal example is to wrap a function that takes no arguments (has no parameters) with a function that also takes no arguments (and has no parameters).
+The most practical example might be to :class:`~forge.copy` the signature from one function to another:
+
+.. testcode::
+
+    from types import SimpleNamespace
+    from datetime import datetime
+    import forge
+
+    class Article(SimpleNamespace):
+        pass
+
+    def create_article(title=None, text=None):
+        return Article(title=title, text=text, created_at=datetime.now())
+
+    @forge.copy(create_article)
+    def create_draft(**kwargs):
+        kwargs['title'] = kwargs['title'] or '(draft)'
+        return create_article(**kwargs)
+
+    assert forge.repr_callable(create_draft) == \
+        "create_draft(title=None, text=None)"
+
+    draft = create_draft()
+    assert draft.title == '(draft)'
+
+As we can see, ``create_draft`` no longer exposes the :term:`var-keyword` parameter ``kwargs``.
+Instead, it has the same function signature as ``create_article``.
+
+As you might expect, passing a keyword-argument that's not ``title`` or ``text`` raises a TypeError.
+
+.. testcode::
+
+    try:
+        create_draft(author='Abe Lincoln')
+    except TypeError as exc:
+        assert exc.args[0] == "create_draft() got an unexpected keyword argument 'author'"
+
+Indeed, the signature is enforced!
+How about creating another method for editing the article?
+Let's keep in mind that we might want to erase the ``text`` of the article, so a value of ``None`` is significant.
+
+In this example we're going to use four revisions: :class:`~forge.compose` (to perform a batch of revisions), :class:`~forge.copy` (to copy another function's signature), :class:`~forge.insert` (to add an additional parameter), and :class:`~forge.modify` (to alter one or more parameters).
+
+.. testcode::
+
+    @forge.compose(
+        forge.copy(create_article),
+        forge.insert(forge.arg('article'), index=0),
+        forge.modify(
+            lambda param: param.name != 'article',
+            multiple=True,
+            default=forge.void,
+        ),
+    )
+    def edit_article(article, **kwargs):
+        for k, v in kwargs.items():
+            if v is not forge.void:
+                setattr(article, k, v)
+
+    assert forge.repr_callable(edit_article) == \
+        "edit_article(article, title=<void>, text=<void>)"
+
+    edit_article(draft, text='hello world')
+    assert draft.title == '(draft)'
+    assert draft.text == 'hello world'
+
+As your ``Article`` class gains more attributes (``author``, ``tags``, ``status``, ``published_on``, etc.) the amount of effort to maintenance, update and test these parameters - or a subset of these parameters – becomes costly and taxing.
+
+
+
+
+
+The "unit of work" with ``forge`` is the ``revision``.
+A ``revision`` is an instance of :class:`~forge.Revision` (or an instance of a specialized subclass).
+``Revision`` subclasses often take initialized arguments, and :meth:`~forge.Revision.revise` :class:`~forge.FSignature` instances.
+The most practical use of a ``revision`` is as a decorator:
 
 .. testcode::
 
     import forge
 
-    @forge.sign()
+    @forge.Revision()
     def func():
         pass
 
-    assert forge.repr_callable(func) == 'func()'
+The specialized subclasses are incredibly useful for surgically revising signatures.
 
-Forging a signature works as expected with ``staticmethod``, ``classmethod``, the instance ``method``, as well as ``property`` and ``__call__``.
-The following example is a bit tedious, but its relevance is that it demonstrates that :func:`forge.sign` is transparent to underlying code.
+
+.. _basic-revisions_group:
+
+Revisions (group)
+=================
+
+The following revisions operate primarily on the signature as a whole.
+
+.. _basic-revisions_group-compose:
+
+compose
+-------
+
+The :class:`~forge.compose` revision allows for creating a batch revision ordered from top-to-bottom without validation performed between intermediate steps.
 
 .. testcode::
 
-    import random
     import forge
 
-    smin = 0
-    smax = 10
+    func = lambda a, b, c: None
 
-    class Klass:
-        cmin = 11
-        cmax = 20
-
-        def __init__(self):
-            self.imin = 21
-            self.imax = 30
-
-        @staticmethod
-        @forge.sign()
-        def srandom():
-            return random.randint(smin, smax)
-
-        @classmethod
-        @forge.sign(forge.cls)
-        def crandom(cls):
-            return random.randint(cls.cmin, cls.cmax)
-
-        @property
-        @forge.sign(forge.self)
-        def irange(self):
-            return range(self.imin, self.imax)
-
-        @forge.sign(forge.self)
-        def irandom(self):
-            return random.randint(self.imin, self.imax)
-
-        @forge.sign(forge.self)
-        def __call__(self):
-            return (self.imin, self.imax)
-
-    klass = Klass()
-
-    # Check signatures
-    assert forge.repr_callable(Klass.srandom) == 'srandom()'
-    assert forge.repr_callable(Klass.crandom) == 'crandom()'
-    assert forge.repr_callable(klass.irandom) == 'irandom()'
-    assert forge.repr_callable(klass) == '{}()'.format(klass)
-
-    assert smin <= Klass.srandom() <= smax
-    assert Klass.cmin <= Klass.crandom() <= Klass.cmax
-
-    assert klass.imin <= klass.irandom() <= klass.imax
-    assert klass.irange == range(klass.imin, klass.imax)
-    assert klass() == (klass.imin, klass.imax)
-
-
-And, this works as expected for coroutine functions:
-
-.. doctest::
-
-    import inspect
-    import forge
-
-    @forge.sign()
-    async def func():
+    @forge.compose(
+        forge.copy(func),
+        forge.modify('c', default=None)
+    )
+    def func2(**kwargs):
         pass
 
-    assert inspect.iscoroutinefunction(func)
+    assert forge.repr_callable(func2) == 'func2(a, b, c=None)'
 
-The original function is available, unmodified at :attr:`func.__wrapped__`.
-In addition, there are two additional attributes on the function, an instance of :class:`inspect.Signature`, and a :class:`~forge.Mapper` instance available at :attr:`__mapper__` that holds information about the new signature, the wrapped callable, and how to *map* arguments between the old and new signatures.
+If we were to define recreate this without :class:`~forge.compose`, it would look like:
 
-Function authors don't need to worry about their code signatures being altered as it's an implementation detail.
-This expands the dynamic functionality of Python *upwards*.
-This is exciting because while we've been able to dynamically create ``class`` objects by calling :func:``type(name, bases, namespace)``, **we've been unable to dynamically define function parameters at runtime**.
+.. testcode::
+
+    import forge
+
+    func = lambda a, b, c: None
+
+    @forge.modify('c', default=None)
+    @forge.copy(func)
+    def func2(**kwargs):
+        pass
+
+    assert forge.repr_callable(func2) == 'func2(a, b, c=None)'
+
+Notice how :class:`~forge.modify` comes before :class:`~forge.copy` in this latter example?
+That's because the Python interpreter builds ``func2``, passes it to the the instance of :class:`~forge.copy`, and then passes *that* return value to :class:`~forge.modify`.
+
+:class:`~forge.compose` is therefore as a useful tool to reason about your code top-to-bottom, rather than in an inverted manner.
+
+In addition, if you were to to revise a signature so that it's no longer valid in an intermediate step (say you wanted to give a parameter a default value, but it's followed by another parameter of the same :term:`parameter kind` without a default value), :class:`~forge.compose` allows for signatures to have an invalid intermediate state:
+
+.. testcode::
+
+    import forge
+
+    func = lambda a, b, c: None
+
+    @forge.compose(
+        forge.copy(func),
+        forge.modify('a', default=None),
+        forge.move('a', after='c'),
+    )
+    def func2(**kwargs):
+        pass
+
+    assert forge.repr_callable(func2) == 'func2(b, c, a=None)'
+
+After the ``modify`` revision, but before the ``move`` revisions, the signature is ``func2(a=None, b, c)``, but of course a :term:`positional-only` or :term:`positional-or-keyword` parameter with a default must follow parameters of the same kind *without* defaults.
 
 .. note::
 
-    Sometimes you'll want to further simplify the forged signature, and to help there is a convenience function :func:`forge.resign` that revises a signature further without providing a second-level of nesting.
-    Take a look at the :doc:`api` for more information.
+    The :class:`~forge.compose` revision accepts all other revisions (including :class:`~forge.compose`, itself) as arguments.
+
+
+.. _basic-revisions_group-copy:
+
+copy
+----
+
+The :class:`~forge.copy` revision is straightforward: use it when you want to *copy* the signature from another callable.
+
+.. testcode::
+
+    import forge
+
+    func = lambda a, b, c: None
+
+    @forge.copy(func)
+    def func2(**kwargs):
+        pass
+
+    assert forge.repr_callable(func2) == 'func2(a, b, c)'
+
+As you can see, the signature of ``func`` is copied in its entirety to ``func2``.
+
+.. note::
+
+    In order to :class:`~forge.copy` a signature, the receiving callable must either have a :term:`var-keyword` parameter which collects the extra keyword arguments (as demonstrated above), or be pre-defined with all the same parameters:
+
+    .. testcode::
+
+        import forge
+
+        func = lambda a, b, c: None
+
+        @forge.copy(func)
+        def func2(a=1, b=2, c=3):
+            pass
+
+        assert forge.repr_callable(func2) == 'func2(a, b, c)'
+
+    The exception is the :term:`var-positional` parameter.
+    If the new signature takes a :term:`var-positional` parameter (e.g. ``*args``), then the receiving function must also accept a :term:`var-positional` parameter.
+
+
+.. _basic-revisions_group-manage:
+
+manage
+------
+
+The :class:`~forge.manage` revision lets you supply your own function that receives an instance of :class:`~forge.FSignature`, and returns a new instance. Because :class:`~forge.FSignature` is *immutable*, consider using :meth:`~forge.FSignature.replace` to create a new :class:`~forge.FSignature` with updated ``parameters`` or an updated ``return_annotation``
+
+.. testcode::
+
+    import forge
+
+    reverse = lambda prev: prev.replace(parameters=prev[::-1])
+
+    @forge.manage(reverse)
+    def func(a, b, c):
+        pass
+
+    assert forge.repr_callable(func) == 'func(c, b, a)'
+
+
+.. _basic-revisions_group-returns:
+
+returns
+-------
+
+The :class:`~forge.returns` revision alters the return type annotation of the receiving function.
+In the case that there are no other revisions, :class:`~forge.returns` updates the receiving signature without wrapping it.
+
+.. testcode::
+
+    import forge
+
+    @forge.returns(int)
+    def func():
+        pass
+
+    assert forge.repr_callable(func) == 'func() -> int'
+
+Of course, if you've defined a return type annotation on a function that has a forged signature, it's return type annotation will stay in place:
+
+.. testcode::
+
+    import forge
+
+    @forge.compose()
+    def func() -> int:
+        pass
+
+    assert forge.repr_callable(func) == 'func() -> int'
+
+
+.. _basic-revisions_group-synthesize:
+
+synthesize / sign
+-----------------
+
+The :class:`~forge.synthesize` revision (also known as :data:`~forge.sign`) allows you to construct a signature by hand.
+
+.. testcode::
+
+    import forge
+
+    @forge.sign(
+        forge.pos('a'),
+        forge.arg('b'),
+        *forge.args,
+        c=forge.kwo(),
+        **forge.kwargs,
+    )
+    def func(*args, **kwargs):
+        pass
+
+    assert forge.repr_callable(func) == 'func(a, /, b, *args, c, **kwargs)'
 
 .. warning::
 
-    When supplying previously-created parameters to :func:`.sign` or :func:`.resign`, those parameters will be ordered by their creation order.
+    When supplying parameters to :class:`~forge.synthesize` or :data:`~forge.sign`, unnamed parameter arguments are ordered by the order they were supplied, whereas named paramter arguments are ordered by their ``createion_order``
 
-    This is because Python implementations prior to ``3.7`` don't guarantee the ordering of keyword-arguments.
+    This design decision is a consequence of Python <= 3.6 not guaranteeing insertion-order for dictionaries (and thus an unorderd :term:`var-keyword` argument).
 
-    Therefore, it is recommended that when supplying pre-created
-    parameters to :func:`.sign` or :func:`.resign` to supply them as
-    positional arguments:
+    It is therefore recommended that when supplying pre-created parameters to :func:`.sign` or :func:`.resign` to supply them as positional arguments:
 
     .. testcode::
 
@@ -132,6 +312,172 @@ This is exciting because while we've been able to dynamically create ``class`` o
 
         assert forge.repr_callable(func1) == 'func1(b, a)'
         assert forge.repr_callable(func2) == 'func2(a, b)'
+
+
+.. _basic-revisions_group-sort:
+
+sort
+----
+
+By default, the :class:`~forge.sort` revision sorts the parameters by :term:`parameter kind <kind>`, by whether they have a default value, and then by the name (lexicographically).
+
+.. testcode::
+
+    import forge
+
+    @forge.sort()
+    def func(c, b, a, *, f=None, e, d):
+        pass
+
+    assert forge.repr_callable(func) == 'func(a, b, c, *, d, e, f=None)'
+
+:class:`~forge.sort` also accepts a user-defined function (:paramref:`~forge.sort.sortkey`) that receives the signature's :class:`~forge.FParameter` instances and emits a key for sorting.
+The underlying implementation relies on :func:`builtins.sorted`, so head on over to the Python docs to jog your memory on how to use ``sortkey``.
+
+
+.. _basic-revisions_unit:
+
+Revisions (unit)
+================
+
+The following revisions work on one or more individual parameters of a signature.
+As with the group revisions (above), the underlying function remains unmodified.
+
+
+.. _basic-revisions_unit-delete:
+
+delete
+------
+
+The :class:`~forge.delete` revision removes a parameter from the signature.
+This revision requires the receiving function's parameter to have a default value.
+If no default value is provided, a :exc:`TypeError` will be raised.
+
+.. testcode::
+
+    import forge
+
+    @forge.delete('a')
+    def func(a=1, b=2, c=3):
+        pass
+
+    assert forge.repr_callable(func) == 'func(b=2, c=3)'
+
+
+.. _basic-revisions_unit-insert:
+
+insert
+------
+
+The :class:`~forge.insert` revision adds a parameter or a sequence of parameters into a signature.
+This revision takes the :class:`~forge.FParameter` to insert, and one of the following: :paramref:`~forge.insert.index`, :paramref:`~forge.insert.before`, or :paramref:`~forge.insert.after`.
+If ``index`` is supplied, it must be an integer, whereas ``before`` and ``after`` must be the :paramref:`~forge.FParameter.name` of a parameter, an iterable of parameter names, or a function that receives a parameter and returns ``True`` if the paramter matches.
+
+.. testcode::
+
+    import forge
+
+    @forge.insert(forge.arg('a'), index=0)
+    def func(b, c, **kwargs):
+        pass
+
+    assert forge.repr_callable(func) == 'func(a, b, c, **kwargs)'
+
+Or, to insert multiple parameters using :paramref:`~forge.FParameter.after` with a parameter name:
+
+.. testcode::
+
+    import forge
+
+    @forge.insert([forge.arg('b'), forge.arg('c')], after='a')
+    def func(a, **kwargs):
+        pass
+
+    assert forge.repr_callable(func) == 'func(a, b, c, **kwargs)'
+
+
+.. _basic-revisions_unit-modify:
+
+modify
+------
+
+The :class:`~forge.modify` revision modifies one or more of the receiving function's parameters.
+It takes a :paramref:`~forge.modify.selector` argument (a parameter name, an iterable of names, or a callable that takes a parameter and returns ``True`` if matched), (optionally) a :paramref:`~forge.modify.multiple` argument (whether to apply the modification to all matching parameters), and keyword-arguments that map to the attributes of the underlying :class:`~forge.FParameter` to modify.
+
+.. testcode::
+
+    import forge
+
+    @forge.modify('c', default=None)
+    def func(a, b, c):
+        pass
+
+    assert forge.repr_callable(func) == 'func(a, b, c=None)'
+
+.. warning::
+
+    When using :class:`~forge.modify` to alter a signature's parameters, keep an eye on the :term:`parameter kind` of surrounding parameters and whether other parameters of the same :term:`parameter kind` lack default values.
+
+    In Python, :term:`positional-only` paramters are followed by :term:`positional-or-keyword` parameters. After that comes the :term:`var-positional` parameter, then any :term:`keyword-only` parameters, and finally an optional :term:`var-keyword` parameter.
+
+    Using :class:`~forge.compose` and :class:`~forge.sort` can be helpful here to ensure that your paramters are properly ordered.
+
+    .. testcode::
+
+        import forge
+
+        @forge.compose(
+            forge.modify('b', kind=forge.FParameter.POSITIONAL_ONLY),
+            forge.sort(),
+        )
+        def func(a, b, c):
+            pass
+
+        assert forge.repr_callable(func) == 'func(b, /, a, c)'
+
+
+.. _basic-revisions_unit-replace:
+
+replace
+-------
+
+The :class:`~forge.replace` revision replaces a parameter outright.
+This is a helpful alternative to ``modify`` when it's easier to replace a parameter outright than to alter its state.
+:class:`~forge.replace` takes a :paramref:`~forge.replace.selector` argument (a string for matching parameter names, an iterable of strings that contain a parameter's name, or a function that is passed the signature's :class:`~forge.FSignature` parameters and returns ``True`` upon a match) and a new :class:`~forge.FParameter` instance.
+
+.. testcode::
+
+    import forge
+
+    @forge.replace('a', forge.pos('a'))
+    def func(a=0, b=1, c=2):
+        pass
+
+    assert forge.repr_callable(func) == 'func(a, /, b=1, c=2)'
+
+
+.. _basic-revisions_unit-translocate:
+
+translocate / move
+------------------
+
+The :class:`~forge.translocate` revision (also known as :data:`~forge.move`) moves a parameter to another location in the signature.
+:paramref:`~forge.translocate.selector`, :paramref:`~forge.translocate.before` and :paramref:`~forge.translocate.after` take a string for matching parameter names, an iterable of strings that contain a parameter's name, or a function that is passed the signature's :class:`~forge.FSignature` parameters and returns ``True`` upon a match.
+One (and only one) of :paramref:`~forge.translocate.index`, :paramref:`~forge.translocate.before`, or :paramref:`~forge.translocate.after`, must be provided.
+
+.. testcode::
+
+    import forge
+
+    @forge.move('a', after='c')
+    def func(a, b, c):
+        pass
+
+    assert forge.repr_callable(func) == 'func(b, c, a)'
+
+Function authors don't need to worry about their code signatures being altered as it's an implementation detail.
+This expands the dynamic functionality of Python *upwards*.
+This is exciting because while we've been able to dynamically create ``class`` objects by calling :func:``type(name, bases, namespace)``, **we've been unable to dynamically define function parameters at runtime**.
 
 
 .. _basic-usage_reflecting-a-signature:
@@ -165,10 +511,10 @@ This can be simplified with :func:`~forge.reflect`, a convenience for applying t
     def func(a, b, c, *args, **kwargs):
         return (a, b, c, args, kwargs)
 
-    @forge.reflect(func)
+    @forge.copy(func)
     def log_and_func(*args, **kwargs):
         logging.warning('{}'.format(dict(args=args, kwargs=kwargs)))
-        return forge.callwith(func, vpo=args, vkw=kwargs)
+        return forge.callwith(func, named=kwargs, unnamed=args)
 
     assert forge.repr_callable(log_and_func) == "log_and_func(a, b, c, *args, **kwargs)"
     assert log_and_func(1, 2, 3, 4, d=5) == (1, 2, 3, (4,), {'d': 5})
@@ -183,10 +529,10 @@ This can be simplified with :func:`~forge.reflect`, a convenience for applying t
     def func(a, b, c, *args, **kwargs):
         return (a, b, c, args, kwargs)
 
-    @forge.reflect(func, exclude=['args'])
+    @forge.copy(func, exclude=['args'])
     def log_and_func(**kwargs):
         logging.warning('{}'.format(kwargs))
-        return forge.callwith(func, vkw=kwargs)
+        return forge.callwith(func, named=kwargs)
 
     assert forge.repr_callable(log_and_func) == "log_and_func(a, b, c, **kwargs)"
     assert log_and_func(1, 2, 3, d=5) == (1, 2, 3, (), {'d': 5})
@@ -272,7 +618,6 @@ If a callable's parameter doesn't have a default value, you can still remove it,
 
     assert forge.repr_callable(func) == 'func()'
     assert func() == 0
-
 
 Supported by:
 
@@ -572,7 +917,7 @@ Here are some tips for effective use of metadata:
         def func(param):
             pass
 
-        param = func.__mapper__.fsignature['param']
+        param = func.__mapper__.fsignature.parameters['param']
         assert param.metadata == {MY_KEY: 'value'}
 
     Metadata should be composable, so consider supporting this approach even if you decide implementing your metadata in one of the following ways.
@@ -591,17 +936,19 @@ Here are some tips for effective use of metadata:
             return dict(value or {}, **{MY_KEY: 'myvalue'})
 
         def with_md(constructor):
-            fparams = dict(forge.FSignature.from_callable(constructor))
-            for k in ('default', 'factory', 'type'):
-                if k not in fparams:
-                    continue
-                fparams[k] = fparams[k].replace(
-                    converter=lambda ctx, name, value: forge.empty,
-                    factory=lambda: forge.empty,
-                )
-            fparams['metadata'] = fparams['metadata'].\
-                replace(converter=update_metadata)
-            return forge.sign(**fparams)(constructor)
+            fsig = forge.FSignature.from_callable(constructor)
+            parameters = []
+            for name, param in fsig.parameters.items():
+                if name in ('default', 'factory', 'type'):
+                    parameters.append(param.replace(
+                        converter=lambda ctx, name, value: forge.empty,
+                        factory=lambda: forge.empty,
+                    ))
+                elif name == 'metadata':
+                    parameters.append(param.replace(converter=update_metadata))
+                else:
+                    parameters.append(param)
+            return forge.sign(*parameters)(constructor)
 
         md_arg = with_md(forge.arg)
         param = md_arg('x')

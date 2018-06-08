@@ -4,48 +4,112 @@ API Reference
 
 .. currentmodule:: forge
 
-``forge`` works by decorating a callable using :func:`forge.sign` with parameters of :func:`forge.arg`, :func:`forge.kwarg`, :class:`forge.kwargs`, and .
-
-.. note::
-
-   When this documentation speaks about "``forge`` parameters" it means those parameters that are defined using :func:`forge.arg` and friends in the :func:`forge.sign` decorator.
-
+``forge`` works by decorating callable using subclasses of :class:`forge.Revision`.
 What follows is the API explanation, if you'd like a more hands-on introduction, have a look at :doc:`basic`.
 
 
-.. _api_parameter:
+.. _api_config:
 
-Parameter
+Config
+======
+
+.. autofunction:: forge.get_run_validators
+
+.. autofunction:: forge.set_run_validators
+
+
+.. _api_exceptions:
+
+Exceptions
+==========
+
+.. autoclass:: forge.ForgeError
+
+.. autoclass:: forge.ImmutableInstanceError
+
+
+.. _api_marker:
+
+Marker
+======
+
+.. autoclass:: forge.empty
+
+.. autoclass:: forge.void
+
+
+.. _api_revisions:
+
+Revisions
 =========
 
-.. _api_parameter-classes:
+.. autoclass:: forge.Mapper
+
+.. autoclass:: forge.Revision
+
+
+.. _api_revisions_group:
+
+Group revisions
+---------------
+
+.. autoclass:: forge.compose
+
+.. autoclass:: forge.copy
+
+.. autoclass:: forge.manage
+
+.. autoclass:: forge.returns
+
+.. autoclass:: forge.synthesize
+
+.. data:: forge.sign
+
+    a convenience "short-name" for :class:`~forge.synthesize`
+
+.. autoclass:: forge.sort
+
+
+.. _api_revisions_unit:
+
+Unit revisions
+--------------
+.. autoclass:: forge.delete
+
+.. autoclass:: forge.insert
+
+.. autoclass:: forge.modify
+
+.. autoclass:: forge.replace
+
+.. autoclass:: forge.translocate
+
+.. data:: forge.move
+
+    a convenience "short-name" for :class:`~forge.translocate`
+
+
+.. _api_signature:
+
+Signature
+=========
+
+.. _api_signature-classes:
 
 Classes
 -------
+.. autoclass:: forge.FSignature
+
 .. autoclass:: forge.FParameter
 
-    .. attribute:: POSITIONAL_ONLY
+.. autoclass:: forge.VarPositional
 
-        For more information about this :term:`parameter kind` constant, refer to :term:`positional-only`.
+.. autoclass:: forge.VarKeyword
 
-    .. attribute:: POSITIONAL_OR_KEYWORD
-
-        For more information about this :term:`parameter kind` constant, refer to :term:`positional-or-keyword`.
-
-    .. attribute:: VAR_POSTIIONAL
-
-        For more information about this :term:`parameter kind` constant, refer to :term:`var-positional`.
-
-    .. attribute:: KEYWORD_ONLY
-
-        For more information about this :term:`parameter kind` constant, refer to :term:`keyword-only`.
-
-    .. attribute:: VAR_KEYWORD
-
-        For more information about this :term:`parameter kind` constant, refer to :term:`var-keyword`.
+.. autoclass:: forge.Factory
 
 
-.. _api_parameter-constructors:
+.. _api_signature-constructors:
 
 Constructors
 ------------
@@ -69,78 +133,40 @@ Constructors
 
 .. autofunction:: forge.vkw
 
-.. autofunction:: forge.args
-
-.. autofunction:: forge.kwargs
-
 
 .. _api_parameter-helpers:
 
 Helpers
 -------
+
+.. autofunction:: findparam
+
+.. data:: forge.args
+
+    a "ready-to-go" instance of :class:`~forge.VarPositional`, with the name ``args``.
+    Use as ``*args``, or supply :meth:`~forge.VarPositional.replace` arguments.
+    For example, to change the name to ``items``: ``*args(name='items')``.
+
+.. data:: forge.kwargs
+
+    a "ready-to-go" instance of :class:`~forge.VarKeyword`, with the name ``kwargs``.
+    Use as ``**kwargs``, or supply :meth:`~forge.VarKeyword.replace` arguments.
+    For example, to change the name to ``extras``: ``**kwargs(name='extras')``.
+
 .. data:: forge.self
 
-    a convenience for ``forge.ctx('self')``.
+    a "ready-to-go" instance of :class:`~forge.FParameter` as the ``self`` context parameter.
 
 .. data:: forge.cls
 
-    a convenience for ``forge.ctx('cls')``.
-
-
-.. _api_signature:
-
-Signature
-=========
-
-.. _api_signature-classes:
-
-Classes
--------
-.. autoclass:: forge.CallArguments
-
-.. autoclass:: forge.FSignature
-
-.. autoclass:: forge.Mapper
-
-
-.. _api_signature-functions:
-
-Functions
----------
-.. autofunction:: forge.sign
-
-.. autofunction:: forge.reflect
-
-.. autofunction:: forge.resign
-
-.. autofunction:: forge.returns
-
-.. autofunction:: forge.sort_arguments
-
-.. autofunction:: forge.callwith
-
-
-.. _api_config:
-
-Config
-======
-
-.. autofunction:: forge.get_run_validators
-
-.. autofunction:: forge.set_run_validators
-
-
-.. _api_marker:
-
-Marker
-======
-
-.. autoclass:: forge.void
+    a "ready-to-go" instance of :class:`~forge.FParameter` as the ``cls`` context parameter.
 
 
 .. _api_utils:
 
 Utils
 =====
+
+.. autofunction:: forge.callwith
 
 .. autofunction:: forge.repr_callable

@@ -61,23 +61,11 @@ This is a useful alternative to provided a generic :term:`var-keyword` and *whit
     import forge
     import requests
 
-    common = forge.fsignature(requests.Session.request)['url':]
-
-    request = forge.sign(forge.arg('method'), *common)(requests.request)
-
-    post = forge.sign(*common)(requests.post)
-    get = forge.sign(*common)(requests.get)
-    update = forge.sign(*common)(requests.update)
-    delete = forge.sign(*common)(requests.delete)
-    head = forge.sign(*common)(requests.head)
-    options = forge.sign(*common)(requests.options)
-    patch = forge.sign(*common)(requests.patch)
-
     # `requests.request` looks like this:
-    assert forge.repr_callable(requests.request) == \
-        'request(method, url, **kwargs)'
+    assert forge.repr_callable(requests.request) == 'request(method, url, **kwargs)'
 
-    # our `request` looks like this:
+    # let's expose the parameters
+    request = forge.copy(requests.Session.request, exclude='self')(requests.request)
     assert forge.repr_callable(request) == (
         'request('
             'method, url, params=None, data=None, headers=None, cookies=None, '
@@ -86,6 +74,26 @@ This is a useful alternative to provided a generic :term:`var-keyword` and *whit
             'json=None'
         ')'
     )
+
+    # let's create a function for each method: [POST, GET, PUT, DELETE, etc.]
+    with_method = lambda method: forge.modify(
+        'method',
+        default=method,
+        bound=True,
+        kind=forge.FParameter.POSITIONAL_ONLY,
+    )(request)
+
+    post = with_method('POST')
+    get = with_method('GET')
+    put = with_method('PUT')
+    delete = with_method('DELETE')
+    options = with_method('OPTIONS')
+    head = with_method('HEAD')
+    patch = with_method('PATCH')
+
+    # let's try it out:
+    response = options('http://google.com')
+    assert response.headers['Allow'] == 'GET, HEAD'
 
 
 .. _advanced-usage_transmutating-parameters:
@@ -216,18 +224,15 @@ This could be useful for auto-discovered dependency injection.
 
     import forge
 
-    @forge.sign(
-        *forge.args('remove'),
-        **forge.kwargs,
-    )
+    @forge.compose()
     def chameleon(*remove, **kwargs):
-        forge.resign(
-            *forge.args('remove'),
-            **{
-                k: forge.kwarg(default=v) for k, v in kwargs.items()
+        globals()['chameleon'] = forge.compose(
+            forge.copy(chameleon.__wrapped__),
+            forge.insert([
+                forge.kwo(k, default=v) for k, v in kwargs.items()
                 if k not in remove
-            },
-            **forge.kwargs,
+            ], index=0),
+            forge.sort(),
         )(chameleon)
         return kwargs
 
