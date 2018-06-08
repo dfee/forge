@@ -6,7 +6,7 @@ import typing
 
 import forge._immutable as immutable
 from forge._counter import CreationOrderMeta
-from forge._marker import empty, void
+from forge._marker import _void, empty, void
 
 ## Parameter
 POSITIONAL_ONLY = inspect.Parameter.POSITIONAL_ONLY
@@ -94,8 +94,6 @@ class FParameter(immutable.Immutable, metaclass=CreationOrderMeta):
         :term:`keyword-only` :class:`~forge.FParameter`
         - :func:`~forge.vkw` for :term:`var-keyword` :class:`~forge.FParameter`
 
-    .. versionchanged:: 18.5.1 added :class:`~forge.empty`
-
     :param kind: the :term:`parameter kind`, which detemrines the position
         of the parameter in a callable signature.
     :param name: the public name of the parameter.
@@ -125,12 +123,22 @@ class FParameter(immutable.Immutable, metaclass=CreationOrderMeta):
         contextual)
     :param metadata: optional, extra meta-data that describes the parameter
 
-    :cvar empty: :class:`~forge.empty`
-    :cvar POSITIONAL_ONLY: :attr:`inspect.Parameter.POSITIONAL_ONLY`
-    :cvar POSITIONAL_OR_KEYWORD: :attr:`inspect.Parameter.POSITIONAL_OR_KEYWORD`
-    :cvar VAR_POSITIONAL: :attr:`inspect.Parameter.VAR_POSITIONAL`
-    :cvar KEYWORD_ONLY: :attr:`inspect.Parameter.KEYWORD_ONLY`
-    :cvar VAR_KEYWORD: :attr:`inspect.Parameter.VAR_KEYWORD`
+    :cvar empty: the constant :class:`~forge.FParameter.empty`
+    :cvar POSITIONAL_ONLY: the :term:`positional-only`
+        :term:`parameter kind` constant
+        :attr:`inspect.Parameter.POSITIONAL_ONLY`
+    :cvar POSITIONAL_OR_KEYWORD: the :term:`positional-or-keyword`
+        :term:`parameter kind` constant
+        :attr:`inspect.Parameter.POSITIONAL_OR_KEYWORD`
+    :cvar VAR_POSITIONAL: the :term:`var-positional` constant
+        :term:`parameter kind` constant
+        :attr:`inspect.Parameter.VAR_POSITIONAL`
+    :cvar KEYWORD_ONLY: the :term:`keyword-only` constant
+        :term:`parameter kind` constant
+        :attr:`inspect.Parameter.KEYWORD_ONLY`
+    :cvar VAR_KEYWORD: the :term:`var-keyword` constant
+        :term:`parameter kind` constant
+        :attr:`inspect.Parameter.VAR_KEYWORD`
     """
 
     __slots__ = (
@@ -170,6 +178,18 @@ class FParameter(immutable.Immutable, metaclass=CreationOrderMeta):
         ) -> None:
         # pylint: disable=W0622, redefined-builtin
         # pylint: disable=R0913, too-many-arguments
+        if name is not None and not isinstance(name, str):
+            # Do enough validation of name to enable the Sequence functionality
+            # of FSignature
+            raise TypeError(
+                'name must be a str, not a {}'.format(name),
+            )
+
+        if interface_name is not None and not isinstance(interface_name, str):
+            raise TypeError(
+                'interface_name must be a str, not a {}'.format(interface_name)
+            )
+
         if factory is not empty:
             if default is not empty:
                 raise TypeError(
@@ -342,17 +362,17 @@ class FParameter(immutable.Immutable, metaclass=CreationOrderMeta):
     def replace(
             self,
             *,
-            kind=void,
-            name=void,
-            interface_name=void,
-            default=void,
-            factory=void,
-            type=void,
-            converter=void,
-            validator=void,
-            bound=void,
-            contextual=void,
-            metadata=void
+            kind=_void,
+            name=_void,
+            interface_name=_void,
+            default=_void,
+            factory=_void,
+            type=_void,
+            converter=_void,
+            validator=_void,
+            bound=_void,
+            contextual=_void,
+            metadata=_void
         ):
         """
         An evolution method that generates a new :class:`~forge.FParameter`
@@ -374,7 +394,7 @@ class FParameter(immutable.Immutable, metaclass=CreationOrderMeta):
         # pylint: disable=E1120, no-value-for-parameter
         # pylint: disable=W0622, redefined-builtin
         # pylint: disable=R0913, too-many-arguments
-        if factory is not void and default is void:
+        if factory is not _void and default is _void:
             default = empty
 
         return immutable.replace(self, **{
@@ -390,7 +410,7 @@ class FParameter(immutable.Immutable, metaclass=CreationOrderMeta):
                 'bound': bound,
                 'contextual': contextual,
                 'metadata': metadata,
-            }.items() if v is not void
+            }.items() if v is not _void
         })
 
     @classmethod
@@ -878,212 +898,6 @@ class VarKeyword(collections.abc.Mapping):
 # Convenience
 kwargs = VarKeyword()
 
-
-# Common type hints for FParameterSequence
-_TYPE_FPM_PARAMETERS = typing.Optional[
-    typing.Union[
-        typing.List[FParameter],
-        typing.Tuple[FParameter, ...],
-    ]
-]
-_TYPE_FPM_VALIDATE = bool  # pylint: disable=C0103, invalid-name
-
-
-class FParameterSequence(collections.abc.Mapping):
-    """
-    A sequence of :class:`~forge.FParameter` instances that represent the
-    parameter sequence of a signature.
-
-    This class implements the :class:`collections.abc.Mapping` interface,
-    gaining the following methods:
-    - ``__contains__``,
-    - ``keys``,
-    - ``items``,
-    - ``values``,
-    - ``get``,
-    ``__eq__``, and
-    ``__ne__``.
-
-    In additon, `__getitem__` provides slice access by parameter name, as
-    described in :meth:`~forge.FParameterSequence.__getitem__`
-
-    :param parameters: an ordered list or tuple of :class:`~forge.FParameter`
-        instances.
-    :param validate: whether the sequence should be validated by
-        :meth:`~forge.FParameterSequence.validate`
-    """
-    def __init__(
-            self,
-            parameters: _TYPE_FPM_PARAMETERS = None,
-            validate: _TYPE_FPM_VALIDATE = True,
-        ) -> None:
-        parameters = parameters or []
-        if validate:
-            self.validate(*parameters)
-        self._data = collections.OrderedDict([
-            (param.name, param) for param in parameters
-        ])
-
-    def __getitem__(
-            self,
-            key: typing.Union[str, slice],
-        ) -> typing.Union[FParameter, typing.List[FParameter]]:
-        """
-        Concrete method for :class:`collections.abc.Mapping`
-
-        :param key: a key that corresponds to a
-            :paramref:`~forge.FParameter.name`, or an instance of
-            :class:`slice`, with ``start`` and ``stop`` being valid
-            :paramref:`~forge.FParameter.name`. Note that unlike list slices,
-            *both* the start and stop are included when present in the
-            :class:`~forge.FSignature`.
-        :raises KeyError: if an instance of :class:`~forge.FParameter` with
-            :paramref:`~forge.FParameter.name` doesn't exist on this
-            :class:`~forge.FSignature`.
-        :return: the instance of :class:`~forge.FParameter.name` for which
-            :paramref:`~forge.FSignature.__getitem__.key` corresponds.
-        """
-        if isinstance(key, slice):
-            params = []
-            visited_start = not bool(key.start)
-            for name, param in self.items():
-                if name == key.stop:
-                    params.append(param)
-                    break
-                elif visited_start:
-                    params.append(param)
-                elif name == key.start:
-                    visited_start = True
-                    params.append(param)
-            return params
-        return self._data[key]
-
-    def __iter__(self) -> typing.Iterator:
-        """
-        Concrete method for :class:`collections.abc.Mapping`
-
-        :return: an iterator over this instance which maps
-            :paramref:`~forge.FParameter.name` to a :class:`~forge.FParameter`.
-        """
-        return iter(self._data)
-
-    def __len__(self) -> int:
-        """
-        Concrete method for :class:`collections.abc.Mapping`
-
-        :return: the number of parameters in this :class:`~forge.FSignature`
-            instance.
-        """
-        return len(self._data)
-
-    def __str__(self) -> str:
-        # https://github.com/python/mypy/issues/5156
-        sig = inspect.Signature(  # type: ignore
-            [fp.native for fp in self.values()],
-            __validate_parameters__=False,
-        )
-        return str(sig)
-
-    def __repr__(self) -> str:
-        return '<{} {}>'.format(type(self).__name__, str(self))
-
-    @classmethod
-    def validate(cls, *parameters: FParameter) -> None:
-        """
-        Validation ensures:
-
-        - the appropriate order of parameters by kind:
-
-            #. (optional) :term:`positional-only`, followed by
-            #. (optional) :term:`positional-or-keyword`, followed by
-            #. (optional) :term:`var-positional`, followed by
-            #. (optional) :term:`keyword-only`, followed by
-            #. (optional) :term:`var-keyword`
-
-        - that non-default :term:`positional-only` or
-            :term:`positional-or-keyword` parameters don't follow their
-            respective similarly-kinded parameters with defaults,
-
-            .. note::
-
-                Python signatures allow non-default :term:`keyword-only`
-                parameters to follow default :term:`keyword-only` parameters.
-
-        - that at most there is one :term:`var-positional` parameter,
-
-        - that at most there is one :term:`var-keyword` parameter,
-
-        - that at most there is one ``context`` parameter, and that it
-            is the first parameter (if it is provided.)
-
-        - that no two instances of :class:`~forge.FParameter` share the same
-            :paramref:`~forge.FParameter.name` or
-            :paramref:`~forge.FParameter.interface_name`.
-        """
-        # pylint: disable=R0912, too-many-branches
-        name_set = set()  # type: typing.Set[str]
-        iname_set = set()  # type: typing.Set[str]
-        for i, current in enumerate(parameters):
-            if not isinstance(current, FParameter):
-                raise TypeError(
-                    "Received non-FParameter '{}'".\
-                    format(current)
-                )
-            elif not (current.name and current.interface_name):
-                raise ValueError(
-                    "Received unnamed parameter: '{}'".\
-                    format(current)
-                )
-            elif current.contextual:
-                if i > 0:
-                    raise TypeError(
-                        'Only the first parameter can be contextual'
-                    )
-
-            if current.name in name_set:
-                raise ValueError(
-                    "Received multiple parameters with name '{}'".\
-                    format(current.name)
-                )
-            name_set.add(current.name)
-
-            if current.interface_name in iname_set:
-                raise ValueError(
-                    "Received multiple parameters with interface_name '{}'".\
-                    format(current.interface_name)
-                )
-            iname_set.add(current.interface_name)
-
-            last = parameters[i-1] if i > 0 else None
-            if not last:
-                continue
-
-            elif current.kind < last.kind:
-                raise SyntaxError(
-                    "'{current}' of kind '{current.kind.name}' follows "
-                    "'{last}' of kind '{last.kind.name}'".\
-                    format(current=current, last=last)
-                )
-            elif current.kind is last.kind:
-                if current.kind is FParameter.VAR_POSITIONAL:
-                    raise TypeError(
-                        'Received multiple variable-positional parameters'
-                    )
-                elif current.kind is FParameter.VAR_KEYWORD:
-                    raise TypeError(
-                        'Received multiple variable-keyword parameters'
-                    )
-                elif current.kind in (
-                        FParameter.POSITIONAL_ONLY,
-                        FParameter.POSITIONAL_OR_KEYWORD
-                    ) \
-                    and last.default is not empty \
-                    and current.default is empty:
-                    raise SyntaxError(
-                        'non-default parameter follows default parameter'
-                    )
-
-
 _T_PARAM = typing.TypeVar('_T_PARAM', inspect.Parameter, FParameter)
 _TYPE_FINDITER_PARAMETERS = typing.Iterable[_T_PARAM]
 _TYPE_FINDITER_SELECTOR = typing.Union[
@@ -1091,7 +905,6 @@ _TYPE_FINDITER_SELECTOR = typing.Union[
     typing.Iterable[str],
     typing.Callable[[_T_PARAM], bool],
 ]
-
 
 def findparam(
         parameters: _TYPE_FINDITER_PARAMETERS,
@@ -1104,6 +917,7 @@ def findparam(
 
     :paramref:`~forge.findparam.selector` is used differently based on what is
     supplied:
+
     - str: a parameter is found if its :attr:`name` attribute is contained
     - Iterable[str]: a parameter is found if its :attr:`name` attribute is
         contained
@@ -1176,51 +990,168 @@ def get_var_positional_parameter(parameters: _TYPE_FINDITER_PARAMETERS):
         return None
 
 
-
-# Common type hints for FSignature
-_TYPE_FS_PARAMETERS = _TYPE_FPM_PARAMETERS
-_TYPE_FS_RETURN_ANNOTATION = typing.Any
-# pylint: disable=C0103, invalid-name
-_TYPE_FS__VALIDATE_PARAMETERS__ = _TYPE_FPM_VALIDATE
-# pylint: enable=C0103, invalid-name
-
-
-class FSignature(immutable.Immutable):
+class FSignature(immutable.Immutable, collections.abc.Sequence):
     """
     An immutable, validated representation of a signature composed of
-    :class:`~forge.FParameter` instances.
+    :class:`~forge.FParameter` instances, and a return type annotation.
 
-    :param parameters: an ordered list or tuple of :class:`~forge.FParameter`
-        instances.
+    Sequence methods are supported and ``__getitem__`` is overloaded to provide
+    access to parameters by index, name, or a slice.
+    Described in further detail: :meth:`~forge.FSignature.__getitem__`
+
+    :param parameters: an iterable of :class:`~forge.FParameter` that makes up
+        the signature
     :param return_annotation: the return type annotation for the signature
     :param __validate_parameters__: whether the sequence of provided parameters
-        should be validated (passed to the constructor of
-        :class:`~forge.FParameterSequence`)
+        should be validated
     """
     # pylint: disable=R0901, too-many-ancestors
-
     def __init__(
             self,
-            parameters: _TYPE_FS_PARAMETERS = None,
+            parameters: typing.Optional[typing.Iterable[FParameter]] = None,
             *,
-            return_annotation: _TYPE_FS_RETURN_ANNOTATION = empty.native,
-            __validate_parameters__: _TYPE_FS__VALIDATE_PARAMETERS__ = False
+            return_annotation: typing.Any = empty.native,
+            __validate_parameters__: bool = False
         ) -> None:
         super().__init__(
-            parameters=FParameterSequence(
-                parameters,
-                validate=__validate_parameters__,
-            ),
-            return_annotation=return_annotation
+            _data=list(parameters or ()),
+            return_annotation=return_annotation,
+        )
+        if __validate_parameters__:
+            self.validate()
+
+    def __len__(self):
+        return len(self._data)
+
+    @typing.overload
+    def __getitem__(self, index: int) -> FParameter:
+        pass # pragma: no cover
+
+    @typing.overload
+    def __getitem__(self, index: slice) -> typing.List[FParameter]:
+        # pylint: disable=E0102, function-redefined
+        pass # pragma: no cover
+
+    @typing.overload
+    def __getitem__(self, index: str) -> FParameter:
+        # pylint: disable=E0102, function-redefined
+        pass # pragma: no cover
+
+    def __getitem__(self, index):
+        """
+        Depending on the type of ``index`` (integer, string, or slice), this
+        method returns :class:`~forge.FParameter <parameters>` using the
+        following strategies:
+
+        - ``index`` as ``str``: the first parameter (and if the signature is \
+        validated, the *only* parameter) with ``index`` as a ``name`` is
+        returned. \
+        If no parameter is found, then a :class:`KeyError` is raised.
+
+        - ``index`` as ``int``: the parameter at the ``index`` is returned. \
+        If no parameter is found, then an :class:`IndexError` is raised.
+
+        - ``index`` as a ``str`` slice: when accessing parameters using str \
+        slice notation, e.g. ``fsignature['a':'c']``, all parameters \
+        (beginning with the parameter with name 'a', and ending *inclusively* \
+        with the parameter with name 'c', will be returned. \
+        The ``step`` value of ``slice`` must not be provided.
+
+        - ``index`` as an ``int`` slice: when accessing parameters using int \
+        slice notation, e.g. ``fsignature[0:3]``, all parameters \
+        (beginning with the parameter at index 0, and ending with the
+        parameter before index 3, will be returned. \
+        The ``step`` value of ``slice`` can be provided.
+
+        :param index: a parameter index, name, or slice of indices or names
+        :raises KeyError: if an instance of :class:`~forge.FParameter` with
+            :paramref:`~forge.FParameter.name` doesn't exist on this
+            :class:`~forge.FSignature`.
+        :return: the instance of :class:`~forge.FParameter.name` for which
+            :paramref:`~forge.FSignature.__getitem__.index` corresponds.
+        """
+        # pylint: disable=E0102, function-redefined
+        if isinstance(index, slice):
+            typemap = dict(
+                start=type(index.start),
+                stop=type(index.stop),
+                step=type(index.step),
+            )
+            if set([int, type(None)]) >= set(typemap.values()):
+                # slice with ints
+                return self._data[index]
+
+            if set([str, type(None)]) >= set(typemap.values()):
+                # slice with strings
+                if getattr(index, 'step', None):
+                    raise TypeError('string slices cannot have a step')
+
+                params = []
+                visited_start = not bool(index.start)
+                for param in self._data:
+                    if param.name == index.start:
+                        visited_start = True
+                        params.append(param)
+                    elif param.name == index.stop:
+                        params.append(param)
+                        break
+                    elif visited_start:
+                        params.append(param)
+                return params
+
+            raise TypeError(
+                'slice arguments must all be integers or all be strings'
+            )
+
+        if isinstance(index, int):
+            return self._data[index]
+
+        if isinstance(index, str):
+            for param in self._data:
+                if param.name == index:
+                    return param
+            raise KeyError(index)
+
+        raise TypeError(
+            "indices must be integers, strings or slices, not {}".\
+            format(getattr(type(index), '__name__', repr(index)))
         )
 
     def __str__(self) -> str:
-        sig = inspect.Signature(  # type: ignore
-            [fp.native for fp in self.parameters.values()],
-            return_annotation=self.return_annotation,
-            __validate_parameters__=False,
-        )
-        return str(sig)
+        components = []
+        if self:
+            pos_param = next(
+                findparam(self, lambda p: p.kind is POSITIONAL_ONLY),
+                None,
+            )
+            has_positional = bool(pos_param)
+            vpo_param = get_var_positional_parameter(self)
+            has_var_positional = bool(vpo_param)
+
+            for i, param in enumerate(self):
+                last_ = self[i - 1] if (i > 0) else None
+                next_ = self[i + 1] if (len(self) > i + 1) else None
+
+                if (
+                        not has_var_positional and
+                        self[i].kind is KEYWORD_ONLY and
+                        (not last_ or last_.kind is not KEYWORD_ONLY)
+                    ):
+                    components.append('*')
+
+                components.append(str(param))
+                if (
+                        has_positional and
+                        self[i].kind is POSITIONAL_ONLY and
+                        (not next_ or next_.kind is not POSITIONAL_ONLY)
+                    ):
+                    components.append('/')
+
+        ra_str = ' -> {}'.format(
+            inspect.formatannotation(self.return_annotation)
+        ) if self.return_annotation is not empty.native else ''
+
+        return '({}){}'.format(', '.join(components), ra_str)
 
     def __repr__(self) -> str:
         return '<{} {}>'.format(type(self).__name__, self)
@@ -1271,10 +1202,10 @@ class FSignature(immutable.Immutable):
         Provides a representation of this :class:`~forge.FSignature` as an
         instance of :class:`inspect.Signature`
         """
-        return inspect.Signature([
-            param.native for param in self.parameters.values()
-            if not param.bound
-        ], return_annotation=self.return_annotation)
+        return inspect.Signature(
+            [param.native for param in self if not param.bound],
+            return_annotation=self.return_annotation,
+        )
 
     def replace(
             self,
@@ -1298,11 +1229,115 @@ class FSignature(immutable.Immutable):
         return type(self)(  # type: ignore
             parameters=parameters \
                 if parameters is not void \
-                else list(self.parameters.values()),
+                else self._data,
             return_annotation=return_annotation \
                 if return_annotation is not void \
                 else self.return_annotation,
             __validate_parameters__=__validate_parameters__,
         )
+
+    @property
+    def parameters(self) -> types.MappingProxyType:
+        """
+        The signature's :class:`~forge.FParameter <parameters>`
+        """
+        return types.MappingProxyType(
+            collections.OrderedDict([(p.name, p) for p in self._data])
+        )
+
+    def validate(self):
+        """
+        Validation ensures:
+
+        - the appropriate order of parameters by kind:
+
+            #. (optional) :term:`positional-only`, followed by
+            #. (optional) :term:`positional-or-keyword`, followed by
+            #. (optional) :term:`var-positional`, followed by
+            #. (optional) :term:`keyword-only`, followed by
+            #. (optional) :term:`var-keyword`
+
+        - that non-default :term:`positional-only` or
+            :term:`positional-or-keyword` parameters don't follow their
+            respective similarly-kinded parameters with defaults,
+
+            .. note::
+
+                Python signatures allow non-default :term:`keyword-only`
+                parameters to follow default :term:`keyword-only` parameters.
+
+        - that at most there is one :term:`var-positional` parameter,
+
+        - that at most there is one :term:`var-keyword` parameter,
+
+        - that at most there is one ``context`` parameter, and that it
+            is the first parameter (if it is provided.)
+
+        - that no two instances of :class:`~forge.FParameter` share the same
+            :paramref:`~forge.FParameter.name` or
+            :paramref:`~forge.FParameter.interface_name`.
+        """
+        # pylint: disable=R0912, too-many-branches
+        name_set = set()  # type: typing.Set[str]
+        iname_set = set()  # type: typing.Set[str]
+        for i, current in enumerate(self._data):
+            if not isinstance(current, FParameter):
+                raise TypeError(
+                    "Received non-FParameter '{}'".\
+                    format(current)
+                )
+            elif not (current.name and current.interface_name):
+                raise ValueError(
+                    "Received unnamed parameter: '{}'".\
+                    format(current)
+                )
+            elif current.contextual:
+                if i > 0:
+                    raise TypeError(
+                        'Only the first parameter can be contextual'
+                    )
+
+            if current.name in name_set:
+                raise ValueError(
+                    "Received multiple parameters with name '{}'".\
+                    format(current.name)
+                )
+            name_set.add(current.name)
+
+            if current.interface_name in iname_set:
+                raise ValueError(
+                    "Received multiple parameters with interface_name '{}'".\
+                    format(current.interface_name)
+                )
+            iname_set.add(current.interface_name)
+
+            last = self._data[i-1] if i > 0 else None
+            if not last:
+                continue
+
+            elif current.kind < last.kind:
+                raise SyntaxError(
+                    "'{current}' of kind '{current.kind.name}' follows "
+                    "'{last}' of kind '{last.kind.name}'".\
+                    format(current=current, last=last)
+                )
+            elif current.kind is last.kind:
+                if current.kind is FParameter.VAR_POSITIONAL:
+                    raise TypeError(
+                        'Received multiple variable-positional parameters'
+                    )
+                elif current.kind is FParameter.VAR_KEYWORD:
+                    raise TypeError(
+                        'Received multiple variable-keyword parameters'
+                    )
+                elif current.kind in (
+                        FParameter.POSITIONAL_ONLY,
+                        FParameter.POSITIONAL_OR_KEYWORD
+                    ) \
+                    and last.default is not empty \
+                    and current.default is empty:
+                    raise SyntaxError(
+                        'non-default parameter follows default parameter'
+                    )
 
 fsignature = FSignature.from_callable  # Convenience

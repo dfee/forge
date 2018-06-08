@@ -5,7 +5,7 @@ from unittest.mock import Mock
 import pytest
 
 import forge
-from forge._compose import (
+from forge._revision import (
     Mapper,
     Revision,
     compose,
@@ -454,7 +454,7 @@ class TestRevision:
 
     def test__call__existing(self):
         """
-        Ensure ``__call__`` replaces the ``__mapper__``, and that a call to the
+        Ensure ``__call__`` replaces the wrapper, and that a call to the
         wrapped func traverses only the new ``Mapper.__call__`` and the
         wrapped function; i.e. no double wrapping.
         """
@@ -463,19 +463,25 @@ class TestRevision:
         func = lambda **kwargs: CallArguments(**kwargs)
 
         func2 = rev(func)
-        mapper1 = func2.__mapper__
+        f2mapper = func2.__mapper__
         func3 = rev(func2)
-        mapper2 = func3.__mapper__
+        f3mapper = func3.__mapper__
 
-        assert func3 is func2
-        assert isinstance(mapper2, Mapper)
-        assert mapper2 is not mapper1
-        assert mapper2.fsignature == mapper1.fsignature
+        assert func3 is not func2
+        assert func3.__wrapped__ is func2.__wrapped__
+        assert func3.__mapper__ is not func2.__mapper__
+
+        assert isinstance(f3mapper, Mapper)
+        assert f3mapper is not f2mapper
+        assert f3mapper.fsignature == f2mapper.fsignature
+
+        func2.__mapper__ = Mock(side_effect=f2mapper)
+        func3.__mapper__ = Mock(side_effect=f3mapper)
 
         call_args = CallArguments(b=1)
-        func3.__mapper__ = Mock(side_effect=mapper2)
         assert func3(*call_args.args, **call_args.kwargs) == call_args
         func3.__mapper__.assert_called_once_with(**call_args.kwargs)
+        func2.__mapper__.assert_not_called()
 
     def test_revise(self):
         """
@@ -633,9 +639,7 @@ class TestManage:
         """
         fsig = fsignature(lambda a, b, c: None)
         reverse = Mock(
-            side_effect=lambda prev: prev.replace(
-                parameters=list(prev.parameters.values())[::-1]
-            )
+            side_effect=lambda prev: prev.replace(parameters=prev[::-1])
         )
         rev = manage(reverse)
 
@@ -665,32 +669,28 @@ class TestReturns:
         - mapper: update __mapper__
         """
         rev = returns(int)
-        def func():
-            pass
+        func = lambda: None
 
         if strategy == 'annotations':
-            pass
-        elif strategy == 'signature':
-            func.__signature__ = inspect.Signature()
-        elif strategy == 'mapper':
-            identity_rev = Revision()
-            identity_rev.revise = lambda prev: prev
-            func = identity_rev(func)
-        else:
-            raise TypeError('Unknown strategy {}'.format(strategy))
-
-        assert rev(func) is func
-
-        if strategy == 'annotations':
+            assert rev(func) is func
             assert not hasattr(func, '__signature__')
             assert func.__annotations__['return'] is int
         elif strategy == 'signature':
+            func.__signature__ = inspect.Signature()
+            assert rev(func) is func
             assert not func.__annotations__
             assert hasattr(func, '__signature__')
             assert func.__signature__.return_annotation is int
         elif strategy == 'mapper':
-            assert func.__signature__.return_annotation is int
-            assert func.__mapper__.fsignature.return_annotation is int
+            identity_rev = Revision()
+            identity_rev.revise = lambda prev: prev
+            func = identity_rev(func)
+            func2 = rev(func)
+            assert func2 is not func
+            assert func2.__signature__.return_annotation is int
+            assert func2.__mapper__.fsignature.return_annotation is int
+        else:
+            raise TypeError('Unknown strategy {}'.format(strategy))
 
     def test_revise_no_validation(self):
         """
@@ -950,7 +950,7 @@ class TestInsert:
                 id='after_iter_str',
             ),
             pytest.param(
-                None, None, lambda param: True,
+                None, None, lambda param: param.name == '_',
                 FSignature([forge.arg('__'), forge.arg('_')]),
                 FSignature([forge.arg('__'), forge.arg('_'), forge.arg('a')]),
                 id='after_callable',
@@ -1047,6 +1047,17 @@ class TestModify:
         rev = modify('a', **revision)
         assert rev.revise(FSignature([in_param])) == FSignature([out_param])
 
+    def test_revise_void_cls(self):
+        """
+        Ensure that passing ``void`` as a ``default`` or ``type`` is passed
+        through (distinguishing _void from void).
+        """
+        in_ = FSignature([forge.arg('x')])
+        rev = modify('x', default=forge.void, type=forge.void)
+        out_ = rev.revise(in_)
+        assert out_.parameters['x'].default is forge.void
+        assert out_.parameters['x'].type is forge.void
+
     @pytest.mark.parametrize(('multiple',), [(True,), (False,)])
     def test_revise_multiple(self, multiple):
         """
@@ -1057,7 +1068,7 @@ class TestModify:
         rev = modify(('a', 'b'), multiple=multiple, kind=POSITIONAL_ONLY)
         out_ = rev.revise(in_)
 
-        kinds = [param.kind for param in out_.parameters.values()]
+        kinds = [param.kind for param in out_]
         if multiple:
             assert kinds == [POSITIONAL_ONLY, POSITIONAL_ONLY]
         else:
@@ -1097,8 +1108,8 @@ class TestModify:
         Ensure that ``modify`` takes the same arguments as
         ``FParameter.replace``. Keeps code in sync.
         """
-        assert fsignature(modify).parameters['name':] == \
-            fsignature(FParameter.replace).parameters['name':]
+        assert fsignature(modify)['name':] == \
+            fsignature(FParameter.replace)['name':]
 
 
 class TestReplace:
@@ -1158,11 +1169,11 @@ class TestTranslocate:
         pytest.param(1, None, None, id='index'),
 
         # Before
-        pytest.param(None, 'c', None, id='before_str'),
-        pytest.param(None, ('c', 'x'), None, id='before_iter_str'),
+        pytest.param(None, 'b', None, id='before_str'),
+        pytest.param(None, ('b', 'x'), None, id='before_iter_str'),
         pytest.param(
             None,
-            lambda param: param.name == 'c',
+            lambda param: param.name == 'b',
             None,
             id='before_callable',
         ),
@@ -1178,11 +1189,31 @@ class TestTranslocate:
         ),
     ])
     @pytest.mark.parametrize(('selector',), [
-        pytest.param('b', id='selector_str'),
-        pytest.param(('b', 'x'), id='selector_iter_str'),
-        pytest.param(lambda param: param.name == 'b', id='selector_callable'),
+        pytest.param('_', id='selector_str'),
+        pytest.param(('_', 'x'), id='selector_iter_str'),
+        pytest.param(lambda param: param.name == '_', id='selector_callable'),
     ])
-    def test_revise(self, selector, index, before, after):
+    @pytest.mark.parametrize(('in_'), [
+        pytest.param(
+            FSignature([
+                forge.arg('a'),
+                forge.arg('b'),
+                forge.arg('c'),
+                forge.arg('_'),
+            ]),
+            id='trailing',
+        ),
+        pytest.param(
+            FSignature([
+                forge.arg('_'),
+                forge.arg('a'),
+                forge.arg('b'),
+                forge.arg('c'),
+            ]),
+            id='leading',
+        ),
+    ])
+    def test_revise(self, selector, index, before, after, in_):
         """
         Ensure that ``translocate``:
         - takes index
@@ -1191,8 +1222,12 @@ class TestTranslocate:
         """
         # pylint: disable=R0913, too-many-arguments
         rev = translocate(selector, index=index, before=before, after=after)
-        in_ = FSignature([forge.arg('a'), forge.arg('c'), forge.arg('b')])
-        out_ = FSignature([forge.arg('a'), forge.arg('b'), forge.arg('c')])
+        out_ = FSignature([
+            forge.arg('a'),
+            forge.arg('_'),
+            forge.arg('b'),
+            forge.arg('c'),
+        ])
 
         if isinstance(out_, Exception):
             with pytest.raises(type(out_)) as excinfo:

@@ -3,31 +3,31 @@ import typing
 
 # pylint: disable=C0103, invalid-name
 
-T = typing.TypeVar('T')
 
 class MarkerMeta(type):
     """
-    A metaclass that creates singletons by overriding `__call__`.
-
-    Usage::
-
-        >>> class Marker(metaclass=MarkerMeta):
-        ...     pass
-        ...
-        >>> assert Marker() is Marker
+    A metaclass that creates marker classes for use as distinguishing elements
+    in a signature.
     """
-    def __call__(cls: T, *args, **kwargs) -> T:
-        """
-        Returns the class itself; does not generate a new class. The class's
-        ``__new__`` method is not called.
-        """
-        return cls
-
     def __repr__(cls) -> str:
         return '<{}>'.format(cls.__name__)
 
-    def __bool__(cls) -> bool:
-        return False
+    def __new__(
+            mcs,
+            name: str,
+            bases: typing.Tuple[type, ...],
+            namespace: typing.Dict[str, typing.Any],
+        ):
+        """
+        Create a new ``forge`` marker class with a ``native`` attribute.
+
+        :param name: the name of the new class
+        :param bases: the base classes of the new class
+        :param namespace: the namespace of the new class
+        :param native: the ``native`` Python marker class
+        """
+        namespace['__repr__'] = lambda self: repr(type(self))
+        return super().__new__(mcs, name, bases, namespace)
 
 
 class void(metaclass=MarkerMeta):
@@ -43,6 +43,9 @@ class void(metaclass=MarkerMeta):
             return proxied(a, b, c=extra)
     """
     pass
+
+_void = void()
+"""Internal-use void instance"""
 
 
 class empty(metaclass=MarkerMeta):

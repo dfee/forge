@@ -5,11 +5,10 @@ import types
 import typing
 
 import forge._immutable as immutable
-from forge._marker import empty, void
+from forge._marker import _void, empty
 from forge._signature import (
     _TYPE_FINDITER_SELECTOR,
     FParameter,
-    FParameterSequence,
     FSignature,
     fsignature,
     findparam,
@@ -62,7 +61,7 @@ class Mapper(immutable.Immutable):
         private_signature = inspect.signature(callable)
         public_signature = fsignature.native
         parameter_map = self.map_parameters(fsignature, private_signature)
-        context_param = get_context_parameter(fsignature.parameters.values())
+        context_param = get_context_parameter(fsignature)
 
         super().__init__(
             callable=callable,
@@ -183,23 +182,19 @@ class Mapper(immutable.Immutable):
             are mapped.
         '''
         # pylint: disable=W0622, redefined-builtin
-        from_vpo_param = get_var_positional_parameter(from_.parameters.values())
-        from_vkw_param = get_var_keyword_parameter(from_.parameters.values())
+        from_vpo_param = get_var_positional_parameter(from_)
+        from_vkw_param = get_var_keyword_parameter(from_)
         from_param_index = {
-            fparam.interface_name: fparam
-            for fparam in from_.parameters.values()
+            fparam.interface_name: fparam for fparam in from_
             if fparam not in (from_vpo_param, from_vkw_param)
         }
 
-        to_vpo_param = get_var_positional_parameter(
-            to_.parameters.values()
-        )
-        to_vkw_param = get_var_keyword_parameter(
-            to_.parameters.values()
-        )
+        to_vpo_param = \
+            get_var_positional_parameter(to_.parameters.values())
+        to_vkw_param = \
+            get_var_keyword_parameter(to_.parameters.values())
         to_param_index = {
-            param.name: param
-            for param in to_.parameters.values()
+            param.name: param for param in to_.parameters.values()
             if param not in (to_vpo_param, to_vkw_param)
         }
 
@@ -304,8 +299,7 @@ class Revision:
         parameters to the original function's signature.
 
         If the function was already wrapped (has an :attr:`__mapper__`
-        attribute), then the signature and mapper are replaced, but the
-        function is not rewrapped.
+        attribute), then the (underlying) wrapped function is re-wrapped.
 
         :param callable: a :term:`callable` whose signature to revise
         :return: a function with the revised signature that calls into the
@@ -313,21 +307,10 @@ class Revision:
         """
         # pylint: disable=W0622, redefined-builtin
         if hasattr(callable, '__mapper__'):
-            existing = True
-            prev_ = callable.__mapper__.fsignature  # type: ignore
+            next_ = self.revise(callable.__mapper__.fsignature)  # type: ignore
+            callable = callable.__wrapped__  # type: ignore
         else:
-            existing = False
-            prev_ = FSignature.from_callable(callable)
-
-        next_ = self.revise(prev_)
-        FParameterSequence.validate(*next_.parameters.values())
-
-        # Previously revised; already wrapped
-        if existing:
-            mapper = Mapper(next_, callable.__wrapped__)  # type: ignore
-            callable.__mapper__ = mapper  # type: ignore
-            callable.__signature__ = mapper.public_signature  # type: ignore
-            return callable
+            next_ = self.revise(FSignature.from_callable(callable))
 
         # Unrevised; not wrapped
         if asyncio.iscoroutinefunction(callable):
@@ -343,6 +326,7 @@ class Revision:
                 mapped = inner.__mapper__(*args, **kwargs)
                 return callable(*mapped.args, **mapped.kwargs)
 
+        next_.validate()
         inner.__mapper__ = Mapper(next_, callable)  # type: ignore
         inner.__signature__ = inner.__mapper__.public_signature  # type: ignore
         return inner
@@ -443,15 +427,12 @@ class copy(Revision):  # pylint: disable=C0103, invalid-name
         """
         if self.include:
             return self.signature.replace(parameters=list(
-                findparam(self.signature.parameters.values(), self.include)
+                findparam(self.signature, self.include)
             ))
         elif self.exclude:
-            excluded = list(
-                findparam(self.signature.parameters.values(), self.exclude)
-            )
+            excluded = list(findparam(self.signature, self.exclude))
             return self.signature.replace(parameters=[
-                param for param in self.signature.parameters.values()
-                if param not in excluded
+                param for param in self.signature if param not in excluded
             ])
         return self.signature
 
@@ -467,7 +448,7 @@ class manage(Revision):  # pylint: disable=C0103, invalid-name
 
         def reverse(previous):
             return previous.replace(
-                parameters=list(previous.parameters.values())[::-1],
+                parameters=previous[::-1],
                 __validate_parameters__=False,
             )
 
@@ -571,7 +552,7 @@ class returns(Revision): # pylint: disable=invalid-name
         :return: a modified instance of :class:`~forge.FSignature`
         """
         return FSignature(
-            list(previous.parameters.values()),
+            previous,
             return_annotation=self.return_annotation,
         )
 
@@ -717,7 +698,7 @@ class sort(Revision): # pylint: disable=C0103, invalid-name
         :return: a modified instance of :class:`~forge.FSignature`
         """
         return previous.replace(  # type: ignore
-            parameters=sorted(previous.parameters.values(), key=self.sortkey),
+            parameters=sorted(previous, key=self.sortkey),
             __validate_parameters__=False,
         )
 
@@ -758,7 +739,7 @@ class delete(Revision):  # pylint: disable=C0103, invalid-name
         :param previous: the :class:`~forge.FSignature` to modify
         :return: a modified instance of :class:`~forge.FSignature`
         """
-        excluded = list(findparam(previous.parameters.values(), self.selector))
+        excluded = list(findparam(previous, self.selector))
         if not excluded:
             if self.raising:
                 raise ValueError(
@@ -772,7 +753,7 @@ class delete(Revision):  # pylint: disable=C0103, invalid-name
         # https://github.com/python/mypy/issues/5156
         return previous.replace(  # type: ignore
             parameters=[
-                param for param in previous.parameters.values()
+                param for param in previous
                 if param not in excluded
             ],
             __validate_parameters__=False,
@@ -842,7 +823,7 @@ class insert(Revision):  # pylint: disable=C0103, invalid-name
         :param previous: the :class:`~forge.FSignature` to modify
         :return: a modified instance of :class:`~forge.FSignature`
         """
-        pparams = list(previous.parameters.values())
+        pparams = list(previous)
         nparams = []
         if self.before:
             try:
@@ -864,7 +845,7 @@ class insert(Revision):  # pylint: disable=C0103, invalid-name
                     "No parameter matched selector '{}'".format(self.after)
                 )
 
-            for param in previous.parameters.values():
+            for param in previous:
                 nparams.append(param)
                 if param is match:
                     nparams.extend(self.insertion)
@@ -919,17 +900,17 @@ class modify(Revision):  # pylint: disable=C0103, invalid-name
             multiple: bool = False,
             raising: bool = True,
             *,
-            kind=void,
-            name=void,
-            interface_name=void,
-            default=void,
-            factory=void,
-            type=void,
-            converter=void,
-            validator=void,
-            bound=void,
-            contextual=void,
-            metadata=void
+            kind=_void,
+            name=_void,
+            interface_name=_void,
+            default=_void,
+            factory=_void,
+            type=_void,
+            converter=_void,
+            validator=_void,
+            bound=_void,
+            contextual=_void,
+            metadata=_void
         ) -> None:
         # pylint: disable=W0622, redefined-builtin
         # pylint: disable=R0914, too-many-locals
@@ -949,7 +930,7 @@ class modify(Revision):  # pylint: disable=C0103, invalid-name
                 'bound': bound,
                 'contextual': contextual,
                 'metadata': metadata,
-            }.items() if v is not void
+            }.items() if v is not _void
         }
 
     def revise(self, previous: FSignature) -> FSignature:
@@ -964,7 +945,7 @@ class modify(Revision):  # pylint: disable=C0103, invalid-name
         :param previous: the :class:`~forge.FSignature` to modify
         :return: a modified instance of :class:`~forge.FSignature`
         """
-        matched = list(findparam(previous.parameters.values(), self.selector))
+        matched = list(findparam(previous, self.selector))
         if not matched:
             if self.raising:
                 raise ValueError(
@@ -979,7 +960,7 @@ class modify(Revision):  # pylint: disable=C0103, invalid-name
         return previous.replace(  # type: ignore
             parameters=[
                 param.replace(**self.updates) if param in matched else param
-                for param in previous.parameters.values()
+                for param in previous
             ],
             __validate_parameters__=False,
         )
@@ -1026,7 +1007,7 @@ class replace(Revision):  # pylint: disable=C0103, invalid-name
         :return: a modified instance of :class:`~forge.FSignature`
         """
         try:
-            match = next(findparam(previous.parameters.values(), self.selector))
+            match = next(findparam(previous, self.selector))
         except StopIteration:
             raise ValueError(
                 "No parameter matched selector '{}'".format(self.selector)
@@ -1036,7 +1017,7 @@ class replace(Revision):  # pylint: disable=C0103, invalid-name
         return previous.replace(  # type: ignore
             parameters=[
                 self.parameter if param is match else param
-                for param in previous.parameters.values()
+                for param in previous
             ],
             __validate_parameters__=False,
         )
@@ -1100,10 +1081,7 @@ class translocate(Revision):  # pylint: disable=C0103, invalid-name
         :return: a modified instance of :class:`~forge.FSignature`
         """
         try:
-            selected = next(findparam(
-                previous.parameters.values(),
-                self.selector,
-            ))
+            selected = next(findparam(previous, self.selector))
         except StopIteration:
             raise ValueError(
                 "No parameter matched selector '{}'".format(self.selector)
@@ -1111,39 +1089,36 @@ class translocate(Revision):  # pylint: disable=C0103, invalid-name
 
         if self.before:
             try:
-                before = next(findparam(
-                    previous.parameters.values(),
-                    self.before,
-                ))
+                before = next(findparam(previous, self.before))
             except StopIteration:
                 raise ValueError(
                     "No parameter matched selector '{}'".format(self.before)
                 )
 
             parameters = []
-            for param in previous.parameters.values():
+            for param in previous:
                 if param is before:
                     parameters.append(selected)
+                elif param is selected:
+                    continue
                 parameters.append(param)
         elif self.after:
             try:
-                after = next(findparam(
-                    previous.parameters.values(),
-                    self.after,
-                ))
+                after = next(findparam(previous, self.after))
             except StopIteration:
                 raise ValueError(
                     "No parameter matched selector '{}'".format(self.after)
                 )
 
             parameters = []
-            for param in previous.parameters.values():
-                parameters.append(param)
+            for param in previous:
+                if param is not selected:
+                    parameters.append(param)
                 if param is after:
                     parameters.append(selected)
         else:
             parameters = [
-                param for param in previous.parameters.values()
+                param for param in previous
                 if param is not selected
             ]
             parameters.insert(self.index, selected)

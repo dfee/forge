@@ -23,18 +23,12 @@ class TestMarkerMeta:
         name = 'dummy'
         assert repr(make_marker(name)) == '<{}>'.format(name)
 
-    def test__bool__(self, make_marker):
-        """
-        Ensure that markers are False
-        """
-        assert not make_marker('dummy')
-
-    def test_instance(self, make_marker):
+    def test_ins__repr__(self, make_marker):
         """
         Ensure that calling ``__new__`` simply returns the cls.
         """
         marker = make_marker('dummy')
-        assert marker() is marker
+        assert repr(marker()) == repr(marker)
 
 
 class TestEmpty:

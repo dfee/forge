@@ -11,11 +11,3 @@ class ImmutableInstanceError(ForgeError):
     :class:`~forge._immutable.Immutable` instance.
     """
     pass
-
-
-class RevisionError(ForgeError):
-    """
-    A generic error raised by :meth:`~forge.BaseRevision.apply`
-    An error that is raised when a revision fails
-    """
-    pass

@@ -1,22 +1,3 @@
-from ._compose import (
-    Mapper,
-    Revision,
-    # Unit
-    delete,
-    insert,
-    manage,
-    modify,
-    move,
-    translocate,
-    # Group
-    compose,
-    copy,
-    replace,
-    returns,
-    sign,
-    sort,
-    synthesize,
-)
 from ._config import (
     get_run_validators,
     set_run_validators,
@@ -24,11 +5,27 @@ from ._config import (
 from ._exceptions import (
     ForgeError,
     ImmutableInstanceError,
-    RevisionError,
 )
 from ._marker import (
     empty,
     void,
+)
+from ._revision import (
+    Mapper,
+    Revision,
+    # Group
+    compose,
+    copy,
+    manage,
+    returns,
+    synthesize, sign,
+    sort,
+    # Unit
+    delete,
+    insert,
+    modify,
+    replace,
+    translocate, move,
 )
 from ._signature import (
     Factory,
@@ -38,16 +35,8 @@ from ._signature import (
     VarPositional,
     findparam,
     fsignature,
-    pos,
-    arg,
-    pok,
-    kwarg,
-    kwo,
-    ctx,
-    vpo,
-    vkw,
-    args,
-    kwargs,
+    pos, pok, vpo, kwo, vkw,
+    arg, ctx, args, kwarg, kwargs,
     self_ as self,
     cls_ as cls,
 )

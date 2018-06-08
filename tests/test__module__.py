@@ -12,19 +12,23 @@ def test_namespace():
     """
     private_ptn = re.compile(r'^\_[a-zA-Z]')
     assert set(filter(private_ptn.match, forge.__dict__.keys())) == set([
-        '_compose',
         '_config',
         '_counter',
         '_exceptions',
         '_immutable',
         '_marker',
+        '_revision',
         '_signature',
         '_utils',
     ])
 
     public_ptn = re.compile(r'^[a-zA-Z]')
     assert set(filter(public_ptn.match, forge.__dict__.keys())) == set([
-        ## Compose
+        ## Config
+        'get_run_validators',
+        'set_run_validators',
+
+        ## Revision
         'Revision',
         # unit
         'delete', 'insert', 'modify', 'translocate', 'move', 'replace',
@@ -52,15 +56,9 @@ def test_namespace():
         # constructors
         'pos', 'pok', 'arg', 'kwo', 'kwarg', 'vkw', 'vpo',
 
-        ## Config
-        'get_run_validators',
-        'set_run_validators',
-
         ## Exceptions
         'ForgeError',
         'ImmutableInstanceError',
-        'ForgeError',
-        'RevisionError',
 
         ## Markers
         'empty',

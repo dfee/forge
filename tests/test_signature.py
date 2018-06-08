@@ -18,7 +18,6 @@ from forge._signature import (
     VAR_POSITIONAL,
     Factory,
     FParameter,
-    FParameterSequence,
     FSignature,
     VarKeyword,
     VarPositional,
@@ -146,6 +145,18 @@ class TestFParameter:
             FParameter(**kwargs)
         assert excinfo.value.args[0] == \
             'expected either "default" or "factory", received both'
+
+    @pytest.mark.parametrize(('attr',), [('name',), ('interface_name',)])
+    def test_name_validation(self, attr):
+        """
+        Ensure a parameter's ``name`` / ``interface_name`` must be a str or None
+        """
+        kwargs = {'kind': POSITIONAL_ONLY, attr: 3}
+        with pytest.raises(TypeError) as excinfo:
+            FParameter(**kwargs)
+        assert excinfo.value.args[0] == \
+            '{} must be a str, not a {}'.format(attr, 3)
+
 
     @pytest.mark.parametrize(('extras', 'raises'), [
         pytest.param({'default': 1}, False, id='default'),
@@ -888,16 +899,85 @@ class TestParameterConvenience:
         assert kwargs.validator is None
 
 
-class TestFParameterSequence:
-    # Begin collections.abc.Mapping Tests
-    def test__getitem__str(self):
+class TestFSignature:
+    def test_fsignature(self):
+        assert fsignature == FSignature.from_callable
+
+    # Begin test sequence methods
+    @pytest.mark.parametrize(('in_', 'key', 'out_'), [
+        # int
+        pytest.param(
+            FSignature([forge.arg(i) for i in 'abcd']),
+            0,
+            forge.arg('a'),
+            id='int_key',
+        ),
+        pytest.param(
+            FSignature([forge.arg(i) for i in 'abcd']),
+            slice(0, 2),
+            [forge.arg('a'), forge.arg('b')],
+            id='int_slice_key',
+        ),
+        pytest.param(
+            FSignature([forge.arg(i) for i in 'abcd']),
+            slice(0, 2),
+            [forge.arg('a'), forge.arg('b')],
+            id='int_slice_key',
+        ),
+
+        # str
+        pytest.param(
+            FSignature([forge.arg(i) for i in 'abcd']),
+            'a',
+            forge.arg('a'),
+            id='str_key',
+        ),
+        pytest.param(
+            FSignature([forge.arg(i) for i in 'abcd']),
+            'x',
+            KeyError('x'),
+            id='str_key_missing_raises',
+        ),
+        pytest.param(
+            FSignature([forge.arg(i) for i in 'abcd']),
+            slice('a', 'b'),  # type: ignore
+            [forge.arg('a'), forge.arg('b')],
+            id='str_slice_key',
+        ),
+        pytest.param(
+            FSignature([forge.arg(i) for i in 'abcd']),
+            slice('a', 'b', 'c'),  # type: ignore
+            TypeError('string slices cannot have a step'),
+            id='str_with_step_slice_key_raises',
+        ),
+
+        # other type
+        pytest.param(
+            FSignature([forge.arg(i) for i in 'abcd']),
+            slice('a', 1),  # type: ignore
+            TypeError('slice arguments must all be integers or all be strings'),
+            id='mixed_slice_key_raises',
+        ),
+        pytest.param(
+            FSignature([forge.arg(i) for i in 'abcd']),
+            1.0,
+            TypeError("indices must be integers, strings or slices, not float"),
+            id='non_int_or_str_key_raises',
+        ),
+
+
+    ])
+    def test__getitem__(self, in_, key, out_):
         """
-        Ensure that ``__getitem__`` retrieves fparams by ``name``
-        (an abstract collections.abc.Mapping method)
+        Ensure that ``__getitem__`` retrieves parameters by index, name, or
+        slice.
         """
-        fparam = forge.arg('a')
-        fpseq = FParameterSequence([fparam])
-        assert fpseq['a'] is fparam
+        if isinstance(out_, Exception):
+            with pytest.raises(type(out_)) as excinfo:
+                in_[key]
+            assert excinfo.value.args[0] == out_.args[0]
+            return
+        assert in_[key] == out_
 
     @pytest.mark.parametrize(('start', 'end', 'expected'), [
         pytest.param('c', None, 'cd', id='start'),
@@ -911,198 +991,63 @@ class TestFParameterSequence:
         """
         Ensure that ``__getitem__`` retrives from slice.start forward
         """
-        fparams = OrderedDict([(name, forge.arg(name)) for name in 'abcd'])
-        fpseq = FParameterSequence(list(fparams.values()))
-        assert fpseq[start:end] == [fparams[e] for e in expected]
+        params = [forge.arg(name) for name in 'abcd']
+        fsig = FSignature(params)
+        assert fsig[start:end] == [fsig[e] for e in expected]
 
     def test__len__(self):
         """
         Ensure that ``__len__`` retrieves a count of the fparams
-        (an abstract collections.abc.Mapping method)
         """
-        assert len(FParameterSequence([forge.arg('a')])) == 1
+        assert len(FSignature([forge.arg('a')])) == 1
+    # End test sequence methods
 
-    def test__iter__(self):
-        """
-        Ensure that ``__iter__`` returns an iterator over all fparams
-        (an abstract collections.abc.Mapping method)
-        """
-        fparam = forge.arg('a')
-        fpseq = FParameterSequence([fparam])
-        assert dict(fpseq) == {fparam.name: fparam}
-    # End collections.abc.Mapping Tests
-
-    @pytest.mark.parametrize(('params', 'expected'), [
+    @pytest.mark.parametrize(('params', 'return_annotation', 'expected'), [
         pytest.param(
-            [forge.arg('a'), forge.arg('b')],
-            '(a, b)',
-            id='valid',
+            [], empty.native, '()',
+            id='none',
         ),
         pytest.param(
-            [forge.arg('a'), forge.pos('b')],
-            '(a, b, /)',
-            id='invalid',
+            [forge.pos('a')], empty.native, '(a, /)',
+            id='positional_only',
+        ),
+        pytest.param(
+            [forge.arg('a')], empty.native, '(a)',
+            id='positional_or_keyword',
+        ),
+        pytest.param(
+            [forge.kwo('a')], empty.native, '(*, a)',
+            id='keyword_only',
+        ),
+        pytest.param(
+            [forge.arg('a'), forge.arg('b')], empty.native, '(a, b)',
+            id='multiple',
+        ),
+        pytest.param(
+            [forge.arg('a'), forge.pos('b')], empty.native, '(a, b, /)',
+            id='invalid_order',
+        ),
+        pytest.param(
+            [forge.pos('a'), forge.arg('a')], empty.native, '(a, /, a)',
+            id='invalid_dup_name',
+        ),
+        pytest.param(
+            [], True, '() -> True',
+            id='return_annotation',
         ),
     ])
-    def test__str__and__repr__(self, params, expected):
+    def test__str__and__repr__(self, params, return_annotation, expected):
         """
-        Ensure that FParameterSequence generates a string and representation
+        Ensure that FSignature generates a string and representation
         as expected by passing directly to inspect.Signature
         """
-        seq = FParameterSequence(params, validate=False)
-        assert str(seq) == expected
-        assert repr(seq) == '<FParameterSequence {}>'.format(expected)
-
-    def test_validate_non_fparameter_raises(self):
-        """
-        Ensure that non-fparams raise a TypeError by validating a
-        ``inspect.Parameter``
-        """
-        param = inspect.Parameter('x', POSITIONAL_ONLY)
-        with pytest.raises(TypeError) as excinfo:
-            FParameterSequence.validate(param)
-        assert excinfo.value.args[0] == \
-            "Received non-FParameter '{}'".format(param)
-
-    def test_validate_unnamed_fparameter_raises(self):
-        """
-        Ensure that fparams must be named
-        """
-        arg = forge.arg()
-        with pytest.raises(ValueError) as excinfo:
-            FParameterSequence.validate(arg)
-        assert excinfo.value.args[0] == \
-            "Received unnamed parameter: '{}'".format(arg)
-
-    def test_validate_contextual(self):
-        """
-        Ensure that a contextual parameter doesn't raise (code coverage)
-        """
-        FParameterSequence.validate(forge.ctx('self'))
-
-    def test_validate_late_contextual_fparam_raises(self):
-        """
-        Ensure that non-first fparams cannot be contextual
-        """
-        with pytest.raises(TypeError) as excinfo:
-            FParameterSequence.validate(forge.arg('a'), forge.ctx('self'))
-        assert excinfo.value.args[0] == \
-            'Only the first parameter can be contextual'
-
-    def test_validate_multiple_interface_name_raises(self):
-        """
-        Ensure that a ``interface_name`` between multiple fparams raises
-        """
-        with pytest.raises(ValueError) as excinfo:
-            FParameterSequence.validate(
-                forge.arg('a1', 'b'),
-                forge.arg('a2', 'b'),
-            )
-        assert excinfo.value.args[0] == \
-            "Received multiple parameters with interface_name 'b'"
-
-    def test_validate_multiple_name_raises(self):
-        """
-        Ensure that a ``name`` between multiple fparams raises
-        """
-        with pytest.raises(ValueError) as excinfo:
-            FParameterSequence.validate(
-                forge.arg('a', 'b1'),
-                forge.arg('a', 'b2'),
-            )
-        assert excinfo.value.args[0] == \
-            "Received multiple parameters with name 'a'"
-
-    def test_validate_multiple_var_positional_fparameters_raises(self):
-        """
-        Ensure that mulitple `var-positional` fparams raise
-        """
-        params = [
-            FParameter(
-                kind=inspect.Parameter.VAR_POSITIONAL,
-                name='args{}'.format(i),
-                interface_name='args{}'.format(i),
-                default=empty.native,
-                type=empty.native,
-            ) for i in range(2)
-        ]
-        with pytest.raises(TypeError) as excinfo:
-            FParameterSequence.validate(*params)
-        assert excinfo.value.args[0] == \
-            'Received multiple variable-positional parameters'
-
-    def test_validate_multiple_var_keyword_fparameters_raises(self):
-        """
-        Ensure that mulitple `var-keyword` fparams raise
-        """
-        params = [
-            FParameter(
-                kind=inspect.Parameter.VAR_KEYWORD,
-                name='kwargs{}'.format(i),
-                interface_name='kwargs{}'.format(i),
-                default=empty.native,
-                type=empty.native,
-            ) for i in range(2)
-        ]
-        with pytest.raises(TypeError) as excinfo:
-            FParameterSequence.validate(*params)
-        assert excinfo.value.args[0] == \
-            'Received multiple variable-keyword parameters'
-
-    def test_validate_out_of_order_fparameters_raises(self):
-        """
-        Ensure that fparams misordered (by ``kind``) raise
-        """
-        kwarg_ = forge.kwarg('kwarg')
-        arg_ = forge.arg('arg')
-        with pytest.raises(SyntaxError) as excinfo:
-            FParameterSequence.validate(kwarg_, arg_)
-        assert excinfo.value.args[0] == (
-            "'{arg_}' of kind '{arg_kind}' follows "
-            "'{kwarg_}' of kind '{kwarg_kind}'".format(
-                arg_=arg_,
-                arg_kind=arg_.kind.name,
-                kwarg_=kwarg_,
-                kwarg_kind=kwarg_.kind.name,
-            )
+        fsig = FSignature(
+            params,
+            return_annotation=return_annotation,
+            __validate_parameters__=False,
         )
-
-    @pytest.mark.parametrize(('constructor',), [(forge.pos,), (forge.arg,)])
-    def test_validate_non_default_follows_default_raises(self, constructor):
-        """
-        Ensure that ``positional-only`` and ``positional-or-keyword`` fparams
-        with default values come after fparams without default values
-        """
-        default = constructor('d', default=None)
-        nondefault = constructor('nd')
-        with pytest.raises(SyntaxError) as excinfo:
-            FParameterSequence.validate(default, nondefault)
-        assert excinfo.value.args[0] == (
-            'non-default parameter follows default parameter'
-        )
-
-    def test_validate_default_kw_only_follows_non_default_kw_only(self):
-        """
-        Ensure that ``keyword-only`` fparams with default values can come
-        after fparams without default values (only true for ``keyword-only``!)
-        """
-        FParameterSequence.validate(
-            forge.kwarg('a', default=None),
-            forge.kwarg('b'),
-        )
-
-
-class TestFSignature:
-    def test_fsignature(self):
-        assert fsignature == FSignature.from_callable
-
-    def test__str__and__repr__(self):
-        """
-        Ensure printing and repr of FSignature
-        """
-        sig = FSignature([forge.self])
-        assert str(sig) == '(self)'
-        assert repr(sig) == '<FSignature (self)>'
+        assert str(fsig) == expected
+        assert repr(fsig) == '<FSignature {}>'.format(expected)
 
     @pytest.mark.parametrize(('bound',), [(True,), (False,)])
     def test_native(self, bound):
@@ -1195,6 +1140,159 @@ class TestFSignature:
         optional validation.
         """
         assert in_.replace(**kwargs) == out_
+
+    def test_validate_non_fparameter_raises(self):
+        """
+        Ensure that non-fparams raise a TypeError by validating a
+        ``inspect.Parameter``
+        """
+        param = inspect.Parameter('x', POSITIONAL_ONLY)
+        fsig = FSignature([param], __validate_parameters__=False)
+        with pytest.raises(TypeError) as excinfo:
+            fsig.validate()
+        assert excinfo.value.args[0] == \
+            "Received non-FParameter '{}'".format(param)
+
+    def test_validate_unnamed_fparameter_raises(self):
+        """
+        Ensure that fparams must be named
+        """
+        arg = forge.arg()
+        fsig = FSignature([arg], __validate_parameters__=False)
+        with pytest.raises(ValueError) as excinfo:
+            fsig.validate()
+        assert excinfo.value.args[0] == \
+            "Received unnamed parameter: '{}'".format(arg)
+
+    def test_validate_contextual(self):
+        """
+        Ensure that a contextual parameter doesn't raise (code coverage)
+        """
+        fsig = FSignature([forge.self], __validate_parameters__=False)
+        fsig.validate()
+
+    def test_validate_late_contextual_fparam_raises(self):
+        """
+        Ensure that non-first fparams cannot be contextual
+        """
+        fsig = FSignature(
+            [forge.arg('a'), forge.ctx('self')],
+            __validate_parameters__=False,
+        )
+        with pytest.raises(TypeError) as excinfo:
+            fsig.validate()
+        assert excinfo.value.args[0] == \
+            'Only the first parameter can be contextual'
+
+    def test_validate_multiple_interface_name_raises(self):
+        """
+        Ensure that a ``interface_name`` between multiple fparams raises
+        """
+        fsig = FSignature(
+            [forge.arg('a1', 'b'), forge.arg('a2', 'b')],
+            __validate_parameters__=False,
+        )
+        with pytest.raises(ValueError) as excinfo:
+            fsig.validate()
+        assert excinfo.value.args[0] == \
+            "Received multiple parameters with interface_name 'b'"
+
+    def test_validate_multiple_name_raises(self):
+        """
+        Ensure that a ``name`` between multiple fparams raises
+        """
+        fsig = FSignature(
+            [forge.arg('a', 'b1'), forge.arg('a', 'b2')],
+            __validate_parameters__=False,
+        )
+        with pytest.raises(ValueError) as excinfo:
+            fsig.validate()
+        assert excinfo.value.args[0] == \
+            "Received multiple parameters with name 'a'"
+
+    def test_validate_multiple_var_positional_fparameters_raises(self):
+        """
+        Ensure that mulitple `var-positional` fparams raise
+        """
+        fsig = FSignature([
+            FParameter(
+                kind=inspect.Parameter.VAR_POSITIONAL,
+                name='args{}'.format(i),
+                interface_name='args{}'.format(i),
+                default=empty.native,
+                type=empty.native,
+            ) for i in range(2)
+        ], __validate_parameters__=False)
+        with pytest.raises(TypeError) as excinfo:
+            fsig.validate()
+        assert excinfo.value.args[0] == \
+            'Received multiple variable-positional parameters'
+
+    def test_validate_multiple_var_keyword_fparameters_raises(self):
+        """
+        Ensure that mulitple `var-keyword` fparams raise
+        """
+        fsig = FSignature([
+            FParameter(
+                kind=inspect.Parameter.VAR_KEYWORD,
+                name='kwargs{}'.format(i),
+                interface_name='kwargs{}'.format(i),
+                default=empty.native,
+                type=empty.native,
+            ) for i in range(2)
+        ], __validate_parameters__=False)
+        with pytest.raises(TypeError) as excinfo:
+            fsig.validate()
+        assert excinfo.value.args[0] == \
+            'Received multiple variable-keyword parameters'
+
+    def test_validate_out_of_order_fparameters_raises(self):
+        """
+        Ensure that fparams misordered (by ``kind``) raise
+        """
+        kwarg_ = forge.kwarg('kwarg')
+        arg_ = forge.arg('arg')
+        fsig = FSignature([kwarg_, arg_], __validate_parameters__=False)
+        with pytest.raises(SyntaxError) as excinfo:
+            fsig.validate()
+        assert excinfo.value.args[0] == (
+            "'{arg_}' of kind '{arg_kind}' follows "
+            "'{kwarg_}' of kind '{kwarg_kind}'".format(
+                arg_=arg_,
+                arg_kind=arg_.kind.name,
+                kwarg_=kwarg_,
+                kwarg_kind=kwarg_.kind.name,
+            )
+        )
+
+    @pytest.mark.parametrize(('constructor',), [(forge.pos,), (forge.arg,)])
+    def test_validate_non_default_follows_default_raises(self, constructor):
+        """
+        Ensure that ``positional-only`` and ``positional-or-keyword`` fparams
+        with default values come after fparams without default values
+        """
+        default = constructor('d', default=None)
+        nondefault = constructor('nd')
+        fsig = FSignature(
+            [default, nondefault],
+            __validate_parameters__=False,
+        )
+        with pytest.raises(SyntaxError) as excinfo:
+            fsig.validate()
+        assert excinfo.value.args[0] == (
+            'non-default parameter follows default parameter'
+        )
+
+    def test_validate_default_kw_only_follows_non_default_kw_only(self):
+        """
+        Ensure that ``keyword-only`` fparams with default values can come
+        after fparams without default values (only true for ``keyword-only``!)
+        """
+        fsig = FSignature(
+            [forge.kwarg('a', default=None), forge.kwarg('b')],
+            __validate_parameters__=False,
+        )
+        fsig.validate()
 
 
 class TestSignatureConvenience:
