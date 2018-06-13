@@ -28,7 +28,7 @@ General
         The ``forge`` implementation is available at :class:`forge.FSignature`.
 
     variadic parameter
-        A :term:`variadict parameter` is a :term:`parameter` that accepts one or more :term:`parameters <parameter>`.
+        A :term:`variadic parameter` is a :term:`parameter` that accepts one or more :term:`parameters <parameter>`.
         There are two types: the :term:`var-positional` :term:`parameter` (traditionally named ``args``) and the :term:`var-keyword` :term:`parameter` (traditionally named ``kwargs``).
 
 

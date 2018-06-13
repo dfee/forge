@@ -124,7 +124,6 @@ class FParameter(immutable.Immutable, metaclass=CreationOrderMeta):
         contextual)
     :param metadata: optional, extra meta-data that describes the parameter
 
-    :cvar empty: the constant :class:`~forge.FParameter.empty`
     :cvar POSITIONAL_ONLY: the :term:`positional-only`
         :term:`parameter kind` constant
         :attr:`inspect.Parameter.POSITIONAL_ONLY`
@@ -1032,7 +1031,6 @@ class FSignature(immutable.Immutable, collections.abc.Sequence):
     """
     __slots__ = ('_data', 'return_annotation')
 
-    # pylint: disable=R0901, too-many-ancestors
     def __init__(
             self,
             parameters: typing.Optional[typing.Iterable[FParameter]] = None,

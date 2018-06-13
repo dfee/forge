@@ -184,7 +184,7 @@ Of course, if you've defined a return type annotation on a function that has a f
 sort
 ----
 
-By default, the :class:`~forge.sort` revision sorts the parameters by :term:`parameter kind <kind>`, by whether they have a default value, and then by the name (lexicographically).
+By default, the :class:`~forge.sort` revision sorts the parameters by :term:`kind <parameter kind>`, by whether they have a default value, and then by the name (lexicographically).
 
 .. testcode::
 

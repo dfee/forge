@@ -60,8 +60,6 @@ class empty(metaclass=MarkerMeta):
             if extra is not empty:
                 return proxied(a, b)
             return proxied(a, b, c=inspect.Parameter.empty)
-
-    :ivar native: local storage of :class:`inspect.Parameter.empty`
     """
     native = inspect.Parameter.empty
 
