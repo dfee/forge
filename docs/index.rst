@@ -1,6 +1,6 @@
-===============================
-``forge`` *(python signatures)*
-===============================
+==================================================
+``forge`` *(python) signatures for fun and profit*
+==================================================
 
 Release v\ |release| (:doc:`What's new? <changelog>`).
 
