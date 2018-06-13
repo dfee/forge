@@ -2,7 +2,6 @@ How To Contribute
 =================
 
 First off, thank you for considering contributing to ``forge``!
-It's people like *you* who make it such a great tool for everyone.
 
 This document intends to make contribution more accessible by codifying tribal knowledge and expectations.
 Don't be afraid to open half-finished PRs, and ask questions if something is unclear!
@@ -24,7 +23,7 @@ Workflow
 Code
 ----
 
-- Obey `PEP 8`_ and `PEP 257`_.
+- Obey :pep:`8` and :pep:`257`.
   We use the ``"""``\ -on-separate-lines style for docstrings:
 
   .. code-block:: python
@@ -94,7 +93,7 @@ The recipe for releasing new software looks like this:
 - Add functionality / docstrings as appropriate
 - Add tests / docstrings as necessary
 - Update ``documentation`` and ``changelog``
-- Tag release in ``setup.cfg``
+- Tag release in ``setup.cfg`` (and update badge in the ``README``.
 - Merge branch into master
 - Add a git tag for the release
 - Build a release using ``python setup.py bdist_wheel`` and publish to PYPI as described in `Packaging Python Projects <https://packaging.python.org/tutorials/packaging-projects/>`_
@@ -150,8 +149,6 @@ Thank you for contributing to ``forge``!
 
 
 .. _`Devin Fee`: https://devinfee.com
-.. _`PEP 8`: https://www.python.org/dev/peps/pep-0008/
-.. _`PEP 257`: https://www.python.org/dev/peps/pep-0257/
 .. _`good test docstrings`: https://jml.io/pages/test-docstrings.html
 .. _changelog: https://github.com/dfee/forge/blob/master/CHANGELOG.rst
 .. _tox: https://tox.readthedocs.io/

@@ -642,6 +642,7 @@ class TestFParameter:
         """
         kwargs = dict(
             name='b',
+            type=int,
             converter=dummy_converter,
             validator=dummy_validator,
             metadata={'meta': 'data'},
@@ -689,6 +690,7 @@ class TestFParameter:
         """
         kwargs = dict(
             name='b',
+            type=int,
             converter=dummy_converter,
             validator=dummy_validator,
             metadata={'meta': 'data'},
@@ -720,6 +722,7 @@ class TestVarPositional:
         varp = VarPositional()
         fparam = self.assert_iterable_and_get_fparam(varp)
         assert fparam.name == 'args'
+        assert fparam.type == empty
         assert not fparam.converter
         assert not fparam.validator
         assert not fparam.metadata
@@ -731,6 +734,7 @@ class TestVarPositional:
         """
         kwargs = dict(
             name='b',
+            type=int,
             converter=dummy_converter,
             validator=dummy_validator,
             metadata={'meta': 'data'},
@@ -750,6 +754,7 @@ class TestVarPositional:
         """
         kwargs = dict(
             name='b',
+            type=int,
             converter=dummy_converter,
             validator=dummy_validator,
             metadata={'meta': 'data'},
@@ -781,6 +786,7 @@ class TestVarKeyword:
         vark = VarKeyword()
         name, fparam = self.assert_mapping_and_get_fparam(vark)
         assert name == 'kwargs'
+        assert fparam.type == empty
         assert not fparam.converter
         assert not fparam.validator
         assert not fparam.metadata
@@ -792,6 +798,7 @@ class TestVarKeyword:
         """
         kwargs = dict(
             name='b',
+            type=int,
             converter=dummy_converter,
             validator=dummy_validator,
             metadata={'meta': 'data'},
@@ -812,6 +819,7 @@ class TestVarKeyword:
         """
         kwargs = dict(
             name='b',
+            type=int,
             converter=dummy_converter,
             validator=dummy_validator,
             metadata={'meta': 'data'},
@@ -974,7 +982,7 @@ class TestFSignature:
         """
         if isinstance(out_, Exception):
             with pytest.raises(type(out_)) as excinfo:
-                in_[key]
+                in_[key] # pylint: disable=W0104, pointless-statement
             assert excinfo.value.args[0] == out_.args[0]
             return
         assert in_[key] == out_

@@ -70,10 +70,8 @@ class empty(metaclass=MarkerMeta):
         """
         Conditionally coerce the value to a non-:class:`~forge.empty` value.
 
-        .. versionchanged:: 18.5.1 ``coerce`` -> ``coerce_native``
-
         :param value: the value to conditionally coerce
-        :return: the value, if the value is not an instance of
+        :returns: the value, if the value is not an instance of
             :class:`~forge.empty`, otherwise return
             :class:`inspect.Paramter.empty`
         """
@@ -85,10 +83,8 @@ class empty(metaclass=MarkerMeta):
         Conditionally coerce the value to a
         non-:class:`inspect.Parameter.empty` value.
 
-        .. versionadded:: 18.5.1
-
         :param value: the value to conditionally coerce
-        :return: the value, if the value is not an instance of
+        :returns: the value, if the value is not an instance of
             :class:`inspect.Paramter.empty`, otherwise return
             :class:`~forge.empty`
         """

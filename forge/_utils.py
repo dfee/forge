@@ -42,7 +42,7 @@ class CallArguments(immutable.Immutable):
         :meth:`inspect.Signature.bind` or :meth:`inspect.Signature.bind_partial`
 
         :param bound: an instance of :class:`inspect.BoundArguments`
-        :return: an unpacked version of :class:`inspect.BoundArguments`
+        :returns: an unpacked version of :class:`inspect.BoundArguments`
         """
         return cls(*bound.args, **bound.kwargs)  # type: ignore
 
@@ -63,7 +63,7 @@ class CallArguments(immutable.Immutable):
         :param partial: does not raise if invalid or incomplete arguments are
             provided, as the underlying implementation uses
             :meth:`inspect.Signature.bind_partial`
-        :return: an instance of :class:`inspect.BoundArguments` to which
+        :returns: an instance of :class:`inspect.BoundArguments` to which
             :paramref:`.CallArguments.args` and
             :paramref:`.CallArguments.kwargs` are bound.
         """
@@ -97,8 +97,6 @@ def sort_arguments(
             named=dict(a=1, c=4, e=6),
             unnamed=(3,),
         ) == forge.CallArguments(1, 2, 3, c=4, d=5, e=6)
-
-    .. versionadded:: v18.5.1
 
     :param to_: a callable to call with the named and unnamed parameters
     :param named: a mapping of parameter names to argument values.
@@ -179,8 +177,6 @@ def callwith(
             unnamed=(3,),
         ) == (1, 2, (3,), 4, 5, {'e': 6})
 
-    .. versionadded:: v18.5.1
-
     :param to_: a callable to call with the named and unnamed parameters
     :param named: a mapping of parameter names to argument values.
         Appropriate values are all :term:`positional-only`,
@@ -209,7 +205,7 @@ def repr_callable(callable: typing.Callable) -> str:
         'repr_callable(callable: Callable) -> str'
 
     :param callable: a Python callable to build a string representation of
-    :return: the string representation of the function
+    :returns: the string representation of the function
     """
     # pylint: disable=W0622, redefined-builtin
     sig = inspect.signature(callable)

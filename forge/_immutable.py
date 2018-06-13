@@ -9,7 +9,7 @@ def asdict(obj) -> typing.Dict:
     into the attribute or slot values.
 
     :param obj: any Python class instance
-    :return: the attribute or slot values from :paramref:`.asdict.obj`
+    :returns: the attribute or slot values from :paramref:`.asdict.obj`
     """
     if hasattr(obj, '__dict__'):
         return {

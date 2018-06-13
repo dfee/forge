@@ -4,7 +4,7 @@ _run_validators = True
 def get_run_validators() -> bool:
     """
     Check whether validators are enabled.
-    :return: whether or not validators are run.
+    :returns: whether or not validators are run.
     """
     return _run_validators
 

@@ -18,8 +18,8 @@ from ._revision import (
     copy,
     manage,
     returns,
-    synthesize, sign,
     sort,
+    synthesize, sign,
     # Unit
     delete,
     insert,
@@ -31,8 +31,6 @@ from ._signature import (
     Factory,
     FParameter,
     FSignature,
-    VarKeyword,
-    VarPositional,
     findparam,
     fsignature,
     pos, pok, vpo, kwo, vkw,

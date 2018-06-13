@@ -90,7 +90,7 @@ class Mapper(immutable.Immutable):
         #. iterate over the intersection of bound arguments and ``bound`` \
         parameters on the :paramref:`.Mapper.fsignature` to the \
         :paramref:`~forge.Mapper.private_signature` of the \
-        :parmaref:`.Mapper.callable`, getting their transformed value by \
+        :paramref:`.Mapper.callable`, getting their transformed value by \
         calling :meth:`~forge.FParameter.__call__`
         #. map the resulting value into the private_signature bound arguments
         #. generate and return a :class:`~forge._signature.CallArguments` from \
@@ -98,7 +98,7 @@ class Mapper(immutable.Immutable):
 
         :param args: the positional arguments to map
         :param kwargs: the keyword arguments to map
-        :return: transformed :paramref:`~forge.Mapper.__call__.args` and
+        :returns: transformed :paramref:`~forge.Mapper.__call__.args` and
             :paramref:`~forge.Mapper.__call__.kwargs` mapped from
             :paramref:`~forge.Mapper.public_signature` to
             :paramref:`~forge.Mapper.private_signature`
@@ -150,8 +150,9 @@ class Mapper(immutable.Immutable):
     def get_context(self, arguments: typing.Mapping) -> typing.Any:
         """
         Retrieves the context arguments value (if a context parameter exists)
+
         :param arguments: a mapping of parameter names to argument values
-        :return: the argument value for the context paramter (if it exists),
+        :returns: the argument value for the context parameter (if it exists),
             otherwise ``None``.
         """
         return arguments[self.context_param.name] \
@@ -178,7 +179,7 @@ class Mapper(immutable.Immutable):
 
         :param from_: the :class:`~forge.FSignature` to map from
         :param to_: the :class:`inspect.Signature` to map to
-        :return: a :class:`types.MappingProxyType` that shows how arguments
+        :returns: a :class:`types.MappingProxyType` that shows how arguments
             are mapped.
         '''
         # pylint: disable=W0622, redefined-builtin
@@ -302,7 +303,7 @@ class Revision:
         attribute), then the (underlying) wrapped function is re-wrapped.
 
         :param callable: a :term:`callable` whose signature to revise
-        :return: a function with the revised signature that calls into the
+        :returns: a function with the revised signature that calls into the
             provided :paramref:`~forge.Revision.__call__.callable`
         """
         # pylint: disable=W0622, redefined-builtin
@@ -340,7 +341,7 @@ class Revision:
         :class:`~forge.compose`.
 
         :param previous: the :class:`~forge.FSignature` to modify
-        :return: a modified instance of :class:`~forge.FSignature`
+        :returns: a modified instance of :class:`~forge.FSignature`
         """
         # pylint: disable=R0201, no-self-use
         return previous
@@ -370,7 +371,7 @@ class compose(Revision):  # pylint: disable=C0103, invalid-name
         revision in the context of (another) :class:`~forge.compose`.
 
         :param previous: the :class:`~forge.FSignature` to modify
-        :return: a modified instance of :class:`~forge.FSignature`
+        :returns: a modified instance of :class:`~forge.FSignature`
         """
         return functools.reduce(
             lambda previous, revision: revision.revise(previous),
@@ -423,7 +424,7 @@ class copy(Revision):  # pylint: disable=C0103, invalid-name
         to return an invalid signature.
 
         :param previous: the :class:`~forge.FSignature` to modify
-        :return: a modified instance of :class:`~forge.FSignature`
+        :returns: a modified instance of :class:`~forge.FSignature`
         """
         if self.include:
             return self.signature.replace(parameters=list(
@@ -481,7 +482,7 @@ class manage(Revision):  # pylint: disable=C0103, invalid-name
             :class:`~forge.compose` revision.
 
         :param previous: the :class:`~forge.FSignature` to modify
-        :return: a modified instance of :class:`~forge.FSignature`
+        :returns: a modified instance of :class:`~forge.FSignature`
         """
         return self.callable(previous)
 
@@ -520,7 +521,7 @@ class returns(Revision): # pylint: disable=invalid-name
         Otherwise, the :attr:`__mapper__` and :attr:`__signature__` are updated
 
         :param callable: see :paramref:`~forge.Revision.__call__.callable`
-        :return: either the input callable with an updated return type
+        :returns: either the input callable with an updated return type
             annotation, or a wrapping function with the appropriate return type
             annotation as determined by the strategy described above.
         """
@@ -549,7 +550,7 @@ class returns(Revision): # pylint: disable=invalid-name
         :class:`~forge.compose`.
 
         :param previous: the :class:`~forge.FSignature` to modify
-        :return: a modified instance of :class:`~forge.FSignature`
+        :returns: a modified instance of :class:`~forge.FSignature`
         """
         return FSignature(
             previous,
@@ -570,16 +571,15 @@ class synthesize(Revision):  # pylint: disable=C0103, invalid-name
 
     .. warning::
 
-        When supplying previously-created parameters to :func:`~forge.sign` or
-        :func:`~forge.resign`, those parameters will be ordered by their
-        creation order.
+        When supplying previously-created parameters to :func:`~forge.sign`,
+        those parameters will be ordered by their creation order.
 
         This is because Python implementations prior to ``3.7`` don't
         guarantee the ordering of keyword-arguments.
 
         Therefore, it is recommended that when supplying pre-created
-        parameters to :func:`~forge.sign` or :func:`~forge.resign` to supply
-        them as positional arguments:
+        parameters to :func:`~forge.sign`, you supply them as positional
+        arguments:
 
         .. testcode::
 
@@ -602,10 +602,10 @@ class synthesize(Revision):  # pylint: disable=C0103, invalid-name
     :param parameters: :class:`~forge.FParameter` instances to be ordered
     :param named_parameters: :class:`~forge.FParameter` instances to be
         ordered, updated
-    :return: a wrapping factory that takes a callable and updates it so that
-        it has a signature as defined by the
-        :paramref:`.resign.parameters` and
-        :paramref:`.resign.named_parameters`
+    :returns: a wrapping factory that takes a callable and returns a wrapping
+        function that has a signature as defined by the
+        :paramref:`~forge.synthesize..parameters` and
+        :paramref:`~forge.synthesize.named_parameters`
     """
     def __init__(self, *parameters, **named_parameters):
         self.parameters = [
@@ -630,7 +630,7 @@ class synthesize(Revision):  # pylint: disable=C0103, invalid-name
         :class:`~forge.compose`.
 
         :param previous: the :class:`~forge.FSignature` to modify
-        :return: a modified instance of :class:`~forge.FSignature`
+        :returns: a modified instance of :class:`~forge.FSignature`
         """
         return previous.replace(  # type: ignore
             parameters=self.parameters,
@@ -673,7 +673,7 @@ class sort(Revision): # pylint: disable=C0103, invalid-name
         #. parameters having a default value
         #. parameter name lexicographically
 
-        :return: tuple to sort by
+        :returns: tuple to sort by
         """
         return (param.kind, param.default is not empty, param.name or '')
 
@@ -695,7 +695,7 @@ class sort(Revision): # pylint: disable=C0103, invalid-name
         :class:`~forge.compose`.
 
         :param previous: the :class:`~forge.FSignature` to modify
-        :return: a modified instance of :class:`~forge.FSignature`
+        :returns: a modified instance of :class:`~forge.FSignature`
         """
         return previous.replace(  # type: ignore
             parameters=sorted(previous, key=self.sortkey),
@@ -737,7 +737,7 @@ class delete(Revision):  # pylint: disable=C0103, invalid-name
         :class:`~forge.compose`.
 
         :param previous: the :class:`~forge.FSignature` to modify
-        :return: a modified instance of :class:`~forge.FSignature`
+        :returns: a modified instance of :class:`~forge.FSignature`
         """
         excluded = list(findparam(previous, self.selector))
         if not excluded:
@@ -821,7 +821,7 @@ class insert(Revision):  # pylint: disable=C0103, invalid-name
         :class:`~forge.compose`.
 
         :param previous: the :class:`~forge.FSignature` to modify
-        :return: a modified instance of :class:`~forge.FSignature`
+        :returns: a modified instance of :class:`~forge.FSignature`
         """
         pparams = list(previous)
         nparams = []
@@ -943,7 +943,7 @@ class modify(Revision):  # pylint: disable=C0103, invalid-name
         :class:`~forge.compose`.
 
         :param previous: the :class:`~forge.FSignature` to modify
-        :return: a modified instance of :class:`~forge.FSignature`
+        :returns: a modified instance of :class:`~forge.FSignature`
         """
         matched = list(findparam(previous, self.selector))
         if not matched:
@@ -1004,7 +1004,7 @@ class replace(Revision):  # pylint: disable=C0103, invalid-name
         :class:`~forge.compose`.
 
         :param previous: the :class:`~forge.FSignature` to modify
-        :return: a modified instance of :class:`~forge.FSignature`
+        :returns: a modified instance of :class:`~forge.FSignature`
         """
         try:
             match = next(findparam(previous, self.selector))
@@ -1078,7 +1078,7 @@ class translocate(Revision):  # pylint: disable=C0103, invalid-name
         :class:`~forge.compose`.
 
         :param previous: the :class:`~forge.FSignature` to modify
-        :return: a modified instance of :class:`~forge.FSignature`
+        :returns: a modified instance of :class:`~forge.FSignature`
         """
         try:
             selected = next(findparam(previous, self.selector))

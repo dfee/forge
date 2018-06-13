@@ -1,12 +1,12 @@
 .. image:: https://raw.githubusercontent.com/dfee/forge/master/docs/_static/forge-horizontal.png
    :alt: forge logo
 
-================================================
-``forge`` (python) signatures for fun and profit
-================================================
+===============================
+``forge`` *(python signatures)*
+===============================
 
 
-.. image:: https://img.shields.io/badge/pypi-v2018.5.0-blue.svg
+.. image:: https://img.shields.io/badge/pypi-v2018.6.0-blue.svg
     :target: https://pypi.org/project/python-forge/
     :alt: pypi project
 .. image:: https://img.shields.io/badge/license-MIT-blue.svg
@@ -25,17 +25,18 @@
     :target: http://python-forge.readthedocs.io/en/latest/
     :alt: Documentation Status
 
-.. overview-begin
+.. overview-start
 
-``forge`` is an elegant Python package for crafting function signatures.
-Its aim is to help you write better, more literate code with less boilerplate.
-
-The power of **dynamic signatures** is finally within grasp – **add**, **remove**, or **enhance parameters** at will!
+``forge`` is an elegant Python package for revising function signatures at runtime.
+This libraries aim is to help you write better, more literate code with less boilerplate.
 
 .. overview-end
 
 
-.. installation-begin
+.. installation-start
+
+Installation
+============
 
 ``forge`` is a Python-only package `hosted on PyPI <https://pypi.org/project/python-forge>`_ for **Python 3.5+**.
 
@@ -48,192 +49,70 @@ The recommended installation method is `pip-installing <https://pip.pypa.io/en/s
 .. installation-end
 
 
-.. quickstart-begin
+.. example-start
 
-Re-signing a function
-=====================
+Example
+=======
 
-The primary purpose of forge is to alter the public signature of functions:
+Consider a library like `requests <https://github.com/requests/requests>`_ that provides a useful API for performing HTTP requests.
+Every HTTP method has it's own function which is a thin wrapper around :func:`requests.Session.request`.
+The code is a little more than 150 lines, but using ``forge`` we can narrow that down to about 1/10th the size, while **increasing** the literacy of the code.
 
-.. code-block:: python
+.. testcode::
 
     import forge
+    import requests
 
-    @forge.sign(
-        forge.pos('positional'),
-        forge.arg('argument'),
-        *forge.args,
-        keyword=forge.kwarg(),
-        **forge.kwargs,
+    request = forge.copy(requests.Session.request, exclude='self')(requests.request)
+
+    def with_method(method):
+        revised = forge.modify(
+            'method', default=method, bound=True,
+            kind=forge.FParameter.POSITIONAL_ONLY,
+        )(request)
+        revised.__name__ = method.lower()
+        return revised
+
+    post = with_method('POST')
+    get = with_method('GET')
+    put = with_method('PUT')
+    delete = with_method('DELETE')
+    options = with_method('OPTIONS')
+    head = with_method('HEAD')
+    patch = with_method('PATCH')
+
+So what happened?
+The first thing we did was create an alternate ``request`` function to replace ``requests.request`` that provides the exact same functionality but makes its parameters explicit:
+
+.. testcode::
+
+    # `requests.get` looks like this:
+    assert forge.repr_callable(requests.get) == 'get(url, params=None, **kwargs)'
+
+    # our `request` looks like this:
+    assert forge.repr_callable(get) == (
+        'get(url, params=None, data=None, headers=None, cookies=None, '
+            'files=None, auth=None, timeout=None, allow_redirects=True, '
+            'proxies=None, hooks=None, stream=None, verify=None, cert=None, '
+            'json=None)'
     )
-    def myfunc(*args, **kwargs):
-        return (args, kwargs)
-
-    assert forge.repr_callable(myfunc) == \
-        'myfunc(positional, /, argument, *args, keyword, **kwargs)'
-
-    args, kwargs = myfunc(1, 2, 3, 4, 5, keyword='abc', extra='xyz')
-
-    assert args == (3, 4, 5)
-    assert kwargs == {
-        'positional': 1,
-        'argument': 2,
-        'keyword': 'abc',
-        'extra': 'xyz',
-        }
 
 
-You can re-map a parameter to a different ParameterKind (e.g. positional-only to positional-or-keyword *or* keyword-only), and optionally supply a default value:
+Next, we built a factory function ``with_method`` that creates new functions which make HTTP requests with the proper HTTP verb.
+Because the ``method`` parameter is bound, it won't show up it is removed from the resulting functions signature.
+Of course, the signature of these generated functions remains explicit, let's try it out:
 
-.. code-block:: python
+.. testcode::
 
-    import forge
+    response = get('http://google.com')
+    assert 'Feeling Lucky' in response.text
 
-    @forge.sign(forge.kwarg('color', 'colour', default='blue'))
-    def myfunc(colour):
-        return colour
+You can review the alternate code (the actual implementation) by visiting the code for `requests.api <https://github.com/requests/requests/blob/991e8b76b7a9d21f698b24fa0058d3d5968721bc/requests/api.py>`_.
 
-    assert forge.repr_callable(myfunc) == "myfunc(*, color='blue')"
-    assert myfunc() == 'blue'
-
-
-You can also supply type annotations for usage with linters like mypy:
-
-.. code-block:: python
-
-    import forge
-
-    @forge.sign(forge.arg('number', type=int))
-    @forge.returns(str)
-    def to_str(number):
-        return str(number)
-
-    assert forge.repr_callable(to_str) == 'to_str(number:int) -> str'
-    assert to_str(3) == '3'
+.. example-end
 
 
-.. _quickstart_validating-a-parameter:
-
-Validating a parameter
-======================
-
-You can validate arguments by either passing a validator or an iterable (such as a list or tuple) of validators to your FParameter constructor.
-
-.. code-block:: python
-
-    import forge
-
-    class Present:
-        pass
-
-    def validate_gt5(ctx, name, value):
-        if value < 5:
-            raise TypeError("{name} must be >= 5".format(name=name))
-
-    @forge.sign(forge.arg('count', validator=validate_gt5))
-    def send_presents(count):
-        return [Present() for i in range(count)]
-
-    assert forge.repr_callable(send_presents) == 'send_presents(count)'
-
-    try:
-        send_presents(3)
-    except TypeError as exc:
-        assert exc.args[0] == "count must be >= 5"
-
-    sent = send_presents(5)
-    assert len(sent) == 5
-    for p in sent:
-        assert isinstance(p, Present)
-
-
-You can optionally provide a context parameter, such as ``self``, ``cls``, or create your own named parameter with ``forge.ctx('myparam')``, and use that alongside validation:
-
-.. code-block:: python
-
-    import forge
-
-    def validate_color(ctx, name, value):
-        if value not in ctx.colors:
-            raise TypeError(
-                'expected one of {ctx.colors}, received {value}'.\
-                format(ctx=ctx, value=value)
-            )
-
-    class ColorSelector:
-        def __init__(self, *colors):
-            self.colors = colors
-            self.selected = None
-
-        @forge.sign(
-            forge.self,
-            forge.arg('color', validator=validate_color)
-        )
-        def select_color(self, color):
-            self.selected = color
-
-    cs = ColorSelector('red', 'green', 'blue')
-
-    try:
-        cs.select_color('orange')
-    except TypeError as exc:
-        assert exc.args[0] == \
-            "expected one of ('red', 'green', 'blue'), received orange"
-
-    cs.select_color('red')
-    assert cs.selected == 'red'
-
-
-.. _quickstart_converting-a-parameter:
-
-Converting a parameter
-======================
-
-You can convert an argument by passing a conversion function to your FParameter constructor.
-
-.. code-block:: python
-
-    import forge
-
-    def uppercase(ctx, name, value):
-        return value.upper()
-
-    @forge.sign(forge.arg('message', converter=uppercase))
-    def shout(message):
-        return message
-
-    assert shout('hello over there') == 'HELLO OVER THERE'
-
-
-You can optionally provide a context parameter, such as ``self``, ``cls``, or create your own named FParameter with ``forge.ctx('myparam')``, and use that alongside conversion:
-
-.. code-block:: python
-
-    import forge
-
-    def titleize(ctx, name, value):
-        return '{ctx.title} {value}'.format(ctx=ctx, value=value)
-
-    class RoleAnnouncer:
-        def __init__(self, title):
-            self.title = title
-
-        @forge.sign(forge.self, forge.arg('name', converter=titleize))
-        def announce(self, name):
-            return 'Now announcing {name}!'.format(name=name)
-
-    doctor_ra = RoleAnnouncer('Doctor')
-    captain_ra = RoleAnnouncer('Captain')
-
-    assert doctor_ra.announce('Strangelove') == \
-        "Now announcing Doctor Strangelove!"
-    assert captain_ra.announce('Lionel Mandrake') == \
-        "Now announcing Captain Lionel Mandrake!"
-
-.. quickstart-end
-
-
-.. project-information-begin
+.. project-information-start
 
 Project information
 ===================
@@ -248,3 +127,6 @@ It’s rigorously tested on Python 3.6+ and PyPy 3.5+.
 Other contributors are listed under https://github.com/dfee/forge/graphs/contributors.
 
 .. project-information-end
+
+
+.. _requests_api_get: https://github.com/requests/requests/blob/991e8b76b7a9d21f698b24fa0058d3d5968721bc/requests/api.py#L61

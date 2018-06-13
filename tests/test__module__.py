@@ -48,13 +48,12 @@ def test_namespace():
         'Factory',
         'FParameter',
         'findparam',
-        # variadic
-        'VarKeyword', 'kwargs',
-        'VarPositional', 'args',
-        # context
-        'ctx', 'self', 'cls',
         # constructors
         'pos', 'pok', 'arg', 'kwo', 'kwarg', 'vkw', 'vpo',
+        # context
+        'ctx', 'self', 'cls',
+        # variadic
+        'args', 'kwargs',
 
         ## Exceptions
         'ForgeError',

@@ -1,35 +1,36 @@
-==================================================
-``forge`` *(python) signatures for fun and profit*
-==================================================
+===============================
+``forge`` *(python signatures)*
+===============================
 
 Release v\ |release| (:doc:`What's new? <changelog>`).
 
 .. include:: ../README.rst
-    :start-after: overview-begin
+    :start-after: overview-start
     :end-before: overview-end
 
 
-Installation
-============
-
 .. include:: ../README.rst
-    :start-after: installation-begin
+    :start-after: installation-start
     :end-before: installation-end
 
 
 Overview
 ========
 
-- :doc:`quickstart` is the fastest way to discover ``forge``.
-    Start here to forge your first signature.
-- :doc:`philosophy` walks you through an example of ``forge`` wrapping the ``stdlib``'s :mod:`logging` module.
-    Read this to understand the value proposition, philosphy, and design strategy behind ``forge``.
-- :doc:`basic` gives a comprehensive tour of ``forge``'s features.
-    Read this to learn how to use ``forge`` - from beginner to advanced features.
-- :doc:`advanced` shares some common use-cases and approaches for using ``forge``.
-    For example, build a function whose signature changes every call.
+- :doc:`philosophy` walks you through the design considerations and need for ``forge``.
+  Read this to understand the value proposition through a case-study review of the standard library's :mod:`logging` module.
+- :doc:`signature` gives a comprehensive overview of the ``forge`` data structures.
+  Read this to learn how to take full advantage of the power of ``forge``.
+- :doc:`revision` describes the signature revision utilities included with ``forge``.
+  This is a narrative on how to use "the features".
+- :doc:`patterns` depicts some common use-cases and approaches for using ``forge``.
 - :doc:`api` has documentation for all public functionality.
-- :doc:`glossary` helps out iron out semantics and terms that are useful when (re-) designing function signatures.
+- :doc:`glossary` irons-out the terminology necessary to harness the power of ``forge``.
+
+
+.. include:: ../README.rst
+    :start-after: example-start
+    :end-before: example-end
 
 
 Full Table of Contents
@@ -38,10 +39,10 @@ Full Table of Contents
 .. toctree::
     :maxdepth: 2
 
-    quickstart
     philosophy
-    basic
-    advanced
+    signature
+    revision
+    patterns
     api
     glossary
     contributing
@@ -56,5 +57,5 @@ Indices and tables
 * :ref:`search`
 
 .. include:: ../README.rst
-    :start-after: project-information-begin
+    :start-after: project-information-start
     :end-before: project-information-end

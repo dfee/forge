@@ -4,10 +4,6 @@ API Reference
 
 .. currentmodule:: forge
 
-``forge`` works by decorating callable using subclasses of :class:`forge.Revision`.
-What follows is the API explanation, if you'd like a more hands-on introduction, have a look at :doc:`basic`.
-
-
 .. _api_config:
 
 Config
@@ -34,8 +30,10 @@ Marker
 ======
 
 .. autoclass:: forge.empty
+   :members:
 
 .. autoclass:: forge.void
+   :members:
 
 
 .. _api_revisions:
@@ -44,8 +42,11 @@ Revisions
 =========
 
 .. autoclass:: forge.Mapper
+   :members:
 
 .. autoclass:: forge.Revision
+   :members:
+   :special-members: __call__
 
 
 .. _api_revisions_group:
@@ -54,20 +55,27 @@ Group revisions
 ---------------
 
 .. autoclass:: forge.compose
+   :members:
 
 .. autoclass:: forge.copy
+   :members:
 
 .. autoclass:: forge.manage
+   :members:
 
 .. autoclass:: forge.returns
+   :members:
+   :special-members: __call__
 
 .. autoclass:: forge.synthesize
+   :members:
 
 .. data:: forge.sign
 
     a convenience "short-name" for :class:`~forge.synthesize`
 
 .. autoclass:: forge.sort
+   :members:
 
 
 .. _api_revisions_unit:
@@ -75,14 +83,19 @@ Group revisions
 Unit revisions
 --------------
 .. autoclass:: forge.delete
+   :members:
 
 .. autoclass:: forge.insert
+   :members:
 
 .. autoclass:: forge.modify
+   :members:
 
 .. autoclass:: forge.replace
+   :members:
 
 .. autoclass:: forge.translocate
+   :members:
 
 .. data:: forge.move
 
@@ -99,14 +112,13 @@ Signature
 Classes
 -------
 .. autoclass:: forge.FSignature
+   :members:
 
 .. autoclass:: forge.FParameter
-
-.. autoclass:: forge.VarPositional
-
-.. autoclass:: forge.VarKeyword
+   :members:
 
 .. autoclass:: forge.Factory
+   :members:
 
 
 .. _api_signature-constructors:
@@ -141,23 +153,23 @@ Helpers
 
 .. autofunction:: findparam
 
-.. data:: forge.args
+.. autofunction:: forge.args
 
     a "ready-to-go" instance of :class:`~forge.VarPositional`, with the name ``args``.
     Use as ``*args``, or supply :meth:`~forge.VarPositional.replace` arguments.
     For example, to change the name to ``items``: ``*args(name='items')``.
 
-.. data:: forge.kwargs
+.. autodata:: forge.kwargs
 
     a "ready-to-go" instance of :class:`~forge.VarKeyword`, with the name ``kwargs``.
     Use as ``**kwargs``, or supply :meth:`~forge.VarKeyword.replace` arguments.
     For example, to change the name to ``extras``: ``**kwargs(name='extras')``.
 
-.. data:: forge.self
+.. autodata:: forge.self
 
     a "ready-to-go" instance of :class:`~forge.FParameter` as the ``self`` context parameter.
 
-.. data:: forge.cls
+.. autodata:: forge.cls
 
     a "ready-to-go" instance of :class:`~forge.FParameter` as the ``cls`` context parameter.
 
