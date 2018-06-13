@@ -1,9 +1,9 @@
 .. image:: https://raw.githubusercontent.com/dfee/forge/master/docs/_static/forge-horizontal.png
    :alt: forge logo
 
-===============================
-``forge`` *(python signatures)*
-===============================
+==================================================
+``forge`` *(python) signatures for fun and profit*
+==================================================
 
 
 .. image:: https://img.shields.io/badge/pypi-v2018.6.0-blue.svg
@@ -49,16 +49,18 @@ The recommended installation method is `pip-installing <https://pip.pypa.io/en/s
 .. installation-end
 
 
-.. example-start
 
 Example
 =======
 
-Consider a library like `requests <https://github.com/requests/requests>`_ that provides a useful API for performing HTTP requests.
-Every HTTP method has it's own function which is a thin wrapper around :func:`requests.Session.request`.
-The code is a little more than 150 lines, but using ``forge`` we can narrow that down to about 1/10th the size, while **increasing** the literacy of the code.
+.. example-start
 
-.. testcode::
+Consider a library like `requests <https://github.com/requests/requests>`_ that provides a useful API for performing HTTP requests.
+Every HTTP method has it's own function which is a thin wrapper around ``requests.Session.request``.
+The code is a little more than 150 lines, with about 90% of that being boilerplate.
+Using ``forge`` we can get that back down to about 10% it's current size, while *increasing* the literacy of the code.
+
+.. code-block:: python
 
     import forge
     import requests
@@ -84,25 +86,25 @@ The code is a little more than 150 lines, but using ``forge`` we can narrow that
 So what happened?
 The first thing we did was create an alternate ``request`` function to replace ``requests.request`` that provides the exact same functionality but makes its parameters explicit:
 
-.. testcode::
+.. code-block:: python
 
-    # `requests.get` looks like this:
+    # requests.get() looks like this:
     assert forge.repr_callable(requests.get) == 'get(url, params=None, **kwargs)'
 
-    # our `request` looks like this:
+    # our get() calls the same code, but looks like this:
     assert forge.repr_callable(get) == (
         'get(url, params=None, data=None, headers=None, cookies=None, '
             'files=None, auth=None, timeout=None, allow_redirects=True, '
             'proxies=None, hooks=None, stream=None, verify=None, cert=None, '
-            'json=None)'
+            'json=None'
+        ')'
     )
-
 
 Next, we built a factory function ``with_method`` that creates new functions which make HTTP requests with the proper HTTP verb.
 Because the ``method`` parameter is bound, it won't show up it is removed from the resulting functions signature.
 Of course, the signature of these generated functions remains explicit, let's try it out:
 
-.. testcode::
+.. code-block:: python
 
     response = get('http://google.com')
     assert 'Feeling Lucky' in response.text
