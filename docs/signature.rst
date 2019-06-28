@@ -186,7 +186,7 @@ There are five :term:`kinds <parameter kind>` of parameters:
      - :func:`forge.kwo` (a.k.a :func:`forge.kwarg`)
    * - :term:`var-keyword`
      - :paramref:`~forge.FParameter.VAR_KEYWORD`
-     - :func:`forge.vko` (or :data:`**forge.kwargs <forge.kwargs>`)
+     - :func:`forge.vkw` (or :data:`**forge.kwargs <forge.kwargs>`)
 
 .. note::
 
